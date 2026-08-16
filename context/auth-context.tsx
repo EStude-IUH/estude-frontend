@@ -1,0 +1,105 @@
+'use client';
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { authApi } from '@/lib/auth-api';
+import type { LoginPayload, RegisterPayload, User } from '@/types/auth';
+
+interface AuthContextValue {
+  user: User | null;
+  isInitializing: boolean;
+  signIn: (payload: LoginPayload) => Promise<User>;
+  signUp: (payload: RegisterPayload) => Promise<User>;
+  signOut: () => Promise<void>;
+  signOutAll: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    authApi.setUnauthorizedHandler(() => setUser(null));
+    return () => authApi.setUnauthorizedHandler(null);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function restoreSession() {
+      try {
+        await authApi.refresh();
+        const currentUser = await authApi.me();
+        if (isMounted) {
+          setUser(currentUser);
+        }
+      } catch {
+        if (isMounted) {
+          authApi.clearAccessToken();
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
+    }
+
+    void restoreSession();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const signIn = useCallback(async (payload: LoginPayload) => {
+    const session = await authApi.login(payload);
+    setUser(session.user);
+    return session.user;
+  }, []);
+
+  const signUp = useCallback(async (payload: RegisterPayload) => {
+    const session = await authApi.register(payload);
+    setUser(session.user);
+    return session.user;
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      setUser(null);
+    }
+  }, []);
+
+  const signOutAll = useCallback(async () => {
+    try {
+      await authApi.logoutAll();
+    } finally {
+      setUser(null);
+    }
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, isInitializing, signIn, signUp, signOut, signOutAll }),
+    [user, isInitializing, signIn, signUp, signOut, signOutAll],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth phải được sử dụng bên trong AuthProvider');
+  }
+  return context;
+}

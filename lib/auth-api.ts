@@ -1,0 +1,184 @@
+import type {
+  AccessTokenResponse,
+  ApiEnvelope,
+  ApiErrorEnvelope,
+  AuthSession,
+  LoginPayload,
+  LoginSessionInfo,
+  RegisterPayload,
+  User,
+} from '@/types/auth';
+
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'
+).replace(/\/$/, '');
+
+let accessToken: string | null = null;
+let refreshPromise: Promise<AccessTokenResponse> | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+interface RequestOptions {
+  authenticated?: boolean;
+  retryOnUnauthorized?: boolean;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly details: string[] = [],
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => null)) as
+    | ApiEnvelope<T>
+    | ApiErrorEnvelope
+    | null;
+
+  if (!response.ok || !payload || payload.success === false) {
+    const errorPayload = payload && payload.success === false ? payload : null;
+    throw new ApiError(
+      errorPayload?.message ?? 'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+      response.status,
+      errorPayload?.errors ?? [],
+    );
+  }
+
+  return payload.data;
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+): Promise<T> {
+  const { authenticated = false, retryOnUnauthorized = true } = options;
+  const headers = new Headers(init.headers);
+
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  if (authenticated && accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers,
+  });
+
+  if (response.status === 401 && authenticated && retryOnUnauthorized) {
+    await refreshAccessToken();
+    return request<T>(path, init, {
+      authenticated: true,
+      retryOnUnauthorized: false,
+    });
+  }
+
+  if (response.status === 401 && authenticated) {
+    accessToken = null;
+    unauthorizedHandler?.();
+  }
+
+  return readResponse<T>(response);
+}
+
+async function refreshAccessToken(): Promise<AccessTokenResponse> {
+  if (!refreshPromise) {
+    refreshPromise = request<AccessTokenResponse>(
+      '/auth/refresh-token',
+      { method: 'POST' },
+      { retryOnUnauthorized: false },
+    )
+      .then((tokens) => {
+        accessToken = tokens.accessToken;
+        return tokens;
+      })
+      .catch((error: unknown) => {
+        accessToken = null;
+        unauthorizedHandler?.();
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
+export function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return request<T>(path, init, { authenticated: true });
+}
+
+export const authApi = {
+  async login(payload: LoginPayload): Promise<AuthSession> {
+    const session = await request<AuthSession>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    accessToken = session.accessToken;
+    return session;
+  },
+
+  async register(payload: RegisterPayload): Promise<AuthSession> {
+    const session = await request<AuthSession>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    accessToken = session.accessToken;
+    return session;
+  },
+
+  refresh(): Promise<AccessTokenResponse> {
+    return refreshAccessToken();
+  },
+
+  me(): Promise<User> {
+    return authenticatedRequest<User>('/auth/me');
+  },
+
+  async logout(): Promise<Record<string, never>> {
+    try {
+      return await authenticatedRequest<Record<string, never>>('/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      accessToken = null;
+    }
+  },
+
+  async logoutAll(): Promise<Record<string, never>> {
+    try {
+      return await authenticatedRequest<Record<string, never>>('/auth/logout-all', {
+        method: 'POST',
+      });
+    } finally {
+      accessToken = null;
+    }
+  },
+
+  sessions(): Promise<LoginSessionInfo[]> {
+    return authenticatedRequest<LoginSessionInfo[]>('/auth/sessions');
+  },
+
+  revokeSession(sessionId: string): Promise<Record<string, never>> {
+    return authenticatedRequest<Record<string, never>>(
+      `/auth/sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  clearAccessToken(): void {
+    accessToken = null;
+  },
+
+  setUnauthorizedHandler(handler: (() => void) | null): void {
+    unauthorizedHandler = handler;
+  },
+};
