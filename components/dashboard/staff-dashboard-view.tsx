@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -8,6 +8,7 @@ import {
   BookOpenCheck,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -112,10 +113,28 @@ export function StaffDashboardView() {
   const { user, signOut } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false);
+  }, [pathname]);
 
   async function handleSignOut() {
     const loginPath = getRoleLogin(user?.role ?? "TEACHER");
+    setIsAccountMenuOpen(false);
     setIsSigningOut(true);
     try {
       await signOut();
@@ -170,9 +189,7 @@ export function StaffDashboardView() {
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
       : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"
   }`;
-  const sidebarItemLayout = isSidebarCollapsed
-    ? "lg:gap-0 lg:px-[19px]"
-    : "";
+  const sidebarItemLayout = isSidebarCollapsed ? "lg:gap-0 lg:px-[19px]" : "";
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
@@ -204,16 +221,73 @@ export function StaffDashboardView() {
             <span className="absolute right-2 top-2 size-2 rounded-full bg-amber-500 ring-2 ring-white" />
           </button>
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
-              {initials}
-            </span>
-            <div className="hidden md:block">
-              <p className="max-w-44 truncate text-sm font-bold text-slate-900">
-                {user.fullName}
-              </p>
-              <p className="text-xs font-medium text-indigo-600">{roleLabel}</p>
-            </div>
+          <div ref={accountMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsAccountMenuOpen((current) => !current)}
+              className="flex items-center gap-3 rounded-xl p-1.5 text-left transition hover:bg-slate-50 focus:outline-none"
+              aria-haspopup="menu"
+              aria-expanded={isAccountMenuOpen}
+            >
+              <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
+                {initials}
+              </span>
+              <span className="hidden md:block">
+                <span className="block max-w-44 truncate text-sm font-bold text-slate-900">
+                  {user.fullName}
+                </span>
+                <span className="block text-xs font-medium text-indigo-600">
+                  {roleLabel}
+                </span>
+              </span>
+              <ChevronDown
+                className={`hidden size-4 text-slate-400 transition-transform md:block ${
+                  isAccountMenuOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {isAccountMenuOpen ? (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => setIsAccountMenuOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+                >
+                  <CircleHelp className="size-4" /> Trợ giúp
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    router.push(getRoleSessionSettings(user.role));
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+                >
+                  <Settings className="size-4" /> Cài đặt
+                </button>
+                <div className="my-1 border-t border-slate-100" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleSignOut()}
+                  disabled={isSigningOut}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60"
+                >
+                  {isSigningOut ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <LogOut className="size-4" />
+                  )}
+                  {isSigningOut ? "Đang đăng xuất..." : "Đăng xuất"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
@@ -308,46 +382,10 @@ export function StaffDashboardView() {
             );
           })}
         </nav>
-
-        <div className="mt-auto space-y-1.5 border-t border-slate-200 pt-5">
-          <button
-            type="button"
-            title={isSidebarCollapsed ? "Trợ giúp" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-900 ${sidebarItemLayout}`}
-          >
-            <CircleHelp className="size-5 shrink-0" />
-            <span className={sidebarLabelClass}>Trợ giúp</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push(getRoleSessionSettings(user.role))}
-            title={isSidebarCollapsed ? "Cài đặt" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-900 ${sidebarItemLayout}`}
-          >
-            <Settings className="size-5 shrink-0" />
-            <span className={sidebarLabelClass}>Cài đặt</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            disabled={isSigningOut}
-            title={isSidebarCollapsed ? "Đăng xuất" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-rose-600 transition-all hover:bg-rose-50 disabled:opacity-60 ${sidebarItemLayout}`}
-          >
-            {isSigningOut ? (
-              <LoaderCircle className="size-5 shrink-0 animate-spin" />
-            ) : (
-              <LogOut className="size-5 shrink-0" />
-            )}
-            <span className={sidebarLabelClass}>
-              {isSigningOut ? "Đang đăng xuất..." : "Đăng xuất"}
-            </span>
-          </button>
-        </div>
       </aside>
 
       <main
-        className={`min-h-screen px-4 pb-10 pt-[88px] transition-[margin] duration-300 sm:px-6 lg:px-8 ${
+        className={`min-h-screen px-5 pb-5 pt-20 transition-[margin] duration-300 ${
           isSidebarCollapsed ? "lg:ml-[82px]" : "lg:ml-[266px]"
         }`}
       >

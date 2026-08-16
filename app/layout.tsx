@@ -1,14 +1,21 @@
-import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
-import { AuthProvider } from '@/context/auth-context';
-import './globals.css';
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
+import { AuthProvider } from "@/context/auth-context";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: {
-    default: 'EStude | Không gian học tập số',
-    template: '%s | EStude',
+    default: "EStude | Không gian học tập số",
+    template: "%s | EStude",
   },
-  description: 'Nền tảng học tập và quản lý lớp học dành cho sinh viên IUH.',
+  description: "Nền tảng học tập và quản lý lớp học dành cho sinh viên IUH.",
 };
 
 export default function RootLayout({
@@ -16,7 +23,7 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="vi">
-      <body suppressHydrationWarning>
+      <body className={inter.variable} suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
