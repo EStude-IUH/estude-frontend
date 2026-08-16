@@ -1,28 +1,31 @@
-'use client';
+"use client";
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { LoaderCircle, LockKeyhole, UserRound } from 'lucide-react';
-import { AuthNotice } from '@/components/auth/auth-notice';
-import { FormField } from '@/components/auth/form-field';
-import { BrandLogo } from '@/components/brand-logo';
-import { useAuth } from '@/context/auth-context';
-import { ApiError } from '@/lib/auth-api';
-import { getRoleHome } from '@/lib/role-routes';
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
+import { AuthNotice } from "@/components/auth/auth-notice";
+import { FormField } from "@/components/auth/form-field";
+import { PasswordRecoveryModal } from "@/components/auth/password-recovery-modal";
+import { BrandLogo } from "@/components/brand-logo";
+import { useAuth } from "@/context/auth-context";
+import { ApiError } from "@/lib/auth-api";
+import { getRoleHome } from "@/lib/role-routes";
+import type { UserRole } from "@/types/auth";
 
 interface LoginErrors {
   accountName?: string;
   password?: string;
 }
 
-export function AdminLoginForm() {
+export function StaffLoginForm({ role }: { role: UserRole }) {
   const router = useRouter();
   const { user, isInitializing, signIn } = useAuth();
-  const [accountName, setAccountName] = useState('');
-  const [password, setPassword] = useState('');
+  const [accountName, setAccountName] = useState("");
+  const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<LoginErrors>({});
-  const [apiError, setApiError] = useState('');
+  const [apiError, setApiError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
 
   useEffect(() => {
     if (!isInitializing && user) {
@@ -33,10 +36,10 @@ export function AdminLoginForm() {
   function validate(): LoginErrors {
     const nextErrors: LoginErrors = {};
     if (!/^[a-z0-9._-]{3,50}$/.test(accountName.trim().toLowerCase())) {
-      nextErrors.accountName = 'Tên tài khoản không hợp lệ.';
+      nextErrors.accountName = "Tên tài khoản không hợp lệ.";
     }
     if (!password) {
-      nextErrors.password = 'Vui lòng nhập mật khẩu.';
+      nextErrors.password = "Vui lòng nhập mật khẩu.";
     }
     return nextErrors;
   }
@@ -45,20 +48,22 @@ export function AdminLoginForm() {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
-    setApiError('');
+    setApiError("");
     if (Object.keys(nextErrors).length > 0) return;
 
     setIsSubmitting(true);
     try {
-      await signIn({ accountName, password }, ['ADMIN']);
-      router.replace('/admin/dashboard');
+      await signIn({ accountName, password }, [role]);
+      router.replace(getRoleHome(role));
     } catch (error) {
       setApiError(
         error instanceof ApiError && error.status === 403
-          ? 'Tài khoản không có quyền quản trị hệ thống.'
+          ? role === "ADMIN"
+            ? "Tài khoản không có quyền quản trị hệ thống."
+            : `Tài khoản không có quyền truy cập khu vực ${role === "TEACHER" ? "giảng viên" : "sinh viên"}.`
           : error instanceof ApiError
             ? error.message
-            : 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+            : "Đã có lỗi xảy ra. Vui lòng thử lại.",
       );
     } finally {
       setIsSubmitting(false);
@@ -72,10 +77,16 @@ export function AdminLoginForm() {
 
         <div className="mt-8 text-center">
           <h1 className="text-2xl font-extrabold tracking-tight text-brand-600">
-            Đăng nhập Admin
+            {role === "ADMIN"
+              ? "Đăng nhập Admin"
+              : role === "TEACHER"
+                ? "Đăng nhập Giảng viên"
+                : "Đăng nhập Sinh viên"}
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Sử dụng tài khoản quản trị để tiếp tục.
+            {role === "ADMIN"
+              ? "Sử dụng tài khoản quản trị để tiếp tục."
+              : `Sử dụng tài khoản ${role === "TEACHER" ? "giảng viên" : "sinh viên"} để tiếp tục.`}
           </p>
         </div>
 
@@ -83,12 +94,16 @@ export function AdminLoginForm() {
           {apiError ? <AuthNotice message={apiError} /> : null}
 
           <FormField
-            id="adminAccountName"
+            id={`${role.toLowerCase()}AccountName`}
             name="accountName"
             type="text"
             label="Tên tài khoản"
             icon={UserRound}
-            placeholder="Nhập tên tài khoản admin"
+            placeholder={
+              role === "ADMIN"
+                ? "Nhập tên tài khoản admin"
+                : `Nhập tên tài khoản ${role === "TEACHER" ? "giảng viên" : "sinh viên"}`
+            }
             autoComplete="username"
             autoFocus
             className="admin-login-input bg-slate-50 focus:bg-white"
@@ -101,7 +116,7 @@ export function AdminLoginForm() {
           />
 
           <FormField
-            id="adminPassword"
+            id={`${role.toLowerCase()}Password`}
             name="password"
             type="password"
             label="Mật khẩu"
@@ -117,22 +132,52 @@ export function AdminLoginForm() {
             }}
           />
 
+          {role !== "ADMIN" ? (
+            <div className="-mt-2 text-right">
+              <button
+                type="button"
+                onClick={() => setIsRecoveryOpen(true)}
+                className="text-sm font-semibold text-brand-600 transition hover:text-brand-800"
+              >
+                Quên mật khẩu?
+              </button>
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={isSubmitting || isInitializing}
             className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 font-bold text-white shadow-lg shadow-brand-600/20 transition hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           >
             {isSubmitting ? (
-              <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+              <LoaderCircle
+                className="size-5 animate-spin"
+                aria-hidden="true"
+              />
             ) : null}
-            {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
           </button>
         </form>
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-400">
-          Chỉ dành cho quản trị viên được cấp quyền.
+          {role === "ADMIN"
+            ? "Chỉ dành cho quản trị viên được cấp quyền."
+            : `Chỉ dành cho ${role === "TEACHER" ? "giảng viên" : "sinh viên"} được cấp tài khoản.`}
         </p>
       </section>
+
+      {role !== "ADMIN" ? (
+        <PasswordRecoveryModal
+          key={accountName}
+          open={isRecoveryOpen}
+          initialAccountName={accountName}
+          onClose={() => setIsRecoveryOpen(false)}
+        />
+      ) : null}
     </main>
   );
+}
+
+export function AdminLoginForm() {
+  return <StaffLoginForm role="ADMIN" />;
 }
