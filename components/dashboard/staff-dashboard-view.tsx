@@ -165,6 +165,14 @@ export function StaffDashboardView() {
   const isAccountsPage = pathname === "/admin/accounts";
   const activeMenuLabel =
     navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
+  const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
+    isSidebarCollapsed
+      ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
+      : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"
+  }`;
+  const sidebarItemLayout = isSidebarCollapsed
+    ? "lg:gap-0 lg:px-[19px]"
+    : "";
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
@@ -248,8 +256,8 @@ export function StaffDashboardView() {
           }`}
         >
           <div
-            className={`overflow-hidden transition-[width] duration-300 ${
-              isSidebarCollapsed ? "lg:w-11" : "lg:w-auto"
+            className={`max-w-[190px] overflow-hidden transition-[max-width] duration-300 ease-in-out ${
+              isSidebarCollapsed ? "lg:max-w-[44px]" : "lg:max-w-[190px]"
             }`}
           >
             <BrandLogo withShadow={false} />
@@ -279,20 +287,20 @@ export function StaffDashboardView() {
                   setIsMenuOpen(false);
                 }}
                 title={isSidebarCollapsed ? label : undefined}
-                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-300 ${
                   active
                     ? "bg-blue-50 text-brand-700 ring-1 ring-inset ring-blue-100"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                } ${isSidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                } ${sidebarItemLayout}`}
               >
                 <Icon className="size-5 shrink-0" aria-hidden="true" />
-                <span className={isSidebarCollapsed ? "lg:hidden" : ""}>
-                  {label}
-                </span>
+                <span className={sidebarLabelClass}>{label}</span>
                 {active ? (
                   <span
-                    className={`ml-auto size-1.5 rounded-full bg-brand-600 ${
-                      isSidebarCollapsed ? "lg:hidden" : ""
+                    className={`ml-auto size-1.5 max-w-[6px] shrink-0 rounded-full bg-brand-600 transition-[max-width,margin,opacity,transform] duration-300 ${
+                      isSidebarCollapsed
+                        ? "lg:ml-0 lg:max-w-0 lg:scale-0 lg:opacity-0"
+                        : "lg:scale-100 lg:opacity-100"
                     }`}
                   />
                 ) : null}
@@ -305,43 +313,33 @@ export function StaffDashboardView() {
           <button
             type="button"
             title={isSidebarCollapsed ? "Trợ giúp" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-900 ${
-              isSidebarCollapsed ? "lg:justify-center lg:px-0" : ""
-            }`}
+            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-900 ${sidebarItemLayout}`}
           >
             <CircleHelp className="size-5 shrink-0" />
-            <span className={isSidebarCollapsed ? "lg:hidden" : ""}>
-              Trợ giúp
-            </span>
+            <span className={sidebarLabelClass}>Trợ giúp</span>
           </button>
           <button
             type="button"
             onClick={() => router.push(getRoleSessionSettings(user.role))}
             title={isSidebarCollapsed ? "Cài đặt" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-900 ${
-              isSidebarCollapsed ? "lg:justify-center lg:px-0" : ""
-            }`}
+            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-900 ${sidebarItemLayout}`}
           >
             <Settings className="size-5 shrink-0" />
-            <span className={isSidebarCollapsed ? "lg:hidden" : ""}>
-              Cài đặt
-            </span>
+            <span className={sidebarLabelClass}>Cài đặt</span>
           </button>
           <button
             type="button"
             onClick={() => void handleSignOut()}
             disabled={isSigningOut}
             title={isSidebarCollapsed ? "Đăng xuất" : undefined}
-            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-60 ${
-              isSidebarCollapsed ? "lg:justify-center lg:px-0" : ""
-            }`}
+            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold text-rose-600 transition-all hover:bg-rose-50 disabled:opacity-60 ${sidebarItemLayout}`}
           >
             {isSigningOut ? (
-              <LoaderCircle className="size-5 animate-spin" />
+              <LoaderCircle className="size-5 shrink-0 animate-spin" />
             ) : (
-              <LogOut className="size-5" />
+              <LogOut className="size-5 shrink-0" />
             )}
-            <span className={isSidebarCollapsed ? "lg:hidden" : ""}>
+            <span className={sidebarLabelClass}>
               {isSigningOut ? "Đang đăng xuất..." : "Đăng xuất"}
             </span>
           </button>
