@@ -1,5 +1,5 @@
-export type UserRole = 'ADMIN' | 'TEACHER' | 'STUDENT';
-export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'LOCKED';
+export type UserRole = "ADMIN" | "TEACHER" | "STUDENT";
+export type UserStatus = "PENDING" | "ACTIVE" | "INACTIVE" | "LOCKED";
 
 export interface User {
   id: string;

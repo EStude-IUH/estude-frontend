@@ -9,13 +9,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { authApi } from '@/lib/auth-api';
-import type { LoginPayload, RegisterPayload, User } from '@/types/auth';
+import { ApiError, authApi } from '@/lib/auth-api';
+import type { LoginPayload, RegisterPayload, User, UserRole } from '@/types/auth';
 
 interface AuthContextValue {
   user: User | null;
   isInitializing: boolean;
-  signIn: (payload: LoginPayload) => Promise<User>;
+  signIn: (payload: LoginPayload, allowedRoles?: UserRole[]) => Promise<User>;
   signUp: (payload: RegisterPayload) => Promise<User>;
   signOut: () => Promise<void>;
   signOutAll: () => Promise<void>;
@@ -60,11 +60,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (payload: LoginPayload) => {
-    const session = await authApi.login(payload);
-    setUser(session.user);
-    return session.user;
-  }, []);
+  const signIn = useCallback(
+    async (payload: LoginPayload, allowedRoles?: UserRole[]) => {
+      const session = await authApi.login(payload);
+      if (allowedRoles && !allowedRoles.includes(session.user.role)) {
+        await authApi.logout().catch(() => undefined);
+        throw new ApiError('Tài khoản không có quyền truy cập khu vực đăng nhập này.', 403);
+      }
+      setUser(session.user);
+      return session.user;
+    },
+    [],
+  );
 
   const signUp = useCallback(async (payload: RegisterPayload) => {
     const session = await authApi.register(payload);

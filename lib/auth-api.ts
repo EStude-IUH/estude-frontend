@@ -7,11 +7,11 @@ import type {
   LoginSessionInfo,
   RegisterPayload,
   User,
-} from '@/types/auth';
+} from "@/types/auth";
 
 const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api/v1'
-).replace(/\/$/, '');
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1"
+).replace(/\/$/, "");
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<AccessTokenResponse> | null = null;
@@ -29,20 +29,19 @@ export class ApiError extends Error {
     readonly details: string[] = [],
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
 async function readResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as
-    | ApiEnvelope<T>
-    | ApiErrorEnvelope
-    | null;
+    ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok || !payload || payload.success === false) {
     const errorPayload = payload && payload.success === false ? payload : null;
     throw new ApiError(
-      errorPayload?.message ?? 'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+      errorPayload?.message ??
+        "Không thể kết nối đến máy chủ. Vui lòng thử lại.",
       response.status,
       errorPayload?.errors ?? [],
     );
@@ -59,16 +58,20 @@ async function request<T>(
   const { authenticated = false, retryOnUnauthorized = true } = options;
   const headers = new Headers(init.headers);
 
-  if (init.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
   }
   if (authenticated && accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: "include",
     headers,
   });
 
@@ -91,8 +94,8 @@ async function request<T>(
 async function refreshAccessToken(): Promise<AccessTokenResponse> {
   if (!refreshPromise) {
     refreshPromise = request<AccessTokenResponse>(
-      '/auth/refresh-token',
-      { method: 'POST' },
+      "/auth/refresh-token",
+      { method: "POST" },
       { retryOnUnauthorized: false },
     )
       .then((tokens) => {
@@ -112,14 +115,54 @@ async function refreshAccessToken(): Promise<AccessTokenResponse> {
   return refreshPromise;
 }
 
-export function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export function authenticatedRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   return request<T>(path, init, { authenticated: true });
+}
+
+async function requestBlob(
+  path: string,
+  init: RequestInit = {},
+  retryOnUnauthorized = true,
+): Promise<Blob> {
+  const headers = new Headers(init.headers);
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers,
+  });
+
+  if (response.status === 401 && retryOnUnauthorized) {
+    await refreshAccessToken();
+    return requestBlob(path, init, false);
+  }
+  if (response.status === 401) {
+    accessToken = null;
+    unauthorizedHandler?.();
+  }
+  if (!response.ok) {
+    return readResponse<never>(response);
+  }
+  return response.blob();
+}
+
+export function authenticatedBlobRequest(
+  path: string,
+  init: RequestInit = {},
+): Promise<Blob> {
+  return requestBlob(path, init);
 }
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthSession> {
-    const session = await request<AuthSession>('/auth/login', {
-      method: 'POST',
+    const session = await request<AuthSession>("/auth/login", {
+      method: "POST",
       body: JSON.stringify(payload),
     });
     accessToken = session.accessToken;
@@ -127,8 +170,8 @@ export const authApi = {
   },
 
   async register(payload: RegisterPayload): Promise<AuthSession> {
-    const session = await request<AuthSession>('/auth/register', {
-      method: 'POST',
+    const session = await request<AuthSession>("/auth/register", {
+      method: "POST",
       body: JSON.stringify(payload),
     });
     accessToken = session.accessToken;
@@ -140,13 +183,13 @@ export const authApi = {
   },
 
   me(): Promise<User> {
-    return authenticatedRequest<User>('/auth/me');
+    return authenticatedRequest<User>("/auth/me");
   },
 
   async logout(): Promise<Record<string, never>> {
     try {
-      return await authenticatedRequest<Record<string, never>>('/auth/logout', {
-        method: 'POST',
+      return await authenticatedRequest<Record<string, never>>("/auth/logout", {
+        method: "POST",
       });
     } finally {
       accessToken = null;
@@ -155,22 +198,25 @@ export const authApi = {
 
   async logoutAll(): Promise<Record<string, never>> {
     try {
-      return await authenticatedRequest<Record<string, never>>('/auth/logout-all', {
-        method: 'POST',
-      });
+      return await authenticatedRequest<Record<string, never>>(
+        "/auth/logout-all",
+        {
+          method: "POST",
+        },
+      );
     } finally {
       accessToken = null;
     }
   },
 
   sessions(): Promise<LoginSessionInfo[]> {
-    return authenticatedRequest<LoginSessionInfo[]>('/auth/sessions');
+    return authenticatedRequest<LoginSessionInfo[]>("/auth/sessions");
   },
 
   revokeSession(sessionId: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(
       `/auth/sessions/${encodeURIComponent(sessionId)}`,
-      { method: 'DELETE' },
+      { method: "DELETE" },
     );
   },
 

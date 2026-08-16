@@ -1,13 +1,25 @@
 import { GraduationCap } from 'lucide-react';
 
-export function BrandLogo({ inverse = false }: { inverse?: boolean }) {
+export function BrandLogo({
+  inverse = false,
+  withShadow = true,
+}: {
+  inverse?: boolean;
+  withShadow?: boolean;
+}) {
   return (
     <div className="inline-flex items-center gap-3" aria-label="EStude">
       <span
-        className={`grid size-11 place-items-center rounded-2xl shadow-lg ${
+        className={`grid size-11 place-items-center rounded-2xl ${
           inverse
-            ? 'bg-white text-brand-700 shadow-blue-950/20'
-            : 'bg-brand-600 text-white shadow-brand-600/25'
+            ? 'bg-white text-brand-700'
+            : 'bg-brand-600 text-white'
+        } ${
+          withShadow
+            ? inverse
+              ? 'shadow-lg shadow-blue-950/20'
+              : 'shadow-lg shadow-brand-600/25'
+            : 'shadow-none'
         }`}
       >
         <GraduationCap

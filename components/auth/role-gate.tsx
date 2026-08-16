@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { getRoleHome } from '@/lib/role-routes';
+import { getRoleHome, getRoleLogin } from '@/lib/role-routes';
 import type { UserRole } from '@/types/auth';
 
 function RoleLoadingScreen() {
@@ -19,7 +19,7 @@ function RoleLoadingScreen() {
           aria-hidden="true"
         />
         <p className="mt-3 text-sm font-medium text-slate-500">
-          Đang mở đúng không gian làm việc...
+          Đang tải dữ liệu...
         </p>
       </div>
     </main>
@@ -41,7 +41,7 @@ export function RoleGate({
     if (isInitializing) return;
 
     if (!user) {
-      router.replace('/login');
+      router.replace(getRoleLogin(allowedRole));
       return;
     }
 

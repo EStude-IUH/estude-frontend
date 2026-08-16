@@ -36,6 +36,15 @@ input {
   background: #2269ef;
 }
 
+.admin-login-input:-webkit-autofill,
+.admin-login-input:-webkit-autofill:hover,
+.admin-login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  -webkit-box-shadow: 0 0 0 1000px #f8fafc inset;
+  caret-color: #0f172a;
+  transition: background-color 9999s ease-out 0s;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

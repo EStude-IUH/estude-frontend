@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { ApiError, authApi } from '@/lib/auth-api';
-import { getRoleHome } from '@/lib/role-routes';
+import { getRoleHome, getRoleLogin } from '@/lib/role-routes';
 import type { LoginSessionInfo } from '@/types/auth';
 
 function getDevice(userAgent: string | null): {
@@ -76,8 +76,9 @@ export function SessionManagerView() {
     setError('');
     try {
       if (session.current) {
+        const loginPath = getRoleLogin(user?.role ?? 'STUDENT');
         await signOut();
-        router.replace('/login');
+        router.replace(loginPath);
         return;
       }
       await authApi.revokeSession(session.id);
@@ -97,8 +98,9 @@ export function SessionManagerView() {
     setIsSigningOutAll(true);
     setError('');
     try {
+      const loginPath = getRoleLogin(user?.role ?? 'STUDENT');
       await signOutAll();
-      router.replace('/login');
+      router.replace(loginPath);
     } catch (logoutError) {
       setError(
         logoutError instanceof ApiError

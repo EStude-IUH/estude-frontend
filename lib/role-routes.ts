@@ -21,3 +21,7 @@ export function getRoleSessionSettings(role: UserRole): string {
       return '/student/settings/sessions';
   }
 }
+
+export function getRoleLogin(role: UserRole): string {
+  return role === 'ADMIN' ? '/admin/login' : '/login';
+}
