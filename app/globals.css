@@ -64,3 +64,72 @@ input {
     mask-image: linear-gradient(to bottom, black, transparent 88%);
   }
 }
+
+@keyframes table-loading-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-backdrop-enter {
+  animation: modal-backdrop-in 220ms ease-out both;
+}
+
+.modal-panel-enter {
+  animation: modal-panel-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.table-loading-track {
+  height: 3px;
+  overflow: hidden;
+  background: #e0f2fe;
+}
+
+.table-loading-indicator {
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #38bdf8, #2563eb 50%, #38bdf8);
+  box-shadow: 0 0 8px rgb(37 99 235 / 45%);
+  animation: table-loading-slide 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop-enter,
+  .modal-panel-enter {
+    animation: none;
+  }
+
+  .table-loading-indicator {
+    width: 100%;
+    animation: none;
+    background: #2563eb;
+  }
+}

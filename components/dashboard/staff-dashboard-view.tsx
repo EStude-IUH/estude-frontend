@@ -189,13 +189,13 @@ export function StaffDashboardView() {
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
       : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"
   }`;
-  const sidebarItemLayout = isSidebarCollapsed ? "lg:gap-0 lg:px-[19px]" : "";
+  const sidebarItemLayout = isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : "";
 
   return (
     <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
       <header
         className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center border-b border-slate-200 bg-white/95 px-4 backdrop-blur transition-[padding] duration-300 lg:pr-8 ${
-          isSidebarCollapsed ? "lg:pl-[102px]" : "lg:pl-[286px]"
+          isSidebarCollapsed ? "lg:pl-[92px]" : "lg:pl-[286px]"
         }`}
       >
         <button
@@ -207,7 +207,7 @@ export function StaffDashboardView() {
           <Menu className="size-5" />
         </button>
 
-        <h1 className="truncate text-lg font-extrabold tracking-tight text-brand-700 sm:text-xl">
+        <h1 className="truncate text-base font-semibold tracking-tight text-brand-700 sm:text-lg">
           {activeMenuLabel}
         </h1>
 
@@ -303,7 +303,7 @@ export function StaffDashboardView() {
 
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[266px] flex-col border-r border-slate-200 bg-white px-4 pb-6 pt-4 text-slate-900 shadow-xl shadow-slate-900/[0.06] transition-all duration-300 lg:translate-x-0 ${
-          isSidebarCollapsed ? "lg:w-[82px] lg:px-3" : "lg:w-[266px]"
+          isSidebarCollapsed ? "lg:w-[72px] lg:px-2" : "lg:w-[266px]"
         } ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <button
@@ -324,14 +324,12 @@ export function StaffDashboardView() {
           )}
         </button>
 
-        <div
-          className={`relative flex items-center px-2 ${
-            isSidebarCollapsed ? "lg:justify-center lg:px-0" : "justify-start"
-          }`}
-        >
+        <div className="relative flex items-center">
           <div
-            className={`max-w-[190px] overflow-hidden transition-[max-width] duration-300 ease-in-out ${
-              isSidebarCollapsed ? "lg:max-w-[44px]" : "lg:max-w-[190px]"
+            className={`box-border max-w-[190px] overflow-hidden px-2 transition-[max-width,padding] duration-300 ease-in-out ${
+              isSidebarCollapsed
+                ? "lg:max-w-[56px] lg:px-[6px]"
+                : "lg:max-w-[190px] lg:px-2"
             }`}
           >
             <BrandLogo withShadow={false} />
@@ -385,8 +383,8 @@ export function StaffDashboardView() {
       </aside>
 
       <main
-        className={`min-h-screen px-5 pb-5 pt-20 transition-[margin] duration-300 ${
-          isSidebarCollapsed ? "lg:ml-[82px]" : "lg:ml-[266px]"
+        className={`min-h-screen px-3.5 pb-3.5 pt-[74px] transition-[margin] duration-300 ${
+          isSidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[266px]"
         }`}
       >
         <div className={isAccountsPage ? "w-full" : "mx-auto max-w-[1280px]"}>

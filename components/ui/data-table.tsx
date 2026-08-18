@@ -1,9 +1,11 @@
 import type {
   HTMLAttributes,
+  ReactNode,
   TableHTMLAttributes,
   TdHTMLAttributes,
   ThHTMLAttributes,
 } from "react";
+import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export function Table({
@@ -56,4 +58,40 @@ export function TableCell({
   ...props
 }: TdHTMLAttributes<HTMLTableCellElement>) {
   return <td className={cn("px-4 py-3.5", className)} {...props} />;
+}
+
+export function TableLoadingBarRow({ colSpan }: { colSpan: number }) {
+  return (
+    <tr aria-label="Đang tải dữ liệu">
+      <TableCell colSpan={colSpan} className="!p-0">
+        <div className="table-loading-track" role="progressbar">
+          <span className="table-loading-indicator" />
+        </div>
+      </TableCell>
+    </tr>
+  );
+}
+
+export function TableEmptyRow({
+  colSpan,
+  message = "Không có dữ liệu!",
+  icon = <TriangleAlert className="size-6 shrink-0 text-slate-950" />,
+}: {
+  colSpan: number;
+  message?: ReactNode;
+  icon?: ReactNode;
+}) {
+  return (
+    <tr>
+      <TableCell
+        colSpan={colSpan}
+        className="px-7 py-4 text-left text-sm font-medium text-slate-900"
+      >
+        <span className="flex items-center gap-3">
+          {icon}
+          {message}
+        </span>
+      </TableCell>
+    </tr>
+  );
 }

@@ -11,27 +11,30 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
-  FilterX,
   KeyRound,
   LoaderCircle,
-  LockKeyhole,
   Plus,
-  Search,
   Upload,
   UserRoundCheck,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Table,
   TableBody,
   TableCell,
+  TableEmptyRow,
   TableHead,
   TableHeader,
+  TableLoadingBarRow,
 } from "@/components/ui/data-table";
+import { DataTableFooter } from "@/components/ui/data-table-footer";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
-import { Pagination } from "@/components/ui/pagination";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   ApiError,
   authenticatedBlobRequest,
@@ -46,20 +49,6 @@ const roleLabels: Record<UserRole, string> = {
   ADMIN: "Quản trị viên",
   TEACHER: "Giáo viên",
   STUDENT: "Sinh viên",
-};
-
-const statusLabels: Record<UserStatus, string> = {
-  PENDING: "Chờ đăng nhập",
-  ACTIVE: "Đang hoạt động",
-  INACTIVE: "Ngừng hoạt động",
-  LOCKED: "Đã khóa",
-};
-
-const statusStyles: Record<UserStatus, string> = {
-  PENDING: "bg-amber-50 text-amber-700 ring-amber-200",
-  ACTIVE: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  INACTIVE: "bg-slate-100 text-slate-600 ring-slate-200",
-  LOCKED: "bg-rose-50 text-rose-700 ring-rose-200",
 };
 
 const roleFilterOptions = [
@@ -81,11 +70,6 @@ const managedRoleOptions = [
   { value: "TEACHER", label: "Giáo viên" },
   { value: "STUDENT", label: "Sinh viên" },
 ];
-
-const pageSizeOptions = [10, 20, 50, 100].map((size) => ({
-  value: String(size),
-  label: `${size} dòng`,
-}));
 
 function formatDate(value: string | null): string {
   if (!value) return "--";
@@ -120,6 +104,8 @@ export function AccountManagementPanel() {
   const [listError, setListError] = useState("");
   const [notice, setNotice] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [statusConfirmationUser, setStatusConfirmationUser] =
+    useState<User | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -186,22 +172,6 @@ export function AccountManagementPanel() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
-
-  function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPage(1);
-    setSubmittedSearch(search.trim());
-  }
-
-  function resetFilters() {
-    setSearch("");
-    setSubmittedSearch("");
-    setRoleFilter("");
-    setStatusFilter("");
-    setCreatedFrom("");
-    setCreatedTo("");
-    setPage(1);
-  }
 
   async function handleExport() {
     setIsExporting(true);
@@ -317,6 +287,12 @@ export function AccountManagementPanel() {
         },
       );
       await loadUsers();
+      setStatusConfirmationUser(null);
+      setNotice(
+        nextStatus === "ACTIVE"
+          ? `Đã mở khóa tài khoản ${user.fullName}.`
+          : `Đã khóa tài khoản ${user.fullName}.`,
+      );
     } catch (error) {
       setListError(getErrorMessage(error, "Không thể cập nhật tài khoản"));
     } finally {
@@ -341,21 +317,23 @@ export function AccountManagementPanel() {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-        <div className="flex flex-col gap-3 min-[1650px]:flex-row min-[1650px]:items-center">
-          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1.4fr)_150px_165px_145px_145px_auto]">
-            <form onSubmit={handleSearch}>
-              <Input
-                icon={Search}
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Tìm theo họ tên hoặc tên tài khoản"
-              />
-            </form>
+      <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1.4fr)_150px_165px_230px]">
+            <DebouncedSearchInput
+              className="focus:!ring-0"
+              value={search}
+              onValueChange={setSearch}
+              onSearch={(value) => {
+                setPage(1);
+                setSubmittedSearch(value);
+              }}
+              placeholder="Tìm theo họ tên hoặc tên tài khoản"
+            />
             <CustomSelect
               value={roleFilter}
               options={roleFilterOptions}
+              buttonClassName="!ring-0"
               ariaLabel="Lọc theo vai trò"
               onValueChange={(value) => {
                 setRoleFilter(value);
@@ -365,40 +343,24 @@ export function AccountManagementPanel() {
             <CustomSelect
               value={statusFilter}
               options={statusFilterOptions}
+              buttonClassName="!ring-0"
               ariaLabel="Lọc theo trạng thái"
               onValueChange={(value) => {
                 setStatusFilter(value);
                 setPage(1);
               }}
             />
-            <Input
-              aria-label="Từ ngày"
-              title="Từ ngày"
-              type="date"
-              value={createdFrom}
-              onChange={(event) => {
-                setCreatedFrom(event.target.value);
+            <DateRangePicker
+              from={createdFrom}
+              to={createdTo}
+              onChange={(value) => {
+                setCreatedFrom(value.from);
+                setCreatedTo(value.to);
                 setPage(1);
               }}
             />
-            <Input
-              aria-label="Đến ngày"
-              title="Đến ngày"
-              type="date"
-              value={createdTo}
-              onChange={(event) => {
-                setCreatedTo(event.target.value);
-                setPage(1);
-              }}
-            />
-            <Button variant="outline" onClick={resetFilters} title="Xóa bộ lọc">
-              <FilterX className="size-4" /> Xóa lọc
-            </Button>
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-              <Upload className="size-4" /> Import
-            </Button>
+          <div className="flex shrink-0 flex-nowrap justify-end gap-2">
             <Button
               variant="outline"
               disabled={isExporting}
@@ -418,7 +380,7 @@ export function AccountManagementPanel() {
         </div>
       </div>
 
-      <section className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         {listError ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" /> {listError}
@@ -435,30 +397,13 @@ export function AccountManagementPanel() {
                 <TableHead>Vai trò</TableHead>
                 <TableHead>Ngày tạo</TableHead>
                 <TableHead>Lần đăng nhập cuối</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
+                <TableHead>Đang hoạt động</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <tr>
-                  <TableCell
-                    colSpan={8}
-                    className="py-20 text-center text-slate-500"
-                  >
-                    <LoaderCircle className="mx-auto size-6 animate-spin text-brand-600" />
-                    <span className="mt-2 block">Đang tải dữ liệu...</span>
-                  </TableCell>
-                </tr>
-              ) : users.length === 0 ? (
-                <tr>
-                  <TableCell
-                    colSpan={8}
-                    className="py-20 text-center text-slate-500"
-                  >
-                    Không có tài khoản phù hợp.
-                  </TableCell>
-                </tr>
+              {isLoading ? <TableLoadingBarRow colSpan={7} /> : null}
+              {!isLoading && users.length === 0 ? (
+                <TableEmptyRow colSpan={7} />
               ) : (
                 users.map((user, index) => (
                   <tr key={user.id} className="transition hover:bg-slate-50/70">
@@ -488,32 +433,29 @@ export function AccountManagementPanel() {
                       {formatDate(user.lastLoginAt)}
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusStyles[user.status]}`}
-                      >
-                        {statusLabels[user.status]}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {user.role === "ADMIN" || user.status === "PENDING" ? (
-                        <span className="text-xs text-slate-400">--</span>
-                      ) : (
-                        <Button
-                          variant={
-                            user.status === "ACTIVE" ? "danger" : "secondary"
-                          }
-                          size="sm"
-                          disabled={updatingUserId === user.id}
-                          onClick={() => void handleToggleStatus(user)}
-                        >
-                          {updatingUserId === user.id ? (
-                            <LoaderCircle className="size-3.5 animate-spin" />
-                          ) : (
-                            <LockKeyhole className="size-3.5" />
-                          )}
-                          {user.status === "ACTIVE" ? "Khóa" : "Mở khóa"}
-                        </Button>
-                      )}
+                      <ToggleSwitch
+                        checked={user.status === "ACTIVE"}
+                        aria-label={
+                          user.status === "ACTIVE"
+                            ? `Khóa tài khoản ${user.fullName}`
+                            : `Mở khóa tài khoản ${user.fullName}`
+                        }
+                        title={
+                          user.role === "ADMIN"
+                            ? "Không thể thay đổi trạng thái quản trị viên"
+                            : user.status === "PENDING"
+                              ? "Tài khoản chưa đăng nhập lần đầu"
+                              : user.status === "ACTIVE"
+                                ? "Khóa tài khoản"
+                                : "Mở khóa tài khoản"
+                        }
+                        disabled={
+                          user.role === "ADMIN" ||
+                          user.status === "PENDING"
+                        }
+                        loading={updatingUserId === user.id}
+                        onCheckedChange={() => setStatusConfirmationUser(user)}
+                      />
                     </TableCell>
                   </tr>
                 ))
@@ -522,28 +464,42 @@ export function AccountManagementPanel() {
           </Table>
         </div>
 
-        <footer className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <CustomSelect
-              className="w-32"
-              buttonClassName="h-9"
-              placement="top"
-              value={String(limit)}
-              options={pageSizeOptions}
-              ariaLabel="Số dòng mỗi trang"
-              onValueChange={(value) => {
-                setLimit(Number(value));
-                setPage(1);
-              }}
-            />
-            <span>
-              Tổng cộng <strong className="text-slate-800">{totalUsers}</strong>{" "}
-              tài khoản
-            </span>
-          </div>
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-        </footer>
+        <DataTableFooter
+          rowCount={users.length}
+          totalItems={totalUsers}
+          itemLabel="tài khoản"
+          page={page}
+          totalPages={totalPages}
+          pageSize={limit}
+          onPageChange={setPage}
+          onPageSizeChange={(pageSize) => {
+            setLimit(pageSize);
+            setPage(1);
+          }}
+        />
       </section>
+
+      <ConfirmationDialog
+        open={statusConfirmationUser !== null}
+        title="ĐỔI TRẠNG THÁI"
+        loading={Boolean(updatingUserId)}
+        onClose={() => {
+          setStatusConfirmationUser(null);
+        }}
+        onConfirm={() => {
+          if (statusConfirmationUser) {
+            void handleToggleStatus(statusConfirmationUser);
+          }
+        }}
+      >
+        <p>
+          Bạn có chắc chắn muốn đổi trạng thái hoạt động của tài khoản{" "}
+          <strong className="text-slate-950">
+            {statusConfirmationUser?.fullName}
+          </strong>{" "}
+          không?
+        </p>
+      </ConfirmationDialog>
 
       <Modal
         open={isImportOpen}
@@ -699,18 +655,29 @@ export function AccountManagementPanel() {
               {createError}
             </p>
           ) : null}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Hủy
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsCreateOpen(false);
+                setIsImportOpen(true);
+              }}
+            >
+              <Upload className="size-4" /> Import từ Excel
             </Button>
-            <Button type="submit" disabled={isCreating}>
-              {isCreating ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <UserRoundCheck className="size-4" />
-              )}
-              Tạo tài khoản
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <UserRoundCheck className="size-4" />
+                )}
+                Tạo tài khoản
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
