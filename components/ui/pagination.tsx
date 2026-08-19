@@ -22,12 +22,12 @@ export function Pagination({
       <Button
         variant="outline"
         size="sm"
-        className="size-9 px-0"
+        className="!h-8 !w-8 !rounded-lg px-0"
         disabled={page <= 1}
         onClick={() => onChange(page - 1)}
         aria-label="Trang trước"
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft className="!h-5 !w-5 !shrink-0" strokeWidth={2.5} />
       </Button>
       {pages.map((item, index) => {
         const previous = pages[index - 1];
@@ -39,7 +39,7 @@ export function Pagination({
             <Button
               variant={item === page ? "primary" : "outline"}
               size="sm"
-              className="size-9 px-0"
+              className="!h-8 !w-8 !rounded-lg px-0"
               onClick={() => onChange(item)}
               aria-current={item === page ? "page" : undefined}
             >
@@ -51,12 +51,12 @@ export function Pagination({
       <Button
         variant="outline"
         size="sm"
-        className="size-9 px-0"
+        className="!h-8 !w-8 !rounded-lg px-0"
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
         aria-label="Trang sau"
       >
-        <ChevronRight className="size-4" />
+        <ChevronRight className="!h-5 !w-5 !shrink-0" strokeWidth={2.5} />
       </Button>
     </nav>
   );

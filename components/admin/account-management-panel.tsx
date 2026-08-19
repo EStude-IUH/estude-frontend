@@ -8,7 +8,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  CheckCircle2,
   Download,
   FileSpreadsheet,
   KeyRound,
@@ -35,6 +34,7 @@ import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { useActionNotification } from "@/components/ui/action-notification";
 import {
   ApiError,
   authenticatedBlobRequest,
@@ -88,6 +88,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function AccountManagementPanel() {
+  const { notify } = useActionNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [page, setPage] = useState(1);
@@ -102,7 +103,6 @@ export function AccountManagementPanel() {
   const [createdTo, setCreatedTo] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [listError, setListError] = useState("");
-  const [notice, setNotice] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [statusConfirmationUser, setStatusConfirmationUser] =
     useState<User | null>(null);
@@ -215,7 +215,9 @@ export function AccountManagementPanel() {
       setImportResult(result);
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      setNotice(`Đã tạo thành công ${result.createdCount} tài khoản.`);
+      notify("Đã import danh sách tài khoản", {
+        key: "accounts-imported",
+      });
       setPage(1);
       await loadUsers();
     } catch (error) {
@@ -263,7 +265,7 @@ export function AccountManagementPanel() {
       setNewAccountName("");
       setNewPassword("");
       setIsCreateOpen(false);
-      setNotice("Tạo tài khoản mới thành công.");
+      notify("Đã tạo tài khoản mới", { key: "account-created" });
       setPage(1);
       await loadUsers();
     } catch (error) {
@@ -288,11 +290,9 @@ export function AccountManagementPanel() {
       );
       await loadUsers();
       setStatusConfirmationUser(null);
-      setNotice(
-        nextStatus === "ACTIVE"
-          ? `Đã mở khóa tài khoản ${user.fullName}.`
-          : `Đã khóa tài khoản ${user.fullName}.`,
-      );
+      notify("Đã cập nhật trạng thái tài khoản", {
+        key: "account-status-updated",
+      });
     } catch (error) {
       setListError(getErrorMessage(error, "Không thể cập nhật tài khoản"));
     } finally {
@@ -302,26 +302,11 @@ export function AccountManagementPanel() {
 
   return (
     <div className="w-full">
-      {notice ? (
-        <div className="mb-3 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="size-4" /> {notice}
-          </span>
-          <button
-            type="button"
-            onClick={() => setNotice("")}
-            className="text-emerald-600"
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-
-      <div className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-card">
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1.4fr)_150px_165px_230px]">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)_150px_180px_230px]">
             <DebouncedSearchInput
-              className="focus:!ring-0"
+              className="!h-[42px] !rounded-lg focus:!ring-0"
               value={search}
               onValueChange={setSearch}
               onSearch={(value) => {
@@ -333,7 +318,7 @@ export function AccountManagementPanel() {
             <CustomSelect
               value={roleFilter}
               options={roleFilterOptions}
-              buttonClassName="!ring-0"
+              buttonClassName="!h-[42px] !rounded-lg !ring-0"
               ariaLabel="Lọc theo vai trò"
               onValueChange={(value) => {
                 setRoleFilter(value);
@@ -343,7 +328,7 @@ export function AccountManagementPanel() {
             <CustomSelect
               value={statusFilter}
               options={statusFilterOptions}
-              buttonClassName="!ring-0"
+              buttonClassName="!h-[42px] !rounded-lg !ring-0"
               ariaLabel="Lọc theo trạng thái"
               onValueChange={(value) => {
                 setStatusFilter(value);
@@ -353,6 +338,7 @@ export function AccountManagementPanel() {
             <DateRangePicker
               from={createdFrom}
               to={createdTo}
+              buttonClassName="!h-[42px] !rounded-lg"
               onChange={(value) => {
                 setCreatedFrom(value.from);
                 setCreatedTo(value.to);
@@ -363,6 +349,7 @@ export function AccountManagementPanel() {
           <div className="flex shrink-0 flex-nowrap justify-end gap-2">
             <Button
               variant="outline"
+              className="!h-[42px] !rounded-lg"
               disabled={isExporting}
               onClick={() => void handleExport()}
             >
@@ -373,14 +360,17 @@ export function AccountManagementPanel() {
               )}
               Export
             </Button>
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button
+              className="!h-[42px] !rounded-lg"
+              onClick={() => setIsCreateOpen(true)}
+            >
               <Plus className="size-4" /> Tạo mới
             </Button>
           </div>
         </div>
       </div>
 
-      <section className="mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
         {listError ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" /> {listError}
@@ -613,6 +603,7 @@ export function AccountManagementPanel() {
           onSubmit={(event) => void handleCreate(event)}
         >
           <Input
+            className="!rounded-lg"
             label="Họ và tên"
             required
             minLength={2}
@@ -622,6 +613,7 @@ export function AccountManagementPanel() {
             placeholder="Nhập họ và tên"
           />
           <Input
+            className="!rounded-lg"
             label="Tên đăng nhập"
             required
             minLength={3}
@@ -634,12 +626,14 @@ export function AccountManagementPanel() {
           />
           <CustomSelect
             label="Vai trò"
+            buttonClassName="!rounded-lg"
             value={newRole}
             options={managedRoleOptions}
             onValueChange={(value) => setNewRole(value as ImportRole)}
           />
           <Input
             icon={KeyRound}
+            className="!rounded-lg"
             label="Mật khẩu mặc định"
             hint="Tạm thời không yêu cầu độ mạnh, chỉ cần không để trống."
             type="password"
@@ -658,6 +652,7 @@ export function AccountManagementPanel() {
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
               variant="secondary"
+              className="!rounded-lg"
               onClick={() => {
                 setIsCreateOpen(false);
                 setIsImportOpen(true);
@@ -666,10 +661,18 @@ export function AccountManagementPanel() {
               <Upload className="size-4" /> Import từ Excel
             </Button>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              <Button
+                variant="outline"
+                className="!rounded-lg"
+                onClick={() => setIsCreateOpen(false)}
+              >
                 Hủy
               </Button>
-              <Button type="submit" disabled={isCreating}>
+              <Button
+                type="submit"
+                className="!rounded-lg"
+                disabled={isCreating}
+              >
                 {isCreating ? (
                   <LoaderCircle className="size-4 animate-spin" />
                 ) : (

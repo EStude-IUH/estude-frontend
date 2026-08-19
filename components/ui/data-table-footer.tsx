@@ -48,7 +48,7 @@ export function DataTableFooter({
       <div className="flex items-center gap-3 text-sm text-slate-500">
         <CustomSelect
           className="w-32"
-          buttonClassName="h-9"
+          buttonClassName="h-9 !rounded-lg"
           placement="top"
           value={String(pageSize)}
           options={options}

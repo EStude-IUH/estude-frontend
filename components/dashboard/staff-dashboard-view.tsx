@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  CircleUserRound,
   ClipboardCheck,
   FilePlus2,
   LayoutDashboard,
@@ -27,6 +28,8 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
+import { UserManagementPanel } from "@/components/admin/user-management-panel";
+import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
@@ -173,15 +176,21 @@ export function StaffDashboardView() {
     ...(user.role === "ADMIN"
       ? [
           {
-            icon: UsersRound,
-            label: "Quản lý tài khoản",
+            icon: CircleUserRound,
+            label: "Tài khoản",
             href: "/admin/accounts",
+          },
+          {
+            icon: UsersRound,
+            label: "Người dùng",
+            href: "/admin/users",
           },
         ]
       : []),
     ...staffNavItems,
   ];
   const isAccountsPage = pathname === "/admin/accounts";
+  const isUsersPage = pathname === "/admin/users";
   const activeMenuLabel =
     navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
@@ -192,7 +201,8 @@ export function StaffDashboardView() {
   const sidebarItemLayout = isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : "";
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
+    <ActionNotificationProvider>
+      <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
       <header
         className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center border-b border-slate-200 bg-white/95 px-4 backdrop-blur transition-[padding] duration-300 lg:pr-8 ${
           isSidebarCollapsed ? "lg:pl-[92px]" : "lg:pl-[286px]"
@@ -361,21 +371,12 @@ export function StaffDashboardView() {
                 title={isSidebarCollapsed ? label : undefined}
                 className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-300 ${
                   active
-                    ? "bg-blue-50 text-brand-700 ring-1 ring-inset ring-blue-100"
+                    ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                 } ${sidebarItemLayout}`}
               >
                 <Icon className="size-5 shrink-0" aria-hidden="true" />
                 <span className={sidebarLabelClass}>{label}</span>
-                {active ? (
-                  <span
-                    className={`ml-auto size-1.5 max-w-[6px] shrink-0 rounded-full bg-brand-600 transition-[max-width,margin,opacity,transform] duration-300 ${
-                      isSidebarCollapsed
-                        ? "lg:ml-0 lg:max-w-0 lg:scale-0 lg:opacity-0"
-                        : "lg:scale-100 lg:opacity-100"
-                    }`}
-                  />
-                ) : null}
               </button>
             );
           })}
@@ -387,9 +388,13 @@ export function StaffDashboardView() {
           isSidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[266px]"
         }`}
       >
-        <div className={isAccountsPage ? "w-full" : "mx-auto max-w-[1280px]"}>
+        <div
+          className={isAccountsPage || isUsersPage ? "w-full" : "mx-auto max-w-[1280px]"}
+        >
           {isAccountsPage ? (
             <AccountManagementPanel />
+          ) : isUsersPage ? (
+            <UserManagementPanel />
           ) : (
             <>
               <section className="relative overflow-hidden rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-9 sm:py-9">
@@ -630,6 +635,7 @@ export function StaffDashboardView() {
           )}
         </div>
       </main>
-    </div>
+      </div>
+    </ActionNotificationProvider>
   );
 }

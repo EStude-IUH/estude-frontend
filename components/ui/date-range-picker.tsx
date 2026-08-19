@@ -18,6 +18,7 @@ export interface DateRangeValue {
 interface DateRangePickerProps extends DateRangeValue {
   onChange: (value: DateRangeValue) => void;
   className?: string;
+  buttonClassName?: string;
 }
 
 const dayLabels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
@@ -150,6 +151,7 @@ export function DateRangePicker({
   to,
   onChange,
   className,
+  buttonClassName,
 }: DateRangePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => normalizeDate(new Date()), []);
@@ -215,6 +217,7 @@ export function DateRangePicker({
         className={cn(
           "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-left text-sm outline-none transition hover:border-slate-300 focus:border-brand-400",
           open && "border-brand-400",
+          buttonClassName,
         )}
       >
         <CalendarDays className="size-4 shrink-0 text-slate-400" />
