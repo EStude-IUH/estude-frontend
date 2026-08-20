@@ -151,6 +151,12 @@ input {
   animation: table-loading-slide 1.8s ease-in-out infinite;
 }
 
+/* The dashboard header already identifies the active administration screen. */
+main > div > div.w-full > div.mb-5:first-child,
+main > div > div.pb-8 > div.mb-6:first-child {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop-enter,
   .modal-panel-enter {

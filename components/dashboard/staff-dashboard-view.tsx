@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   FilePlus2,
   LayoutDashboard,
+  Library,
   LoaderCircle,
   LogOut,
   Menu,
@@ -29,16 +30,16 @@ import {
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
 import { UserManagementPanel } from "@/components/admin/user-management-panel";
+import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
+import { SubjectManagementPanel } from "@/components/admin/subject-management-panel";
+import { ClassManagementPanel } from "@/components/admin/class-management-panel";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
 const staffNavItems = [
-  { icon: BookOpenCheck, label: "Lớp học", href: undefined },
-  { icon: UsersRound, label: "Học viên", href: undefined },
-  { icon: ClipboardCheck, label: "Bài tập & chấm điểm", href: undefined },
-  { icon: CalendarClock, label: "Lịch giảng dạy", href: undefined },
-  { icon: BarChart3, label: "Báo cáo", href: undefined },
+  { icon: FilePlus2, label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },
+  { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
 ];
 
 const managedCourses = [
@@ -185,12 +186,30 @@ export function StaffDashboardView() {
             label: "Người dùng",
             href: "/admin/users",
           },
+          {
+            icon: BookOpenCheck,
+            label: "Dữ liệu học vụ",
+            href: "/admin/academic-data",
+          },
+          {
+            icon: Library,
+            label: "Môn học",
+            href: "/admin/subjects",
+          },
+          {
+            icon: UsersRound,
+            label: "Lớp học",
+            href: "/admin/classes",
+          },
         ]
       : []),
-    ...staffNavItems,
+    ...(user.role === "TEACHER" ? staffNavItems : []),
   ];
   const isAccountsPage = pathname === "/admin/accounts";
   const isUsersPage = pathname === "/admin/users";
+  const isAcademicDataPage = pathname === "/admin/academic-data";
+  const isSubjectsPage = pathname === "/admin/subjects";
+  const isClassesPage = pathname === "/admin/classes";
   const activeMenuLabel =
     navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
@@ -389,9 +408,15 @@ export function StaffDashboardView() {
         }`}
       >
         <div
-          className={isAccountsPage || isUsersPage ? "w-full" : "mx-auto max-w-[1280px]"}
+          className={isAccountsPage || isUsersPage || isSubjectsPage || isClassesPage ? "w-full" : "mx-auto max-w-[1280px]"}
         >
-          {isAccountsPage ? (
+          {isSubjectsPage ? (
+            <SubjectManagementPanel />
+          ) : isClassesPage ? (
+            <ClassManagementPanel />
+          ) : isAcademicDataPage ? (
+            <AcademicDataPanel />
+          ) : isAccountsPage ? (
             <AccountManagementPanel />
           ) : isUsersPage ? (
             <UserManagementPanel />
