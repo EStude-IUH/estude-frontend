@@ -5,12 +5,14 @@ import type {
   ExamInput,
   ExamAnswer,
   AcademicYear,
+  ClassRoster,
   GradeComponent,
   SchoolClass,
   Question,
   QuestionFilters,
   QuestionInput,
   Subject,
+  SubjectTeacherAssignment,
   Term,
   Topic,
 } from "@/types/assessment";
@@ -85,7 +87,7 @@ export const academicDataService = {
   validateGradeConfiguration(subjectId: string): Promise<{ subjectId: string; totalWeight: number; valid: true }> {
     return authenticatedRequest<{ subjectId: string; totalWeight: number; valid: true }>("/grade-components/validate", { method: "POST", body: JSON.stringify({ subjectId }) });
   },
-  createClass(payload: Pick<SchoolClass, "academicYearId" | "code" | "name">): Promise<SchoolClass> {
+  createClass(payload: Pick<SchoolClass, "academicYearId" | "code" | "name" | "isActive">): Promise<SchoolClass> {
     return authenticatedRequest<SchoolClass>("/classes", { method: "POST", body: JSON.stringify(payload) });
   },
   updateClass(id: string, payload: Partial<Pick<SchoolClass, "academicYearId" | "code" | "name" | "isActive">>): Promise<SchoolClass> {
@@ -93,6 +95,36 @@ export const academicDataService = {
   },
   deleteClass(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/classes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  getClassRoster(classId: string): Promise<ClassRoster> {
+    return authenticatedRequest<ClassRoster>(`/classes/${encodeURIComponent(classId)}/roster`);
+  },
+  assignClassTeacher(classId: string, userId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers`, { method: "POST", body: JSON.stringify({ userId }) });
+  },
+  removeClassTeacher(classId: string, teacherId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers/${encodeURIComponent(teacherId)}`, { method: "DELETE" });
+  },
+  assignClassStudent(classId: string, userId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/students`, { method: "POST", body: JSON.stringify({ userId }) });
+  },
+  removeClassStudent(classId: string, studentId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/students/${encodeURIComponent(studentId)}`, { method: "DELETE" });
+  },
+  getSubjectTeacherAssignments(filters: { classId?: string; subjectId?: string; teacherId?: string } = {}): Promise<SubjectTeacherAssignment[]> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+    const query = params.toString();
+    return authenticatedRequest<SubjectTeacherAssignment[]>(`/subject-teacher-assignments${query ? `?${query}` : ""}`);
+  },
+  createSubjectTeacherAssignment(payload: Pick<SubjectTeacherAssignment, "classId" | "subjectId" | "teacherId">): Promise<SubjectTeacherAssignment> {
+    return authenticatedRequest<SubjectTeacherAssignment>("/subject-teacher-assignments", { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateSubjectTeacherAssignment(id: string, payload: Partial<Pick<SubjectTeacherAssignment, "classId" | "subjectId" | "teacherId" | "isActive">>): Promise<SubjectTeacherAssignment> {
+    return authenticatedRequest<SubjectTeacherAssignment>(`/subject-teacher-assignments/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+  },
+  deleteSubjectTeacherAssignment(id: string): Promise<SubjectTeacherAssignment> {
+    return authenticatedRequest<SubjectTeacherAssignment>(`/subject-teacher-assignments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   createTopic(payload: Pick<Topic, "subjectId" | "name"> & { description?: string }): Promise<Topic> {
     return authenticatedRequest<Topic>("/topics", { method: "POST", body: JSON.stringify(payload) });

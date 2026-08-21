@@ -22,17 +22,24 @@ import {
   Menu,
   MessageSquareText,
   Settings,
+  School,
   Sparkles,
   UserRoundPlus,
   UsersRound,
   X,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { OverviewDashboard } from "@/components/dashboard/overview-dashboard";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
 import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
 import { SubjectManagementPanel } from "@/components/admin/subject-management-panel";
 import { ClassManagementPanel } from "@/components/admin/class-management-panel";
+import {
+  SystemSettingsPanel,
+  type SystemSettingsSection,
+} from "@/components/admin/system-settings-panel";
+import { SubjectTeacherAssignmentPanel } from "@/components/admin/subject-teacher-assignment-panel";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
@@ -41,6 +48,33 @@ const staffNavItems = [
   { icon: FilePlus2, label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },
   { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
 ];
+
+const settingsSubItems = [
+  {
+    label: "Điểm danh GPS/QR",
+    href: "/admin/settings/attendance",
+    section: "attendance",
+  },
+  {
+    label: "Thông báo",
+    href: "/admin/settings/notifications",
+    section: "notifications",
+  },
+  {
+    label: "Cảnh báo học lực",
+    href: "/admin/settings/performance",
+    section: "performance",
+  },
+  {
+    label: "Bảo mật & phiên",
+    href: "/admin/settings/security",
+    section: "security",
+  },
+] satisfies Array<{
+  label: string;
+  href: string;
+  section: SystemSettingsSection;
+}>;
 
 const managedCourses = [
   {
@@ -117,6 +151,9 @@ export function StaffDashboardView() {
   const { user, signOut } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(
+    pathname.startsWith("/admin/settings"),
+  );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -134,7 +171,9 @@ export function StaffDashboardView() {
 
   useEffect(() => {
     setIsAccountMenuOpen(false);
+    setIsSettingsMenuOpen(pathname.startsWith("/admin/settings"));
   }, [pathname]);
+
 
   async function handleSignOut() {
     const loginPath = getRoleLogin(user?.role ?? "TEACHER");
@@ -201,6 +240,11 @@ export function StaffDashboardView() {
             label: "Lớp học",
             href: "/admin/classes",
           },
+          {
+            icon: ClipboardCheck,
+            label: "Phân công bộ môn",
+            href: "/admin/subject-assignments",
+          },
         ]
       : []),
     ...(user.role === "TEACHER" ? staffNavItems : []),
@@ -210,8 +254,15 @@ export function StaffDashboardView() {
   const isAcademicDataPage = pathname === "/admin/academic-data";
   const isSubjectsPage = pathname === "/admin/subjects";
   const isClassesPage = pathname === "/admin/classes";
+  const isSubjectAssignmentsPage = pathname === "/admin/subject-assignments";
+  const isSettingsPage = pathname.startsWith("/admin/settings/");
+  const settingsSection =
+    settingsSubItems.find((item) => item.href === pathname)?.section ??
+    "attendance";
   const activeMenuLabel =
-    navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
+    pathname.startsWith("/admin/settings")
+      ? "Cấu hình hệ thống"
+      : navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
     isSidebarCollapsed
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
@@ -221,7 +272,7 @@ export function StaffDashboardView() {
 
   return (
     <ActionNotificationProvider>
-      <div className="min-h-screen bg-[#f5f7fb] text-slate-950">
+      <div className="min-h-screen bg-[#f5f9ff] text-slate-950">
       <header
         className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center border-b border-slate-200 bg-white/95 px-4 backdrop-blur transition-[padding] duration-300 lg:pr-8 ${
           isSidebarCollapsed ? "lg:pl-[92px]" : "lg:pl-[286px]"
@@ -236,7 +287,7 @@ export function StaffDashboardView() {
           <Menu className="size-5" />
         </button>
 
-        <h1 className="truncate text-base font-semibold tracking-tight text-brand-700 sm:text-lg">
+        <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
           {activeMenuLabel}
         </h1>
 
@@ -294,7 +345,11 @@ export function StaffDashboardView() {
                   role="menuitem"
                   onClick={() => {
                     setIsAccountMenuOpen(false);
-                    router.push(getRoleSessionSettings(user.role));
+                    router.push(
+                      user.role === "ADMIN"
+                        ? "/admin/settings"
+                        : getRoleSessionSettings(user.role),
+                    );
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
                 >
@@ -377,8 +432,9 @@ export function StaffDashboardView() {
           className="mt-4 space-y-1.5"
           aria-label="Điều hướng khu vực điều hành"
         >
-          {navItems.map(({ icon: Icon, label, href }) => {
+          {navItems.map(({ icon: NavIcon, label, href }) => {
             const active = href === pathname;
+            const Icon = href === "/admin/classes" ? School : NavIcon;
             return (
               <button
                 type="button"
@@ -399,6 +455,59 @@ export function StaffDashboardView() {
               </button>
             );
           })}
+          {user.role === "ADMIN" ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isSettingsPage) {
+                    router.push("/admin/settings/attendance");
+                  } else {
+                    setIsSettingsMenuOpen((current) => !current);
+                  }
+                  setIsMenuOpen(false);
+                }}
+                title={isSidebarCollapsed ? "Cấu hình hệ thống" : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-300 ${
+                  isSettingsPage
+                    ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                } ${sidebarItemLayout}`}
+              >
+                <Settings className="size-5 shrink-0" aria-hidden="true" />
+                <span className={sidebarLabelClass}>Cấu hình hệ thống</span>
+                <ChevronDown
+                  className={`ml-auto size-4 shrink-0 transition-transform ${
+                    isSettingsMenuOpen ? "rotate-180" : ""
+                  } ${isSidebarCollapsed ? "lg:hidden" : ""}`}
+                />
+              </button>
+              {isSettingsMenuOpen && !isSidebarCollapsed ? (
+                <div className="relative ml-5 mt-1 space-y-1 pl-3 before:absolute before:bottom-3 before:left-0 before:top-0 before:w-px before:rounded-full before:bg-blue-100">
+                  {settingsSubItems.map((item) => {
+                    const active = pathname === item.href;
+                    return (
+                      <button
+                        type="button"
+                        key={item.href}
+                        onClick={() => {
+                          router.push(item.href);
+                          setIsMenuOpen(false);
+                        }}
+                        className={`relative flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition before:absolute before:-left-3 before:top-1/2 before:h-3 before:w-3 before:-translate-y-1/2 before:rounded-bl-xl before:border-b before:border-l before:border-blue-100 before:bg-transparent ${
+                          active && isSettingsPage
+                            ? "bg-blue-50 text-brand-700 shadow-sm shadow-blue-100/50"
+                            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </nav>
       </aside>
 
@@ -408,9 +517,13 @@ export function StaffDashboardView() {
         }`}
       >
         <div
-          className={isAccountsPage || isUsersPage || isSubjectsPage || isClassesPage ? "w-full" : "mx-auto max-w-[1280px]"}
+          className={isAccountsPage || isUsersPage || isSubjectsPage || isClassesPage || isSubjectAssignmentsPage || isSettingsPage ? "w-full" : "mx-auto max-w-[1280px]"}
         >
-          {isSubjectsPage ? (
+          {isSubjectAssignmentsPage ? (
+            <SubjectTeacherAssignmentPanel />
+          ) : isSettingsPage ? (
+            <SystemSettingsPanel section={settingsSection} />
+          ) : isSubjectsPage ? (
             <SubjectManagementPanel />
           ) : isClassesPage ? (
             <ClassManagementPanel />
@@ -420,6 +533,8 @@ export function StaffDashboardView() {
             <AccountManagementPanel />
           ) : isUsersPage ? (
             <UserManagementPanel />
+          ) : pathname.endsWith("/dashboard") ? (
+            <OverviewDashboard user={user} />
           ) : (
             <>
               <section className="relative overflow-hidden rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-9 sm:py-9">

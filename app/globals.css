@@ -32,6 +32,11 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Keep data codes consistent with the application's primary UI font. */
+.font-mono {
+  font-family: inherit;
+}
+
 button,
 input {
   font: inherit;

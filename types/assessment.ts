@@ -99,6 +99,45 @@ export interface SchoolClass {
   deletedAt?: string | null;
 }
 
+export interface ClassRosterMember {
+  id: string;
+  fullName: string;
+  accountName: string;
+  role: "TEACHER" | "STUDENT";
+  status: string;
+  avatarUrl: string | null;
+  assignmentId?: string;
+  enrollmentId?: string;
+  assignedAt?: string;
+  joinedAt?: string;
+}
+
+export interface ClassRoster {
+  classId: string;
+  teachers: ClassRosterMember[];
+  students: ClassRosterMember[];
+}
+
+export interface SubjectTeacherAssignment {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  teacher: {
+    id: string;
+    fullName: string;
+    accountName: string;
+    avatarUrl: string | null;
+    status: string;
+  };
+  subject: Pick<Subject, "id" | "code" | "name">;
+  schoolClass: Pick<SchoolClass, "id" | "code" | "name" | "academicYearId">;
+}
+
 export interface Topic {
   id: string;
   subjectId: string;
