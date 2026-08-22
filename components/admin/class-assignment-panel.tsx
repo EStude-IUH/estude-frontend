@@ -1,9 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Trash2, XCircle } from "lucide-react";
+import { LoaderCircle, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomSelect } from "@/components/ui/form-control";
+import { Modal } from "@/components/ui/modal";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmptyRow,
+  TableHead,
+  TableHeader,
+  TableLoadingBarRow,
+} from "@/components/ui/data-table";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
@@ -18,26 +28,40 @@ function getErrorMessage(error: unknown, fallback: string) {
 export function ClassAssignmentContent({ classId }: { classId: string }) {
   const { notify } = useActionNotification();
   const [teachers, setTeachers] = useState<UsersPage["items"]>([]);
-  const [students, setStudents] = useState<UsersPage["items"]>([]);
+  const [availableStudents, setAvailableStudents] = useState<ClassRoster["students"]>([]);
   const [roster, setRoster] = useState<ClassRoster | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRosterLoading, setIsRosterLoading] = useState(false);
+  const [isAvailableLoading, setIsAvailableLoading] = useState(false);
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
 
+  const loadAvailableStudents = useCallback(async () => {
+    setIsAvailableLoading(true);
+    try {
+      setAvailableStudents(await academicDataService.getAvailableStudents(classId));
+    } catch (cause) {
+      setError(getErrorMessage(cause, "Không thể tải danh sách học sinh chưa có lớp"));
+    } finally {
+      setIsAvailableLoading(false);
+    }
+  }, [classId]);
+
   const loadCandidates = useCallback(async () => {
     try {
-      const [teacherPage, studentPage] = await Promise.all([
+      const [teacherPage, students] = await Promise.all([
         authenticatedRequest<UsersPage>("/users?role=TEACHER&status=ACTIVE&limit=100"),
-        authenticatedRequest<UsersPage>("/users?role=STUDENT&status=ACTIVE&limit=100"),
+        academicDataService.getAvailableStudents(classId),
       ]);
       setTeachers(teacherPage.items);
-      setStudents(studentPage.items);
+      setAvailableStudents(students);
     } catch (cause) {
       setError(getErrorMessage(cause, "Không thể tải danh sách giáo viên và học sinh"));
     }
-  }, []);
+  }, [classId]);
 
   const loadRoster = useCallback(async () => {
     if (!classId) return;
@@ -58,15 +82,22 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
   }, [loadCandidates, loadRoster]);
 
   const assignedTeacher = roster?.teachers[0] ?? null;
-  const assignedStudentIds = useMemo(
-    () => new Set(roster?.students.map((item) => item.id)),
-    [roster],
-  );
-  const availableStudents = students.filter((item) => !assignedStudentIds.has(item.id));
   const teacherOptions = [
     { value: "", label: "Chưa phân công" },
     ...teachers.map((item) => ({ value: item.id, label: `${item.fullName} · ${item.accountName}` })),
   ];
+
+  const filteredAvailableStudents = useMemo(() => {
+    const keyword = studentSearch.trim().toLocaleLowerCase("vi");
+    if (!keyword) return availableStudents;
+    return availableStudents.filter((student) =>
+      [student.fullName, student.accountName]
+        .some((value) => value.toLocaleLowerCase("vi").includes(keyword)),
+    );
+  }, [availableStudents, studentSearch]);
+
+  const allFilteredSelected = filteredAvailableStudents.length > 0
+    && filteredAvailableStudents.every((student) => selectedStudentIds.includes(student.id));
 
   async function changeResponsibleTeacher(teacherId: string) {
     if (teacherId === (assignedTeacher?.id ?? "")) return;
@@ -88,17 +119,45 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
     }
   }
 
-  async function assignStudent() {
-    if (!selectedStudentId) return;
-    setSaving("student");
+  function openStudentPicker() {
+    setSelectedStudentIds([]);
+    setStudentSearch("");
+    setIsStudentPickerOpen(true);
+    void loadAvailableStudents();
+  }
+
+  function toggleStudent(studentId: string) {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId],
+    );
+  }
+
+  function toggleAllFilteredStudents() {
+    const filteredIds = filteredAvailableStudents.map((student) => student.id);
+    setSelectedStudentIds((current) => {
+      if (allFilteredSelected) return current.filter((id) => !filteredIds.includes(id));
+      return [...new Set([...current, ...filteredIds])];
+    });
+  }
+
+  async function assignSelectedStudents() {
+    if (selectedStudentIds.length === 0) return;
+    setSaving("students");
     setError("");
     try {
-      await academicDataService.assignClassStudent(classId, selectedStudentId);
-      setSelectedStudentId("");
-      await loadRoster();
-      notify("Đã gán học sinh vào lớp", { key: "class-student-assigned" });
+      for (const studentId of selectedStudentIds) {
+        await academicDataService.assignClassStudent(classId, studentId);
+      }
+      const assignedCount = selectedStudentIds.length;
+      setSelectedStudentIds([]);
+      setIsStudentPickerOpen(false);
+      await Promise.all([loadRoster(), loadAvailableStudents()]);
+      notify(`Đã gán ${assignedCount} học sinh vào lớp`, { key: "class-students-assigned" });
     } catch (cause) {
       setError(getErrorMessage(cause, "Không thể gán học sinh vào lớp"));
+      await Promise.all([loadRoster(), loadAvailableStudents()]);
     } finally {
       setSaving("");
     }
@@ -109,7 +168,7 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
     setError("");
     try {
       await academicDataService.removeClassStudent(classId, studentId);
-      await loadRoster();
+      await Promise.all([loadRoster(), loadAvailableStudents()]);
       notify("Đã xóa học sinh khỏi lớp", { key: "class-student-removed" });
     } catch (cause) {
       setError(getErrorMessage(cause, "Không thể xóa học sinh khỏi lớp"));
@@ -131,32 +190,79 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
           </section>
 
           <section className="overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-end">
-              <div className="flex-1"><h3 className="font-black">Danh sách học sinh</h3><p className="mt-1 text-xs text-slate-500">{roster?.students.length ?? 0} học sinh trong lớp</p></div>
-              <div className="flex w-full gap-2 lg:max-w-xl">
-                <div className="min-w-0 flex-1"><CustomSelect value={selectedStudentId} options={[{ value: "", label: "Chọn học sinh để gán" }, ...availableStudents.map((item) => ({ value: item.id, label: `${item.fullName} · ${item.accountName}` }))]} onValueChange={setSelectedStudentId} disabled={availableStudents.length === 0 || Boolean(saving)} ariaLabel="Chọn học sinh" /></div>
-                <Button size="sm" onClick={() => void assignStudent()} disabled={!selectedStudentId || Boolean(saving)}>{saving === "student" ? <LoaderCircle className="size-4 animate-spin" /> : null}Gán học sinh</Button>
-              </div>
+            <div className="flex items-center gap-3 border-b border-slate-100 p-4">
+              <div className="min-w-0 flex-1"><h3 className="font-black">Danh sách học sinh</h3><p className="mt-1 text-xs text-slate-500">{roster?.students.length ?? 0} học sinh trong lớp</p></div>
+              <Button size="sm" onClick={openStudentPicker} disabled={Boolean(saving)}><Plus className="size-4" />Gán học sinh</Button>
             </div>
-            <div className="max-h-72 overflow-y-auto">
-              <table className="w-full min-w-[620px] text-left text-sm">
-                <thead className="sticky top-0 bg-brand-600 text-xs uppercase tracking-wide text-white"><tr><th className="w-14 px-4 py-3 text-center">#</th><th className="px-4 py-3">Họ và tên</th><th className="px-4 py-3">Tài khoản</th><th className="px-4 py-3">Trạng thái</th><th className="w-20 px-4 py-3 text-right">Thao tác</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
+            <div className="max-h-72 overflow-auto">
+              <Table className="min-w-[620px]">
+                <TableHeader className="sticky top-0 !bg-brand-600 !text-white"><tr><TableHead className="w-14 text-center">#</TableHead><TableHead>Họ và tên</TableHead><TableHead>Tài khoản</TableHead><TableHead>Trạng thái</TableHead><TableHead className="w-20 text-right">Thao tác</TableHead></tr></TableHeader>
+                <TableBody>
                   {roster?.students.length ? roster.students.map((item, index) => (
-                    <tr key={item.id} className="hover:bg-slate-50/70">
-                      <td className="px-4 py-3 text-center text-xs text-slate-400">{index + 1}</td>
-                      <td className="px-4 py-3 font-bold text-slate-800">{item.fullName}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{item.accountName}</td>
-                      <td className="px-4 py-3"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></td>
-                      <td className="px-4 py-3 text-right"><Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${item.fullName} khỏi lớp`} onClick={() => void removeStudent(item.id)} disabled={Boolean(saving)}>{saving === `student-${item.id}` ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button></td>
+                    <tr key={item.id} className="transition hover:bg-slate-50/70">
+                      <TableCell className="text-center text-xs text-slate-400">{index + 1}</TableCell>
+                      <TableCell className="font-bold text-slate-900">{item.fullName}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-brand-700">{item.accountName}</TableCell>
+                      <TableCell><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></TableCell>
+                      <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${item.fullName} khỏi lớp`} onClick={() => void removeStudent(item.id)} disabled={Boolean(saving)}>{saving === `student-${item.id}` ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button></TableCell>
                     </tr>
-                  )) : <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">Chưa có học sinh trong lớp.</td></tr>}
-                </tbody>
-              </table>
+                  )) : <TableEmptyRow colSpan={5} message="Lớp chưa có học sinh" />}
+                </TableBody>
+              </Table>
             </div>
           </section>
         </>
       )}
+
+      <Modal
+        open={isStudentPickerOpen}
+        title="Gán học sinh vào lớp"
+        description="Chỉ hiển thị học sinh chưa thuộc lớp nào trong năm học này."
+        width="max-w-3xl"
+        bodyClassName="!p-0"
+        onClose={() => { if (saving !== "students") setIsStudentPickerOpen(false); }}
+        footer={(
+          <>
+            <span className="mr-auto text-sm font-semibold text-slate-500">Đã chọn {selectedStudentIds.length} học sinh</span>
+            <Button variant="outline" onClick={() => setIsStudentPickerOpen(false)} disabled={saving === "students"}>Hủy</Button>
+            <Button onClick={() => void assignSelectedStudents()} disabled={selectedStudentIds.length === 0 || saving === "students"}>
+              {saving === "students" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              Gán {selectedStudentIds.length > 0 ? selectedStudentIds.length : ""} học sinh
+            </Button>
+          </>
+        )}
+      >
+        <div className="border-b border-slate-100 p-4">
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <input value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Tìm theo tên hoặc tài khoản" className="h-[42px] w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-blue-100" />
+          </div>
+        </div>
+        <div className="max-h-[420px] overflow-auto">
+          <Table className="min-w-[640px]">
+            <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
+              <tr>
+                <TableHead className="w-14 text-center"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFilteredStudents} disabled={filteredAvailableStudents.length === 0 || isAvailableLoading} className="size-4 accent-brand-600" aria-label="Chọn tất cả học sinh" /></TableHead>
+                <TableHead>Họ và tên</TableHead>
+                <TableHead>Tài khoản</TableHead>
+                <TableHead className="w-36">Trạng thái</TableHead>
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {isAvailableLoading ? <TableLoadingBarRow colSpan={4} /> : null}
+              {!isAvailableLoading && filteredAvailableStudents.length === 0 ? <TableEmptyRow colSpan={4} message={studentSearch ? "Không tìm thấy học sinh phù hợp" : "Không còn học sinh chưa có lớp"} /> : null}
+              {!isAvailableLoading ? filteredAvailableStudents.map((student) => (
+                <tr key={student.id} className={`cursor-pointer transition hover:bg-slate-50/70 ${selectedStudentIds.includes(student.id) ? "bg-blue-50/70" : ""}`} onClick={() => toggleStudent(student.id)}>
+                  <TableCell className="text-center"><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={() => toggleStudent(student.id)} onClick={(event) => event.stopPropagation()} className="size-4 accent-brand-600" aria-label={`Chọn ${student.fullName}`} /></TableCell>
+                  <TableCell className="font-bold text-slate-900">{student.fullName}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold text-brand-700">{student.accountName}</TableCell>
+                  <TableCell><span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">Chưa có lớp</span></TableCell>
+                </tr>
+              )) : null}
+            </TableBody>
+          </Table>
+        </div>
+      </Modal>
     </div>
   );
 }

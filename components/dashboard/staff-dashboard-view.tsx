@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bell,
   BookOpenCheck,
+  CalendarDays,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { OverviewDashboard } from "@/components/dashboard/overview-dashboard";
+import { WeeklyTimetable } from "@/components/dashboard/weekly-timetable";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
 import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
@@ -40,11 +42,16 @@ import {
   type SystemSettingsSection,
 } from "@/components/admin/system-settings-panel";
 import { SubjectTeacherAssignmentPanel } from "@/components/admin/subject-teacher-assignment-panel";
+import { TeacherAssignedClassesPanel } from "@/components/teacher/assigned-classes-panel";
+import { TeacherClassLearningSpace } from "@/components/teacher/class-learning-space";
+import { TeacherMaterialLibraryPanel } from "@/components/teacher/material-library-panel";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
 const staffNavItems = [
+  { icon: School, label: "Lớp học được phân công", href: "/teacher/classes" },
+  { icon: Library, label: "Thư viện tài liệu", href: "/teacher/materials" },
   { icon: FilePlus2, label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },
   { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
 ];
@@ -212,7 +219,11 @@ export function StaffDashboardView() {
   const dashboardPath =
     user.role === "ADMIN" ? "/admin/dashboard" : "/teacher/dashboard";
   const navItems = [
-    { icon: LayoutDashboard, label: "Tổng quan", href: dashboardPath },
+    {
+      icon: user.role === "TEACHER" ? CalendarDays : LayoutDashboard,
+      label: user.role === "TEACHER" ? "Lịch học" : "Tổng quan",
+      href: dashboardPath,
+    },
     ...(user.role === "ADMIN"
       ? [
           {
@@ -255,6 +266,11 @@ export function StaffDashboardView() {
   const isSubjectsPage = pathname === "/admin/subjects";
   const isClassesPage = pathname === "/admin/classes";
   const isSubjectAssignmentsPage = pathname === "/admin/subject-assignments";
+  const isTeacherDashboard = user.role === "TEACHER" && pathname === "/teacher/dashboard";
+  const isTeacherClassesPage = pathname === "/teacher/classes";
+  const isTeacherMaterialsPage = pathname === "/teacher/materials";
+  const teacherClassId = pathname.match(/^\/teacher\/classes\/([^/]+)$/)?.[1] ?? "";
+  const isTeacherClassDetailPage = Boolean(teacherClassId);
   const isSettingsPage = pathname.startsWith("/admin/settings/");
   const settingsSection =
     settingsSubItems.find((item) => item.href === pathname)?.section ??
@@ -262,7 +278,7 @@ export function StaffDashboardView() {
   const activeMenuLabel =
     pathname.startsWith("/admin/settings")
       ? "Cấu hình hệ thống"
-      : navItems.find((item) => item.href === pathname)?.label ?? "Tổng quan";
+      : navItems.find((item) => item.href === pathname || (item.href === "/teacher/classes" && isTeacherClassDetailPage))?.label ?? "Tổng quan";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
     isSidebarCollapsed
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
@@ -433,7 +449,7 @@ export function StaffDashboardView() {
           aria-label="Điều hướng khu vực điều hành"
         >
           {navItems.map(({ icon: NavIcon, label, href }) => {
-            const active = href === pathname;
+            const active = href === pathname || (href === "/teacher/classes" && isTeacherClassDetailPage);
             const Icon = href === "/admin/classes" ? School : NavIcon;
             return (
               <button
@@ -517,9 +533,15 @@ export function StaffDashboardView() {
         }`}
       >
         <div
-          className={isAccountsPage || isUsersPage || isSubjectsPage || isClassesPage || isSubjectAssignmentsPage || isSettingsPage ? "w-full" : "mx-auto max-w-[1280px]"}
+          className={isAccountsPage || isUsersPage || isSubjectsPage || isClassesPage || isSubjectAssignmentsPage || isSettingsPage || isTeacherDashboard || isTeacherClassesPage || isTeacherMaterialsPage || isTeacherClassDetailPage ? "w-full" : "mx-auto max-w-[1280px]"}
         >
-          {isSubjectAssignmentsPage ? (
+          {isTeacherClassDetailPage ? (
+            <TeacherClassLearningSpace classId={teacherClassId} />
+          ) : isTeacherClassesPage ? (
+            <TeacherAssignedClassesPanel />
+          ) : isTeacherMaterialsPage ? (
+            <TeacherMaterialLibraryPanel />
+          ) : isSubjectAssignmentsPage ? (
             <SubjectTeacherAssignmentPanel />
           ) : isSettingsPage ? (
             <SystemSettingsPanel section={settingsSection} />
@@ -534,7 +556,7 @@ export function StaffDashboardView() {
           ) : isUsersPage ? (
             <UserManagementPanel />
           ) : pathname.endsWith("/dashboard") ? (
-            <OverviewDashboard user={user} />
+            user.role === "TEACHER" ? <WeeklyTimetable /> : <OverviewDashboard user={user} />
           ) : (
             <>
               <section className="relative overflow-hidden rounded-[28px] bg-slate-950 px-6 py-7 text-white shadow-xl shadow-slate-900/10 sm:px-9 sm:py-9">

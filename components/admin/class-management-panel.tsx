@@ -99,7 +99,7 @@ export function ClassManagementPanel() {
   return <div className="w-full">
     <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1fr)_190px_200px]">
+        <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)_190px_200px]">
           <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Tìm theo mã hoặc tên lớp" className="h-[42px] w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-blue-100" /></div>
           <CustomSelect value={yearFilter} options={[{ value: "", label: "Tất cả năm học" }, ...yearOptions]} buttonClassName="!h-[42px] !rounded-lg !ring-0" ariaLabel="Lọc theo năm học" onValueChange={(value) => { setYearFilter(value); setPage(1); }} />
           <CustomSelect value={statusFilter} options={statusOptions} buttonClassName="!h-[42px] !rounded-lg !ring-0" ariaLabel="Lọc theo trạng thái" onValueChange={(value) => { setStatusFilter(value); setPage(1); }} />

@@ -4,16 +4,19 @@ import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
   Bell,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   ClipboardCheck,
   FilePlus2,
+  Library,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
   Menu,
+  School,
   Settings,
   X,
 } from "lucide-react";
@@ -51,7 +54,9 @@ export function AssessmentShell({ children, student = false }: { children: React
         { href: "/student/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
       ]
     : [
-        { href: "/teacher/dashboard", label: "Tổng quan", icon: LayoutDashboard },
+        { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
+        { href: "/teacher/classes", label: "Lớp học được phân công", icon: School },
+        { href: "/teacher/materials", label: "Thư viện tài liệu", icon: Library },
         { href: "/teacher/question-bank", label: "Ngân hàng câu hỏi", icon: FilePlus2 },
         { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
       ];

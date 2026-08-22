@@ -13,6 +13,12 @@ import type {
   QuestionInput,
   Subject,
   SubjectTeacherAssignment,
+  TeacherAssignedClass,
+  ClassTopic,
+  ClassTopicInput,
+  LearningMaterial,
+  MaterialAssignmentTarget,
+  BulkMaterialAssignmentResult,
   Term,
   Topic,
 } from "@/types/assessment";
@@ -99,6 +105,9 @@ export const academicDataService = {
   getClassRoster(classId: string): Promise<ClassRoster> {
     return authenticatedRequest<ClassRoster>(`/classes/${encodeURIComponent(classId)}/roster`);
   },
+  getAvailableStudents(classId: string): Promise<ClassRoster["students"]> {
+    return authenticatedRequest<ClassRoster["students"]>(`/classes/${encodeURIComponent(classId)}/available-students`);
+  },
   assignClassTeacher(classId: string, userId: string): Promise<Record<string, unknown>> {
     return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers`, { method: "POST", body: JSON.stringify({ userId }) });
   },
@@ -116,6 +125,89 @@ export const academicDataService = {
     Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
     const query = params.toString();
     return authenticatedRequest<SubjectTeacherAssignment[]>(`/subject-teacher-assignments${query ? `?${query}` : ""}`);
+  },
+  getTeacherAssignedClasses(): Promise<TeacherAssignedClass[]> {
+    return authenticatedRequest<TeacherAssignedClass[]>("/teacher/assigned-classes");
+  },
+  getTeacherAssignedClass(classId: string): Promise<TeacherAssignedClass> {
+    return authenticatedRequest<TeacherAssignedClass>(`/teacher/assigned-classes/${encodeURIComponent(classId)}`);
+  },
+  getClassTopics(classId: string): Promise<ClassTopic[]> {
+    return authenticatedRequest<ClassTopic[]>(`/teacher/assigned-classes/${encodeURIComponent(classId)}/topics`);
+  },
+  createClassTopic(classId: string, payload: ClassTopicInput): Promise<ClassTopic> {
+    return authenticatedRequest<ClassTopic>(`/teacher/assigned-classes/${encodeURIComponent(classId)}/topics`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateClassTopic(topicId: string, payload: Partial<Omit<ClassTopicInput, "subjectId">>): Promise<ClassTopic> {
+    return authenticatedRequest<ClassTopic>(`/teacher/class-topics/${encodeURIComponent(topicId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteClassTopic(topicId: string): Promise<ClassTopic> {
+    return authenticatedRequest<ClassTopic>(`/teacher/class-topics/${encodeURIComponent(topicId)}`, { method: "DELETE" });
+  },
+  async uploadClassMaterial(topicId: string, file: File): Promise<LearningMaterial> {
+    const contentType = file.type || "application/octet-stream";
+    const session = await authenticatedRequest<{
+      material: LearningMaterial;
+      uploadUrl: string;
+      method: "PUT";
+      expiresIn: number;
+    }>(`/teacher/class-topics/${encodeURIComponent(topicId)}/materials/upload-url`, {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, contentType, fileSize: file.size }),
+    });
+    const uploadResponse = await fetch(session.uploadUrl, {
+      method: session.method,
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+    if (!uploadResponse.ok) throw new Error("Không thể tải tài liệu lên S3");
+    return authenticatedRequest<LearningMaterial>(`/teacher/materials/${encodeURIComponent(session.material.id)}/confirm`, { method: "POST" });
+  },
+  getMaterialLibrary(): Promise<LearningMaterial[]> {
+    return authenticatedRequest<LearningMaterial[]>("/teacher/material-library");
+  },
+  async uploadLibraryMaterial(file: File): Promise<LearningMaterial> {
+    const contentType = file.type || "application/octet-stream";
+    const session = await authenticatedRequest<{
+      material: LearningMaterial;
+      uploadUrl: string;
+      method: "PUT";
+      expiresIn: number;
+    }>("/teacher/material-library/upload-url", {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, contentType, fileSize: file.size }),
+    });
+    const uploadResponse = await fetch(session.uploadUrl, {
+      method: session.method,
+      headers: { "Content-Type": contentType },
+      body: file,
+    });
+    if (!uploadResponse.ok) throw new Error("Không thể tải tài liệu lên S3");
+    return authenticatedRequest<LearningMaterial>(`/teacher/materials/${encodeURIComponent(session.material.id)}/confirm`, { method: "POST" });
+  },
+  bulkAssignMaterials(materialIds: string[], targets: MaterialAssignmentTarget[]): Promise<BulkMaterialAssignmentResult> {
+    return authenticatedRequest<BulkMaterialAssignmentResult>("/teacher/material-library/assign", {
+      method: "POST",
+      body: JSON.stringify({ materialIds, targets }),
+    });
+  },
+  removeMaterialFromTopic(topicId: string, materialId: string): Promise<{ topicId: string; materialId: string }> {
+    return authenticatedRequest<{ topicId: string; materialId: string }>(`/teacher/class-topics/${encodeURIComponent(topicId)}/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" });
+  },
+  getMaterialDownloadUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
+    return authenticatedRequest<{ url: string; expiresIn: number }>(`/teacher/materials/${encodeURIComponent(materialId)}/download-url`);
+  },
+  deleteLearningMaterial(materialId: string): Promise<LearningMaterial> {
+    return authenticatedRequest<LearningMaterial>(`/teacher/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" });
+  },
+  getTeacherAssignedClassRoster(classId: string): Promise<ClassRoster> {
+    return authenticatedRequest<ClassRoster>(`/teacher/assigned-classes/${encodeURIComponent(classId)}/roster`);
   },
   createSubjectTeacherAssignment(payload: Pick<SubjectTeacherAssignment, "classId" | "subjectId" | "teacherId">): Promise<SubjectTeacherAssignment> {
     return authenticatedRequest<SubjectTeacherAssignment>("/subject-teacher-assignments", { method: "POST", body: JSON.stringify(payload) });

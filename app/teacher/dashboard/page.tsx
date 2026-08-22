@@ -3,8 +3,8 @@ import { RoleGate } from '@/components/auth/role-gate';
 import { StaffDashboardView } from '@/components/dashboard/staff-dashboard-view';
 
 export const metadata: Metadata = {
-  title: 'Khu vực giảng viên',
-  description: 'Không gian quản lý giảng dạy dành cho giảng viên EStude.',
+  title: 'Lịch học giảng viên',
+  description: 'Theo dõi thời khóa biểu và các lớp học được phân công.',
 };
 
 export default function TeacherDashboardPage() {

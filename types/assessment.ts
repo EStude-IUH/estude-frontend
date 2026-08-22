@@ -138,6 +138,74 @@ export interface SubjectTeacherAssignment {
   schoolClass: Pick<SchoolClass, "id" | "code" | "name" | "academicYearId">;
 }
 
+export interface TeacherAssignedClass {
+  id: string;
+  code: string;
+  name: string;
+  academicYearId: string;
+  studentCount: number;
+  subjects: Array<Pick<Subject, "id" | "code" | "name">>;
+}
+
+export interface LearningMaterial {
+  id: string;
+  topicId: string | null;
+  teacherId: string;
+  originalName: string;
+  s3Key: string;
+  mimeType: string;
+  size: number;
+  status: "PENDING" | "READY";
+  createdAt: string;
+  updatedAt: string;
+  assignments?: MaterialClassAssignment[];
+}
+
+export interface MaterialClassAssignment {
+  id: string;
+  classId: string;
+  subjectId: string;
+  name: string;
+  description: string;
+  schoolClass: Pick<SchoolClass, "id" | "code" | "name">;
+  subject: Pick<Subject, "id" | "code" | "name">;
+}
+
+export interface MaterialAssignmentTarget {
+  classId: string;
+  subjectId: string;
+  topicId?: string;
+  topicName?: string;
+}
+
+export interface BulkMaterialAssignmentResult {
+  assignedCount: number;
+  skippedCount: number;
+  materialCount: number;
+  topicCount: number;
+}
+
+export interface ClassTopic {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  subject: Pick<Subject, "id" | "code" | "name">;
+  materials: LearningMaterial[];
+}
+
+export interface ClassTopicInput {
+  subjectId: string;
+  name: string;
+  description?: string;
+  sortOrder?: number;
+}
+
 export interface Topic {
   id: string;
   subjectId: string;
