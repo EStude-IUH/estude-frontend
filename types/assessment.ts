@@ -1,5 +1,5 @@
 export type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESSAY";
-export type Difficulty = "EASY" | "MEDIUM" | "HARD";
+export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "VERY_HARD";
 
 export interface QuestionOption {
   id: string;
@@ -20,8 +20,67 @@ export interface Question {
   correctOptionIds: string[];
   defaultPoints: number;
   explanation: string;
+  generatedByAi?: boolean;
+  sourceMaterialId?: string | null;
+  source?: QuestionSource | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface QuestionSource {
+  documentName: string;
+  page: number;
+}
+
+export type GeneratedQuestionStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface GeneratedQuestion extends Omit<Question, "createdAt" | "updatedAt"> {
+  teacherId: string;
+  materialId: string;
+  source: QuestionSource;
+  status: GeneratedQuestionStatus;
+  generatedByAi: true;
+  sourceFocus?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerateAiQuestionsInput {
+  materialId: string;
+  subjectId?: string;
+  topicId?: string;
+  sourceFocus?: string;
+  questionType: Extract<QuestionType, "SINGLE_CHOICE" | "TRUE_FALSE">;
+  difficulty: Difficulty;
+  quantity: number;
+  includeExplanation: boolean;
+  defaultPoints: number;
+}
+
+export interface DifficultyLevelDefinition {
+  code: Difficulty;
+  label: string;
+  description: string;
+}
+
+export interface SystemDifficultySettings {
+  levels: DifficultyLevelDefinition[];
+  configured: boolean;
+}
+
+export interface TeacherDifficultySettings {
+  systemLevels: DifficultyLevelDefinition[];
+  customLevels: DifficultyLevelDefinition[] | null;
+  effectiveLevels: DifficultyLevelDefinition[];
+  usingSystemDefaults: boolean;
+}
+
+export interface UpdateGeneratedQuestionInput {
+  content?: string;
+  difficulty?: Difficulty;
+  options?: QuestionOption[];
+  correctOptionIds?: string[];
+  explanation?: string;
 }
 
 export interface QuestionFilters {
@@ -305,6 +364,7 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   EASY: "Dễ",
   MEDIUM: "Trung bình",
   HARD: "Khó",
+  VERY_HARD: "Rất khó",
 };
 
 export const EXAM_STATUS_LABELS: Record<ExamStatus, string> = {

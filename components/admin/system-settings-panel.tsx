@@ -90,6 +90,7 @@ export type SystemSettingsSection =
   | "attendance"
   | "notifications"
   | "performance"
+  | "ai-question"
   | "security";
 
 export function SystemSettingsPanel({

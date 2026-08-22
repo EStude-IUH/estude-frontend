@@ -21,6 +21,12 @@ import type {
   BulkMaterialAssignmentResult,
   Term,
   Topic,
+  GeneratedQuestion,
+  GenerateAiQuestionsInput,
+  UpdateGeneratedQuestionInput,
+  DifficultyLevelDefinition,
+  SystemDifficultySettings,
+  TeacherDifficultySettings,
 } from "@/types/assessment";
 
 export const academicDataService = {
@@ -243,6 +249,58 @@ export const questionBankService = {
   },
   deleteQuestion(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/question-bank/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
+export const aiQuestionService = {
+  generate(payload: GenerateAiQuestionsInput): Promise<GeneratedQuestion[]> {
+    return authenticatedRequest<GeneratedQuestion[]>("/ai-questions/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  update(id: string, payload: UpdateGeneratedQuestionInput): Promise<GeneratedQuestion> {
+    return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  regenerate(id: string): Promise<GeneratedQuestion> {
+    return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}/regenerate`, {
+      method: "POST",
+    });
+  },
+  approve(id: string): Promise<{ generatedQuestion: GeneratedQuestion; question: Question }> {
+    return authenticatedRequest<{ generatedQuestion: GeneratedQuestion; question: Question }>(
+      `/ai-questions/${encodeURIComponent(id)}/approve`,
+      { method: "POST" },
+    );
+  },
+  reject(id: string): Promise<GeneratedQuestion> {
+    return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+    });
+  },
+};
+
+export const aiQuestionSettingsService = {
+  getSystem(): Promise<SystemDifficultySettings> {
+    return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system");
+  },
+  updateSystem(levels: DifficultyLevelDefinition[]): Promise<SystemDifficultySettings> {
+    return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system", {
+      method: "PUT",
+      body: JSON.stringify({ levels }),
+    });
+  },
+  getMine(): Promise<TeacherDifficultySettings> {
+    return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me");
+  },
+  updateMine(levels: DifficultyLevelDefinition[]): Promise<TeacherDifficultySettings> {
+    return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me", {
+      method: "PUT",
+      body: JSON.stringify({ levels }),
+    });
   },
 };
 

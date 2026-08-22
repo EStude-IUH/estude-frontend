@@ -37,6 +37,7 @@ import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
 import { SubjectManagementPanel } from "@/components/admin/subject-management-panel";
 import { ClassManagementPanel } from "@/components/admin/class-management-panel";
+import { AiDifficultySettingsPanel } from "@/components/admin/ai-difficulty-settings-panel";
 import {
   SystemSettingsPanel,
   type SystemSettingsSection,
@@ -71,6 +72,11 @@ const settingsSubItems = [
     label: "Cảnh báo học lực",
     href: "/admin/settings/performance",
     section: "performance",
+  },
+  {
+    label: "Độ khó câu hỏi AI",
+    href: "/admin/settings/ai-question",
+    section: "ai-question",
   },
   {
     label: "Bảo mật & phiên",
@@ -543,6 +549,8 @@ export function StaffDashboardView() {
             <TeacherMaterialLibraryPanel />
           ) : isSubjectAssignmentsPage ? (
             <SubjectTeacherAssignmentPanel />
+          ) : settingsSection === "ai-question" ? (
+            <AiDifficultySettingsPanel />
           ) : isSettingsPage ? (
             <SystemSettingsPanel section={settingsSection} />
           ) : isSubjectsPage ? (
