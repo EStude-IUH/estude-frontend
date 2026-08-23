@@ -29,6 +29,6 @@ export function getRoleLogin(role: UserRole): string {
     case "TEACHER":
       return "/teacher/login";
     case "STUDENT":
-      return "/login";
+      return "/student/login";
   }
 }

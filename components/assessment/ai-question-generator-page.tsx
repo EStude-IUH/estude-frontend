@@ -84,12 +84,15 @@ export function AiQuestionGeneratorPage() {
   useEffect(() => {
     Promise.all([
       academicDataService.getMaterialLibrary(),
-      academicDataService.getSubjects(),
+      academicDataService.getTeacherAssignedClasses(),
       aiQuestionSettingsService.getMine(),
-    ]).then(([materialItems, subjectItems, teacherSettings]) => {
+    ]).then(([materialItems, assignedClasses, teacherSettings]) => {
       const pdfs = materialItems.filter((item) =>
         item.mimeType === "application/pdf" || item.originalName.toLowerCase().endsWith(".pdf"),
       );
+      const subjectItems = [...new Map(
+        assignedClasses.flatMap((item) => item.subjects).map((subject) => [subject.id, subject]),
+      ).values()].map((subject) => ({ ...subject, description: "", isActive: true }));
       setMaterials(pdfs);
       setSubjects(subjectItems);
       setDifficultySettings(teacherSettings);
