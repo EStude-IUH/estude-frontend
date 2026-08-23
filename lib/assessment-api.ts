@@ -233,7 +233,7 @@ export const questionBankService = {
   getQuestions(filters: QuestionFilters = {}): Promise<Question[]> {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     });
     const query = params.toString();
     return authenticatedRequest<Question[]>(`/question-bank${query ? `?${query}` : ""}`);
@@ -335,10 +335,11 @@ export const examAttemptService = {
   getAttempt(id: string): Promise<ExamAttempt & { exam: Exam }> {
     return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}`);
   },
-  saveAnswer(id: string, answer: ExamAnswer): Promise<ExamAttempt> {
+  saveAnswer(id: string, answer: ExamAnswer, keepalive = false): Promise<ExamAttempt> {
     return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/answers`, {
       method: "PATCH",
       body: JSON.stringify(answer),
+      keepalive,
     });
   },
   submitExam(id: string): Promise<ExamAttempt> {

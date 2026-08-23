@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   BookOpen,
@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  ClipboardCheck,
   Clock3,
   FileText,
   LayoutDashboard,
@@ -24,7 +25,16 @@ import { useAuth } from "@/context/auth-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Hôm nay", active: true },
+  {
+    icon: LayoutDashboard,
+    label: "Hôm nay",
+    href: "/student/dashboard",
+  },
+  {
+    icon: ClipboardCheck,
+    label: "Bài kiểm tra",
+    href: "/student/exams",
+  },
   { icon: CalendarDays, label: "Thời khóa biểu" },
   { icon: BookOpen, label: "Môn học" },
   { icon: FileText, label: "Bài tập" },
@@ -152,6 +162,7 @@ function LoadingScreen() {
 
 export function StudentDashboardView() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, signOut } = useAuth();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -195,22 +206,29 @@ export function StudentDashboardView() {
             className="hidden h-full items-center gap-1 lg:flex"
             aria-label="Điều hướng sinh viên"
           >
-            {navItems.map(({ icon: Icon, label, active }) => (
-              <button
-                type="button"
-                key={label}
-                className={`relative flex h-full items-center gap-2 px-3 text-sm font-semibold transition ${
-                  active
-                    ? "text-brand-700"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <Icon className="size-4" /> {label}
-                {active ? (
-                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />
-                ) : null}
-              </button>
-            ))}
+            {navItems.map(({ icon: Icon, label, href }) => {
+              const active = href
+                ? pathname === href || pathname.startsWith(`${href}/`)
+                : false;
+
+              return (
+                <button
+                  type="button"
+                  key={label}
+                  onClick={() => href && router.push(href)}
+                  className={`relative flex h-full items-center gap-2 px-3 text-sm font-semibold transition ${
+                    active
+                      ? "text-brand-700"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <Icon className="size-4" /> {label}
+                  {active ? (
+                    <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />
+                  ) : null}
+                </button>
+              );
+            })}
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -371,6 +389,29 @@ export function StudentDashboardView() {
           </section>
 
           <aside className="space-y-5">
+            <section className="rounded-2xl border border-brand-100 bg-white p-5 shadow-card">
+              <div className="flex items-start gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                  <ClipboardCheck className="size-5" />
+                </span>
+                <div>
+                  <h2 className="font-extrabold text-slate-950">
+                    Bài kiểm tra được giao
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Xem bài sắp diễn ra, bắt đầu hoặc tiếp tục bài đang làm.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push("/student/exams")}
+                className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-sm font-bold text-white transition hover:bg-brand-700"
+              >
+                Xem và làm bài kiểm tra <ChevronRight className="size-4" />
+              </button>
+            </section>
+
             <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-cyan-500 p-5 text-white shadow-lg shadow-brand-700/15">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
@@ -485,15 +526,22 @@ export function StudentDashboardView() {
         className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-slate-200 bg-white px-2 lg:hidden"
         aria-label="Điều hướng nhanh"
       >
-        {navItems.slice(0, 4).map(({ icon: Icon, label, active }) => (
-          <button
-            type="button"
-            key={label}
-            className={`flex flex-col items-center justify-center gap-1 text-[10px] font-bold ${active ? "text-brand-700" : "text-slate-400"}`}
-          >
-            <Icon className="size-5" /> {label}
-          </button>
-        ))}
+        {navItems.slice(0, 4).map(({ icon: Icon, label, href }) => {
+          const active = href
+            ? pathname === href || pathname.startsWith(`${href}/`)
+            : false;
+
+          return (
+            <button
+              type="button"
+              key={label}
+              onClick={() => href && router.push(href)}
+              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-bold ${active ? "text-brand-700" : "text-slate-400"}`}
+            >
+              <Icon className="size-5" /> {label}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
