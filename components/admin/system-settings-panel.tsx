@@ -73,7 +73,9 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${tone}`}>
+      <span
+        className={`grid size-10 shrink-0 place-items-center rounded-xl ${tone}`}
+      >
         <Icon className="size-5" />
       </span>
       <div>
@@ -87,11 +89,7 @@ function SectionHeader({
 }
 
 export type SystemSettingsSection =
-  | "attendance"
-  | "notifications"
-  | "performance"
-  | "ai-question"
-  | "security";
+  "attendance" | "notifications" | "performance" | "ai-question" | "security";
 
 export function SystemSettingsPanel({
   section = "attendance",
@@ -127,18 +125,7 @@ export function SystemSettingsPanel({
 
   return (
     <div className="w-full pb-8">
-      <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">
-            Admin workspace
-          </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-            Cấu hình hệ thống
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Thiết lập các tham số chung phục vụ điểm danh, thông báo và phân tích học lực bằng AI.
-          </p>
-        </div>
+      <div className="mb-3 flex justify-end">
         <Button className="w-fit !rounded-lg" onClick={handleSave}>
           <Save className="size-4" />
           Lưu cấu hình
@@ -146,7 +133,9 @@ export function SystemSettingsPanel({
       </div>
 
       <div className="grid gap-4">
-        <section className={`${section === "attendance" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}>
+        <section
+          className={`${section === "attendance" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}
+        >
           <SectionHeader
             icon={MapPin}
             title="Điểm danh GPS/QR"
@@ -171,7 +160,10 @@ export function SystemSettingsPanel({
               label="Hiệu lực GPS"
               value={attendance.gpsValidity}
               onChange={(event) =>
-                setAttendance({ ...attendance, gpsValidity: event.target.value })
+                setAttendance({
+                  ...attendance,
+                  gpsValidity: event.target.value,
+                })
               }
               hint="Đơn vị: phút"
             />
@@ -195,20 +187,26 @@ export function SystemSettingsPanel({
           <div className="mt-5 grid gap-3">
             <SettingSwitch
               checked={attendance.gpsEnabled}
-              onChange={(gpsEnabled) => setAttendance({ ...attendance, gpsEnabled })}
+              onChange={(gpsEnabled) =>
+                setAttendance({ ...attendance, gpsEnabled })
+              }
               label="Cho phép điểm danh bằng GPS"
               description="Sinh viên cần ở trong bán kính cho phép của lớp học."
             />
             <SettingSwitch
               checked={attendance.qrEnabled}
-              onChange={(qrEnabled) => setAttendance({ ...attendance, qrEnabled })}
+              onChange={(qrEnabled) =>
+                setAttendance({ ...attendance, qrEnabled })
+              }
               label="Cho phép điểm danh bằng mã QR"
               description="Mã QR được tạo theo từng buổi học và tự động hết hiệu lực."
             />
           </div>
         </section>
 
-        <section className={`${section === "notifications" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}>
+        <section
+          className={`${section === "notifications" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}
+        >
           <SectionHeader
             icon={Bell}
             title="Thông báo hệ thống"
@@ -219,7 +217,9 @@ export function SystemSettingsPanel({
           <div className="mt-6 grid gap-3">
             <SettingSwitch
               checked={notifications.email}
-              onChange={(email) => setNotifications({ ...notifications, email })}
+              onChange={(email) =>
+                setNotifications({ ...notifications, email })
+              }
               label="Email"
               description="Gửi thông báo quan trọng đến email của người dùng."
             />
@@ -231,7 +231,9 @@ export function SystemSettingsPanel({
             />
             <SettingSwitch
               checked={notifications.inApp}
-              onChange={(inApp) => setNotifications({ ...notifications, inApp })}
+              onChange={(inApp) =>
+                setNotifications({ ...notifications, inApp })
+              }
               label="Thông báo trong hệ thống"
               description="Lưu thông báo trong trung tâm thông báo của EStude."
             />
@@ -242,7 +244,10 @@ export function SystemSettingsPanel({
               label="Email gửi đi"
               value={notifications.sender}
               onChange={(event) =>
-                setNotifications({ ...notifications, sender: event.target.value })
+                setNotifications({
+                  ...notifications,
+                  sender: event.target.value,
+                })
               }
               icon={Mail}
             />
@@ -250,14 +255,19 @@ export function SystemSettingsPanel({
               label="Email nhận phản hồi"
               value={notifications.replyTo}
               onChange={(event) =>
-                setNotifications({ ...notifications, replyTo: event.target.value })
+                setNotifications({
+                  ...notifications,
+                  replyTo: event.target.value,
+                })
               }
               icon={Mail}
             />
           </div>
         </section>
 
-        <section className={`${section === "performance" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}>
+        <section
+          className={`${section === "performance" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}
+        >
           <SectionHeader
             icon={BrainCircuit}
             title="Cảnh báo học lực"
@@ -305,14 +315,18 @@ export function SystemSettingsPanel({
           <div className="mt-5">
             <SettingSwitch
               checked={performance.aiAnalysis}
-              onChange={(aiAnalysis) => setPerformance({ ...performance, aiAnalysis })}
+              onChange={(aiAnalysis) =>
+                setPerformance({ ...performance, aiAnalysis })
+              }
               label="Bật phân tích học lực bằng AI"
               description="Tự động tổng hợp dữ liệu điểm số và điểm danh để phát hiện sớm rủi ro."
             />
           </div>
         </section>
 
-        <section className={`${section === "security" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}>
+        <section
+          className={`${section === "security" ? "" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}
+        >
           <SectionHeader
             icon={ShieldCheck}
             title="Bảo mật & phiên đăng nhập"
@@ -323,13 +337,24 @@ export function SystemSettingsPanel({
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             {[
               { icon: Globe2, label: "Đăng nhập web", value: "03 phiên" },
-              { icon: Smartphone, label: "Thiết bị di động", value: "02 thiết bị" },
+              {
+                icon: Smartphone,
+                label: "Thiết bị di động",
+                value: "02 thiết bị",
+              },
               { icon: Clock3, label: "Phiên gần nhất", value: "2 phút trước" },
             ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+              <div
+                key={label}
+                className="rounded-xl border border-slate-100 bg-slate-50/70 p-4"
+              >
                 <Icon className="size-4 text-slate-400" />
-                <p className="mt-3 text-xs font-semibold text-slate-500">{label}</p>
-                <p className="mt-1 text-sm font-extrabold text-slate-900">{value}</p>
+                <p className="mt-3 text-xs font-semibold text-slate-500">
+                  {label}
+                </p>
+                <p className="mt-1 text-sm font-extrabold text-slate-900">
+                  {value}
+                </p>
               </div>
             ))}
           </div>
@@ -345,7 +370,6 @@ export function SystemSettingsPanel({
           </button>
         </section>
       </div>
-
     </div>
   );
 }

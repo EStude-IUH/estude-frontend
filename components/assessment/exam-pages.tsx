@@ -1,56 +1,752 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronRight, GripVertical, Send, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  GripVertical,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AssessmentShell, ErrorPanel, LoadingPanel, PageHeading } from "@/components/assessment/assessment-shell";
+import {
+  AssessmentShell,
+  ErrorPanel,
+  LoadingPanel,
+  PageHeading,
+} from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { academicDataService, examService, questionBankService } from "@/lib/assessment-api";
-import { EXAM_STATUS_LABELS, type Exam, type ExamInput, type ExamQuestion, type ExamSettings, type Question, type SchoolClass, type Subject, type Topic } from "@/types/assessment";
+import { Input, Select, Textarea } from "@/components/ui/form-control";
+import {
+  academicDataService,
+  examService,
+  questionBankService,
+} from "@/lib/assessment-api";
+import {
+  EXAM_STATUS_LABELS,
+  type Exam,
+  type ExamInput,
+  type ExamQuestion,
+  type ExamSettings,
+  type Question,
+  type SchoolClass,
+  type Subject,
+  type Topic,
+} from "@/types/assessment";
 
-const blankSettings: ExamSettings = { startsAt: "2026-08-20T08:00", endsAt: "2026-08-30T23:59", durationMinutes: 45, attemptsAllowed: 1, shuffleQuestions: false, shuffleAnswers: false, showScoreImmediately: true, showCorrectAnswers: true };
+const blankSettings: ExamSettings = {
+  startsAt: "2026-08-20T08:00",
+  endsAt: "2026-08-30T23:59",
+  durationMinutes: 45,
+  attemptsAllowed: 1,
+  shuffleQuestions: false,
+  shuffleAnswers: false,
+  showScoreImmediately: true,
+  showCorrectAnswers: true,
+};
 
-function statusClass(status: Exam["status"]) { return { DRAFT: "bg-slate-100 text-slate-600", SCHEDULED: "bg-amber-50 text-amber-700", ONGOING: "bg-emerald-50 text-emerald-700", ENDED: "bg-blue-50 text-blue-700" }[status]; }
+function statusClass(status: Exam["status"]) {
+  return {
+    DRAFT: "bg-slate-100 text-slate-600",
+    SCHEDULED: "bg-amber-50 text-amber-700",
+    ONGOING: "bg-emerald-50 text-emerald-700",
+    ENDED: "bg-blue-50 text-blue-700",
+  }[status];
+}
 
 export function TeacherExamsPage() {
   const router = useRouter();
-  const [exams, setExams] = useState<Exam[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
-  async function load() { setLoading(true); try { setExams(await examService.getExams()); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể tải bài kiểm tra"); } finally { setLoading(false); } }
-  useEffect(() => { void load(); }, []);
-  async function publish(exam: Exam) { try { const updated = await examService.publishExam(exam.id); setExams((items) => items.map((item) => item.id === exam.id ? updated : item)); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể công bố bài kiểm tra"); } }
-  async function remove(exam: Exam) { if (!window.confirm(`Xóa bài kiểm tra “${exam.title}”?`)) return; try { await examService.deleteExam(exam.id); setExams((items) => items.filter((item) => item.id !== exam.id)); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể xóa bài kiểm tra"); } }
-  return <AssessmentShell><PageHeading eyebrow="Teacher workspace" title="Bài kiểm tra" description="Tạo đề, công bố lịch làm và theo dõi bài nộp của học sinh." action={<Link href="/teacher/exams/new"><Button>+ Tạo bài kiểm tra</Button></Link>} />{error ? <div className="mb-5"><ErrorPanel message={error} /></div> : null}{loading ? <LoadingPanel /> : <div className="grid gap-4 lg:grid-cols-2">{exams.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-14 text-center text-sm text-slate-500">Chưa có bài kiểm tra. Hãy tạo đề đầu tiên.</div> : exams.map((exam) => <article key={exam.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-brand-200 hover:shadow-lg"><div className="flex items-start justify-between gap-3"><div><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}>{EXAM_STATUS_LABELS[exam.status]}</span><h2 className="mt-3 text-lg font-black text-slate-950">{exam.title}</h2><p className="mt-1 text-sm text-slate-500">{exam.subjectName} · {exam.className}</p></div><button type="button" onClick={() => void remove(exam)} className="grid size-9 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600" aria-label="Xóa"><Trash2 className="size-4" /></button></div><div className="mt-5 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm"><div><p className="text-xs text-slate-400">Câu hỏi</p><p className="mt-1 font-extrabold">{exam.questions.length} câu · {exam.totalPoints} điểm</p></div><div><p className="text-xs text-slate-400">Thời lượng</p><p className="mt-1 font-extrabold">{exam.settings.durationMinutes} phút</p></div><div><p className="text-xs text-slate-400">Bắt đầu</p><p className="mt-1 font-semibold text-slate-700">{new Date(exam.settings.startsAt).toLocaleString("vi-VN")}</p></div><div><p className="text-xs text-slate-400">Kết thúc</p><p className="mt-1 font-semibold text-slate-700">{new Date(exam.settings.endsAt).toLocaleString("vi-VN")}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => router.push(`/teacher/exams/${exam.id}`)}>Xem chi tiết</Button>{exam.published ? <Button size="sm" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>Bài nộp</Button> : <Button size="sm" onClick={() => void publish(exam)}>Công bố</Button>}</div></article>)}</div>}</AssessmentShell>;
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  async function load() {
+    setLoading(true);
+    try {
+      setExams(await examService.getExams());
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể tải bài kiểm tra",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+  async function publish(exam: Exam) {
+    try {
+      const updated = await examService.publishExam(exam.id);
+      setExams((items) =>
+        items.map((item) => (item.id === exam.id ? updated : item)),
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể công bố bài kiểm tra",
+      );
+    }
+  }
+  async function remove(exam: Exam) {
+    if (!window.confirm(`Xóa bài kiểm tra “${exam.title}”?`)) return;
+    try {
+      await examService.deleteExam(exam.id);
+      setExams((items) => items.filter((item) => item.id !== exam.id));
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể xóa bài kiểm tra",
+      );
+    }
+  }
+  return (
+    <AssessmentShell>
+      <PageHeading
+        eyebrow="Teacher workspace"
+        title="Bài kiểm tra"
+        description="Tạo đề, công bố lịch làm và theo dõi bài nộp của học sinh."
+        action={
+          <Link href="/teacher/exams/new">
+            <Button>+ Tạo bài kiểm tra</Button>
+          </Link>
+        }
+      />
+      {error ? (
+        <div className="mb-5">
+          <ErrorPanel message={error} />
+        </div>
+      ) : null}
+      {loading ? (
+        <LoadingPanel />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {exams.length === 0 ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-14 text-center text-sm text-slate-500">
+              Chưa có bài kiểm tra. Hãy tạo đề đầu tiên.
+            </div>
+          ) : (
+            exams.map((exam) => (
+              <article
+                key={exam.id}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-brand-200 hover:shadow-lg"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}
+                    >
+                      {EXAM_STATUS_LABELS[exam.status]}
+                    </span>
+                    <h2 className="mt-3 text-lg font-black text-slate-950">
+                      {exam.title}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {exam.subjectName} · {exam.className}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void remove(exam)}
+                    className="grid size-9 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                    aria-label="Xóa"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-400">Câu hỏi</p>
+                    <p className="mt-1 font-extrabold">
+                      {exam.questions.length} câu · {exam.totalPoints} điểm
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Thời lượng</p>
+                    <p className="mt-1 font-extrabold">
+                      {exam.settings.durationMinutes} phút
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Bắt đầu</p>
+                    <p className="mt-1 font-semibold text-slate-700">
+                      {new Date(exam.settings.startsAt).toLocaleString("vi-VN")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Kết thúc</p>
+                    <p className="mt-1 font-semibold text-slate-700">
+                      {new Date(exam.settings.endsAt).toLocaleString("vi-VN")}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push(`/teacher/exams/${exam.id}`)}
+                  >
+                    Xem chi tiết
+                  </Button>
+                  {exam.published ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        router.push(`/teacher/exams/${exam.id}/submissions`)
+                      }
+                    >
+                      Bài nộp
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => void publish(exam)}>
+                      Công bố
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      )}
+    </AssessmentShell>
+  );
 }
 
 export function ExamWizardPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1); const [questions, setQuestions] = useState<Question[]>([]); const [selected, setSelected] = useState<ExamQuestion[]>([]); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [search, setSearch] = useState("");
-  const [subjects, setSubjects] = useState<Subject[]>([]); const [classes, setClasses] = useState<SchoolClass[]>([]); const [topics, setTopics] = useState<Topic[]>([]);
-  const [info, setInfo] = useState({ title: "", subjectId: "", subjectName: "", classId: "", className: "", topicName: "", description: "" }); const [settings, setSettings] = useState<ExamSettings>(blankSettings);
-  useEffect(() => { void Promise.all([academicDataService.getSubjects(), academicDataService.getClasses()]).then(([loadedSubjects, loadedClasses]) => { setSubjects(loadedSubjects); setClasses(loadedClasses); if (loadedSubjects[0]) setInfo((current) => ({ ...current, subjectId: loadedSubjects[0].id, subjectName: loadedSubjects[0].name })); if (loadedClasses[0]) setInfo((current) => ({ ...current, classId: loadedClasses[0].id, className: loadedClasses[0].name })); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải dữ liệu học vụ")); }, []);
-  useEffect(() => { if (!info.subjectId) return; void academicDataService.getTopics(info.subjectId).then((loadedTopics) => { setTopics(loadedTopics); if (loadedTopics[0]) setInfo((current) => ({ ...current, topicName: loadedTopics[0].name })); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải chủ đề")); }, [info.subjectId]);
-  useEffect(() => { void questionBankService.getQuestions().then(setQuestions).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải câu hỏi")); }, []);
-  function updateInfo(key: keyof typeof info, value: string) { setInfo((current) => ({ ...current, [key]: value })); }
-  function chooseSubject(value: string) { const subject = subjects.find((item) => item.id === value); if (!subject) return; setInfo((current) => ({ ...current, subjectId: subject.id, subjectName: subject.name, topicName: "" })); }
-  function toggleQuestion(question: Question) { setSelected((items) => items.some((item) => item.questionId === question.id) ? items.filter((item) => item.questionId !== question.id) : [...items, { questionId: question.id, points: question.defaultPoints, order: items.length }]); }
-  const filteredQuestions = questions.filter((question) => !search || question.content.toLowerCase().includes(search.toLowerCase()));
-  const selectedQuestionObjects = selected.map((item) => ({ ...item, question: questions.find((question) => question.id === item.questionId) })).filter((item) => item.question);
-  function canNext() { if (step === 1 && !info.title.trim()) { setError("Vui lòng nhập tên bài kiểm tra"); return false; } if (step === 1 && topics.length > 0 && !topics.some((topic) => topic.name === info.topicName)) { setError("Vui lòng chọn chủ đề từ dữ liệu học vụ"); return false; } if (step === 2 && selected.length === 0) { setError("Hãy chọn ít nhất một câu hỏi"); return false; } return true; }
-  async function save() { setSaving(true); setError(""); const payload: ExamInput = { ...info, questions: selected, settings }; try { await examService.createExam(payload); router.push("/teacher/exams"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể lưu bài kiểm tra"); } finally { setSaving(false); } }
-  return <AssessmentShell><PageHeading eyebrow="Create exam wizard" title="Tạo bài kiểm tra" description="Lưu bản nháp trước, sau đó công bố khi đã kiểm tra đầy đủ nội dung." action={<Button variant="ghost" onClick={() => router.push("/teacher/exams")}><ArrowLeft className="size-4" /> Thoát</Button>} />
-    <div className="mb-5 grid grid-cols-4 gap-2">{["Thông tin", "Chọn câu hỏi", "Cấu hình", "Xem trước"].map((label, index) => <div key={label} className={`rounded-xl px-3 py-3 text-center text-xs font-black ${step === index + 1 ? "bg-brand-600 text-white" : step > index + 1 ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-400"}`}><span className="mr-1">{index + 1}.</span>{label}</div>)}</div>{error ? <div className="mb-5"><ErrorPanel message={error} /></div> : null}
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-7">{step === 1 ? <div className="grid gap-5 md:grid-cols-2"><label className="grid gap-2 text-sm font-bold text-slate-700 md:col-span-2">Tên bài kiểm tra<input value={info.title} onChange={(event) => updateInfo("title", event.target.value)} placeholder="Ví dụ: Kiểm tra giữa kỳ React" className="h-12 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500" /></label><label className="grid gap-2 text-sm font-bold text-slate-700">Môn học<select value={info.subjectId} onChange={(event) => chooseSubject(event.target.value)} className="h-12 rounded-xl border border-slate-200 bg-white px-3 font-normal">{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label><label className="grid gap-2 text-sm font-bold text-slate-700">Lớp học<select value={info.classId} onChange={(event) => { const item = classes.find((value) => value.id === event.target.value) ?? classes[0]; setInfo((current) => ({ ...current, classId: item.id, className: item.name })); }} className="h-12 rounded-xl border border-slate-200 bg-white px-3 font-normal">{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="grid gap-2 text-sm font-bold text-slate-700">Chủ đề<input value={info.topicName} onChange={(event) => updateInfo("topicName", event.target.value)} placeholder="Ví dụ: React Hooks" className="h-12 rounded-xl border border-slate-200 px-3 font-normal" /></label><label className="grid gap-2 text-sm font-bold text-slate-700 md:col-span-2">Mô tả<textarea value={info.description} onChange={(event) => updateInfo("description", event.target.value)} rows={4} className="rounded-xl border border-slate-200 p-3 font-normal" /></label></div> : null}
-      {step === 2 ? <div><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-lg font-black">Chọn từ ngân hàng câu hỏi</h2><p className="mt-1 text-sm text-slate-500">Đã chọn {selected.length} câu · {selected.reduce((sum, item) => sum + item.points, 0)} điểm</p></div><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm câu hỏi..." className="h-10 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-brand-500" /></div><div className="mt-5 max-h-[480px] space-y-2 overflow-y-auto">{filteredQuestions.map((question) => { const chosen = selected.some((item) => item.questionId === question.id); return <button key={question.id} type="button" onClick={() => toggleQuestion(question)} className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${chosen ? "border-brand-300 bg-brand-50" : "border-slate-100 hover:border-brand-200"}`}><span className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}>{chosen ? <Check className="size-4" /> : null}</span><span className="min-w-0"><span className="block font-bold text-slate-800">{question.content}</span><span className="mt-1 block text-xs text-slate-500">{question.subjectName} · {question.topicName} · {question.defaultPoints} điểm</span></span></button>; })}</div></div> : null}
-      {step === 3 ? <div className="grid gap-5 md:grid-cols-2"><label className="grid gap-2 text-sm font-bold text-slate-700">Thời gian bắt đầu<input type="datetime-local" value={settings.startsAt} onChange={(event) => setSettings((current) => ({ ...current, startsAt: event.target.value }))} className="h-12 rounded-xl border border-slate-200 px-3 font-normal" /></label><label className="grid gap-2 text-sm font-bold text-slate-700">Thời gian kết thúc<input type="datetime-local" value={settings.endsAt} onChange={(event) => setSettings((current) => ({ ...current, endsAt: event.target.value }))} className="h-12 rounded-xl border border-slate-200 px-3 font-normal" /></label><label className="grid gap-2 text-sm font-bold text-slate-700">Thời lượng (phút)<input type="number" min="1" value={settings.durationMinutes} onChange={(event) => setSettings((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} className="h-12 rounded-xl border border-slate-200 px-3 font-normal" /></label><label className="grid gap-2 text-sm font-bold text-slate-700">Số lần được phép<input type="number" min="1" value={settings.attemptsAllowed} onChange={(event) => setSettings((current) => ({ ...current, attemptsAllowed: Number(event.target.value) }))} className="h-12 rounded-xl border border-slate-200 px-3 font-normal" /></label><div className="space-y-3 md:col-span-2">{([["shuffleQuestions", "Trộn thứ tự câu hỏi"], ["shuffleAnswers", "Trộn đáp án"], ["showScoreImmediately", "Hiển thị điểm ngay sau khi nộp"], ["showCorrectAnswers", "Cho xem đáp án đúng"]] as const).map(([key, label]) => <label key={key} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={settings[key]} onChange={(event) => setSettings((current) => ({ ...current, [key]: event.target.checked }))} className="size-4 accent-brand-600" />{label}</label>)}</div></div> : null}
-      {step === 4 ? <div><div className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-xs font-bold uppercase tracking-wide text-cyan-300">Xem trước</p><h2 className="mt-2 text-2xl font-black">{info.title}</h2><p className="mt-1 text-sm text-slate-300">{info.subjectName} · {info.className} · {selected.length} câu · {selected.reduce((sum, item) => sum + item.points, 0)} điểm</p></div><div className="mt-5 space-y-3">{selectedQuestionObjects.map(({ question, points }, index) => <div key={question!.id} className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">{index + 1}</span><div><p className="font-bold text-slate-800">{question!.content}</p><p className="mt-1 text-xs text-slate-500">{points} điểm · {question!.options.length} đáp án</p></div></div>)}</div></div> : null}
-      <div className="mt-7 flex justify-between border-t border-slate-100 pt-5"><Button variant="outline" disabled={step === 1 || saving} onClick={() => { setError(""); setStep((value) => value - 1); }}>{step === 1 ? "Hủy" : "Quay lại"}</Button>{step < 4 ? <Button onClick={() => { if (canNext()) { setError(""); setStep((value) => value + 1); } }}>Tiếp theo <ChevronRight className="size-4" /></Button> : <Button onClick={() => void save()} disabled={saving}><Send className="size-4" />{saving ? "Đang lưu..." : "Lưu bản nháp"}</Button>}</div>
-    </section></AssessmentShell>;
+  const [step, setStep] = useState(1);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [selected, setSelected] = useState<ExamQuestion[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [info, setInfo] = useState({
+    title: "",
+    subjectId: "",
+    subjectName: "",
+    classId: "",
+    className: "",
+    topicName: "",
+    description: "",
+  });
+  const [settings, setSettings] = useState<ExamSettings>(blankSettings);
+  useEffect(() => {
+    void Promise.all([
+      academicDataService.getSubjects(),
+      academicDataService.getClasses(),
+    ])
+      .then(([loadedSubjects, loadedClasses]) => {
+        setSubjects(loadedSubjects);
+        setClasses(loadedClasses);
+        if (loadedSubjects[0])
+          setInfo((current) => ({
+            ...current,
+            subjectId: loadedSubjects[0].id,
+            subjectName: loadedSubjects[0].name,
+          }));
+        if (loadedClasses[0])
+          setInfo((current) => ({
+            ...current,
+            classId: loadedClasses[0].id,
+            className: loadedClasses[0].name,
+          }));
+      })
+      .catch((cause) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Không thể tải dữ liệu học vụ",
+        ),
+      );
+  }, []);
+  useEffect(() => {
+    if (!info.subjectId) return;
+    void academicDataService
+      .getTopics(info.subjectId)
+      .then((loadedTopics) => {
+        setTopics(loadedTopics);
+        if (loadedTopics[0])
+          setInfo((current) => ({
+            ...current,
+            topicName: loadedTopics[0].name,
+          }));
+      })
+      .catch((cause) =>
+        setError(
+          cause instanceof Error ? cause.message : "Không thể tải chủ đề",
+        ),
+      );
+  }, [info.subjectId]);
+  useEffect(() => {
+    void questionBankService
+      .getQuestions()
+      .then(setQuestions)
+      .catch((cause) =>
+        setError(
+          cause instanceof Error ? cause.message : "Không thể tải câu hỏi",
+        ),
+      );
+  }, []);
+  function updateInfo(key: keyof typeof info, value: string) {
+    setInfo((current) => ({ ...current, [key]: value }));
+  }
+  function chooseSubject(value: string) {
+    const subject = subjects.find((item) => item.id === value);
+    if (!subject) return;
+    setInfo((current) => ({
+      ...current,
+      subjectId: subject.id,
+      subjectName: subject.name,
+      topicName: "",
+    }));
+  }
+  function toggleQuestion(question: Question) {
+    setSelected((items) =>
+      items.some((item) => item.questionId === question.id)
+        ? items.filter((item) => item.questionId !== question.id)
+        : [
+            ...items,
+            {
+              questionId: question.id,
+              points: question.defaultPoints,
+              order: items.length,
+            },
+          ],
+    );
+  }
+  const filteredQuestions = questions.filter(
+    (question) =>
+      !search || question.content.toLowerCase().includes(search.toLowerCase()),
+  );
+  const selectedQuestionObjects = selected
+    .map((item) => ({
+      ...item,
+      question: questions.find((question) => question.id === item.questionId),
+    }))
+    .filter((item) => item.question);
+  function canNext() {
+    if (step === 1 && !info.title.trim()) {
+      setError("Vui lòng nhập tên bài kiểm tra");
+      return false;
+    }
+    if (
+      step === 1 &&
+      topics.length > 0 &&
+      !topics.some((topic) => topic.name === info.topicName)
+    ) {
+      setError("Vui lòng chọn chủ đề từ dữ liệu học vụ");
+      return false;
+    }
+    if (step === 2 && selected.length === 0) {
+      setError("Hãy chọn ít nhất một câu hỏi");
+      return false;
+    }
+    return true;
+  }
+  async function save() {
+    setSaving(true);
+    setError("");
+    const payload: ExamInput = { ...info, questions: selected, settings };
+    try {
+      await examService.createExam(payload);
+      router.push("/teacher/exams");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể lưu bài kiểm tra",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <AssessmentShell>
+      <PageHeading
+        eyebrow="Create exam wizard"
+        title="Tạo bài kiểm tra"
+        description="Lưu bản nháp trước, sau đó công bố khi đã kiểm tra đầy đủ nội dung."
+        action={
+          <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
+            <ArrowLeft className="size-4" /> Thoát
+          </Button>
+        }
+      />
+      <div className="mb-5 grid grid-cols-4 gap-2">
+        {["Thông tin", "Chọn câu hỏi", "Cấu hình", "Xem trước"].map(
+          (label, index) => (
+            <div
+              key={label}
+              className={`rounded-xl px-3 py-3 text-center text-xs font-black ${step === index + 1 ? "bg-brand-600 text-white" : step > index + 1 ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-400"}`}
+            >
+              <span className="mr-1">{index + 1}.</span>
+              {label}
+            </div>
+          ),
+        )}
+      </div>
+      {error ? (
+        <div className="mb-5">
+          <ErrorPanel message={error} />
+        </div>
+      ) : null}
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        {step === 1 ? (
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <Input
+                label="Tên bài kiểm tra"
+                value={info.title}
+                onChange={(event) => updateInfo("title", event.target.value)}
+                placeholder="Ví dụ: Kiểm tra giữa kỳ React"
+              />
+            </div>
+            <Select label="Môn học" value={info.subjectId} onChange={(event) => chooseSubject(event.target.value)}>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+            </Select>
+            <Select label="Lớp học" value={info.classId} onChange={(event) => {
+                  const item =
+                    classes.find((value) => value.id === event.target.value) ??
+                    classes[0];
+                  if (!item) return;
+                  setInfo((current) => ({
+                    ...current,
+                    classId: item.id,
+                    className: item.name,
+                  }));
+                }}>
+                {classes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+            </Select>
+            <Select label="Chủ đề" value={info.topicName} onChange={(event) => updateInfo("topicName", event.target.value)}>
+              <option value="">Chọn chủ đề</option>
+              {topics.map((topic) => <option key={topic.id} value={topic.name}>{topic.name}</option>)}
+            </Select>
+            <div className="md:col-span-2">
+              <Textarea
+                label="Mô tả"
+                value={info.description}
+                onChange={(event) =>
+                  updateInfo("description", event.target.value)
+                }
+                rows={4}
+              />
+            </div>
+          </div>
+        ) : null}
+        {step === 2 ? (
+          <div>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-lg font-black">
+                  Chọn từ ngân hàng câu hỏi
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Đã chọn {selected.length} câu ·{" "}
+                  {selected.reduce((sum, item) => sum + item.points, 0)} điểm
+                </p>
+              </div>
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm câu hỏi..."
+                className="sm:w-72"
+              />
+            </div>
+            <div className="mt-5 max-h-[480px] space-y-2 overflow-y-auto">
+              {filteredQuestions.map((question) => {
+                const chosen = selected.some(
+                  (item) => item.questionId === question.id,
+                );
+                return (
+                  <button
+                    key={question.id}
+                    type="button"
+                    onClick={() => toggleQuestion(question)}
+                    className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${chosen ? "border-brand-300 bg-brand-50" : "border-slate-100 hover:border-brand-200"}`}
+                  >
+                    <span
+                      className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}
+                    >
+                      {chosen ? <Check className="size-4" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block font-bold text-slate-800">
+                        {question.content}
+                      </span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {question.subjectName} · {question.topicName} ·{" "}
+                        {question.defaultPoints} điểm
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        {step === 3 ? (
+          <div className="grid gap-5 md:grid-cols-2">
+            <Input
+                label="Thời gian bắt đầu"
+                type="datetime-local"
+                value={settings.startsAt}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    startsAt: event.target.value,
+                  }))
+                }
+            />
+            <Input
+                label="Thời gian kết thúc"
+                type="datetime-local"
+                value={settings.endsAt}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    endsAt: event.target.value,
+                  }))
+                }
+            />
+            <Input
+                label="Thời lượng (phút)"
+                type="number"
+                min="1"
+                value={settings.durationMinutes}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    durationMinutes: Number(event.target.value),
+                  }))
+                }
+            />
+            <Input
+                label="Số lần được phép"
+                type="number"
+                min="1"
+                value={settings.attemptsAllowed}
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    attemptsAllowed: Number(event.target.value),
+                  }))
+                }
+            />
+            <div className="space-y-3 md:col-span-2">
+              {(
+                [
+                  ["shuffleQuestions", "Trộn thứ tự câu hỏi"],
+                  ["shuffleAnswers", "Trộn đáp án"],
+                  ["showScoreImmediately", "Hiển thị điểm ngay sau khi nộp"],
+                  ["showCorrectAnswers", "Cho xem đáp án đúng"],
+                ] as const
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 text-sm font-semibold text-slate-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={settings[key]}
+                    onChange={(event) =>
+                      setSettings((current) => ({
+                        ...current,
+                        [key]: event.target.checked,
+                      }))
+                    }
+                    className="size-4 accent-brand-600"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {step === 4 ? (
+          <div>
+            <div className="rounded-2xl bg-slate-950 p-5 text-white">
+              <p className="text-xs font-bold uppercase tracking-wide text-cyan-300">
+                Xem trước
+              </p>
+              <h2 className="mt-2 text-2xl font-black">{info.title}</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                {info.subjectName} · {info.className} · {selected.length} câu ·{" "}
+                {selected.reduce((sum, item) => sum + item.points, 0)} điểm
+              </p>
+            </div>
+            <div className="mt-5 space-y-3">
+              {selectedQuestionObjects.map(({ question, points }, index) => (
+                <div
+                  key={question!.id}
+                  className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <p className="font-bold text-slate-800">
+                      {question!.content}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {points} điểm · {question!.options.length} đáp án
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="mt-7 flex justify-between border-t border-slate-100 pt-5">
+          <Button
+            variant="outline"
+            disabled={step === 1 || saving}
+            onClick={() => {
+              setError("");
+              setStep((value) => value - 1);
+            }}
+          >
+            {step === 1 ? "Hủy" : "Quay lại"}
+          </Button>
+          {step < 4 ? (
+            <Button
+              onClick={() => {
+                if (canNext()) {
+                  setError("");
+                  setStep((value) => value + 1);
+                }
+              }}
+            >
+              Tiếp theo <ChevronRight className="size-4" />
+            </Button>
+          ) : (
+            <Button onClick={() => void save()} disabled={saving}>
+              <Send className="size-4" />
+              {saving ? "Đang lưu..." : "Lưu bản nháp"}
+            </Button>
+          )}
+        </div>
+      </section>
+    </AssessmentShell>
+  );
 }
 
 export function ExamDetailPage() {
-  const params = useParams<{ id: string }>(); const router = useRouter(); const [exam, setExam] = useState<Exam | null>(null); const [questions, setQuestions] = useState<Question[]>([]); const [error, setError] = useState("");
-  useEffect(() => { void Promise.all([examService.getExamById(params.id), questionBankService.getQuestions()]).then(([loadedExam, loadedQuestions]) => { setExam(loadedExam); setQuestions(loadedQuestions); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải đề")); }, [params.id]);
-  if (error) return <AssessmentShell><ErrorPanel message={error} /></AssessmentShell>; if (!exam) return <AssessmentShell><LoadingPanel /></AssessmentShell>;
-  return <AssessmentShell><PageHeading eyebrow="Exam detail" title={exam.title} description={`${exam.subjectName} · ${exam.className}`} action={<Button variant="ghost" onClick={() => router.push("/teacher/exams")}><ArrowLeft className="size-4" /> Quay lại</Button>} /><div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]"><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><h2 className="font-black">Danh sách câu hỏi</h2><div className="mt-4 space-y-2">{exam.questions.sort((a, b) => a.order - b.order).map((item, index) => { const question = questions.find((value) => value.id === item.questionId); return <div key={item.questionId} className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"><GripVertical className="mt-1 size-4 text-slate-300" /><span className="font-black text-brand-700">{index + 1}</span><div><p className="font-bold">{question?.content ?? `Câu hỏi ${item.questionId}`}</p><p className="mt-1 text-xs text-slate-500">{item.points} điểm</p></div></div>; })}</div></section><aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(exam.status)}`}>{EXAM_STATUS_LABELS[exam.status]}</span><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-xs text-slate-400">Lịch làm bài</dt><dd className="mt-1 font-bold">{new Date(exam.settings.startsAt).toLocaleString("vi-VN")} – {new Date(exam.settings.endsAt).toLocaleString("vi-VN")}</dd></div><div><dt className="text-xs text-slate-400">Cấu hình</dt><dd className="mt-1 font-bold">{exam.settings.durationMinutes} phút · {exam.settings.attemptsAllowed} lần</dd></div></dl><Button className="mt-6 w-full" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>Xem bài nộp</Button></aside></div></AssessmentShell>;
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [exam, setExam] = useState<Exam | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    void Promise.all([
+      examService.getExamById(params.id),
+      questionBankService.getQuestions(),
+    ])
+      .then(([loadedExam, loadedQuestions]) => {
+        setExam(loadedExam);
+        setQuestions(loadedQuestions);
+      })
+      .catch((cause) =>
+        setError(cause instanceof Error ? cause.message : "Không thể tải đề"),
+      );
+  }, [params.id]);
+  if (error)
+    return (
+      <AssessmentShell>
+        <ErrorPanel message={error} />
+      </AssessmentShell>
+    );
+  if (!exam)
+    return (
+      <AssessmentShell>
+        <LoadingPanel />
+      </AssessmentShell>
+    );
+  return (
+    <AssessmentShell>
+      <PageHeading
+        eyebrow="Exam detail"
+        title={exam.title}
+        description={`${exam.subjectName} · ${exam.className}`}
+        action={
+          <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
+            <ArrowLeft className="size-4" /> Quay lại
+          </Button>
+        }
+      />
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <h2 className="font-black">Danh sách câu hỏi</h2>
+          <div className="mt-4 space-y-2">
+            {exam.questions
+              .sort((a, b) => a.order - b.order)
+              .map((item, index) => {
+                const question = questions.find(
+                  (value) => value.id === item.questionId,
+                );
+                return (
+                  <div
+                    key={item.questionId}
+                    className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
+                  >
+                    <GripVertical className="mt-1 size-4 text-slate-300" />
+                    <span className="font-black text-brand-700">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <p className="font-bold">
+                        {question?.content ?? `Câu hỏi ${item.questionId}`}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.points} điểm
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </section>
+        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <span
+            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(exam.status)}`}
+          >
+            {EXAM_STATUS_LABELS[exam.status]}
+          </span>
+          <dl className="mt-5 space-y-4 text-sm">
+            <div>
+              <dt className="text-xs text-slate-400">Lịch làm bài</dt>
+              <dd className="mt-1 font-bold">
+                {new Date(exam.settings.startsAt).toLocaleString("vi-VN")} –{" "}
+                {new Date(exam.settings.endsAt).toLocaleString("vi-VN")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-400">Cấu hình</dt>
+              <dd className="mt-1 font-bold">
+                {exam.settings.durationMinutes} phút ·{" "}
+                {exam.settings.attemptsAllowed} lần
+              </dd>
+            </div>
+          </dl>
+          <Button
+            className="mt-6 w-full"
+            variant="secondary"
+            onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}
+          >
+            Xem bài nộp
+          </Button>
+        </aside>
+      </div>
+    </AssessmentShell>
+  );
 }
