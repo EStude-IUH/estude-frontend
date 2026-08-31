@@ -47,6 +47,12 @@ const blankSettings: ExamSettings = {
   showCorrectAnswers: true,
 };
 
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
 function statusClass(status: Exam["status"]) {
   return {
     DRAFT: "bg-slate-100 text-slate-600",
@@ -214,7 +220,7 @@ export function TeacherExamsPage() {
   );
 }
 
-export function ExamWizardPage() {
+export function ExamWizardPage({ examId }: { examId?: string }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -236,13 +242,37 @@ export function ExamWizardPage() {
   });
   const [settings, setSettings] = useState<ExamSettings>(blankSettings);
   useEffect(() => {
+    const examRequest = examId
+      ? examService.getExamById(examId)
+      : Promise.resolve(null);
     void Promise.all([
       academicDataService.getSubjects(),
       academicDataService.getClasses(),
+      examRequest,
     ])
-      .then(([loadedSubjects, loadedClasses]) => {
+      .then(([loadedSubjects, loadedClasses, exam]) => {
         setSubjects(loadedSubjects);
         setClasses(loadedClasses);
+        if (exam) {
+          setInfo({
+            title: exam.title,
+            subjectId: exam.subjectId,
+            subjectName: exam.subjectName,
+            classId: exam.classId,
+            className: exam.className,
+            topicName: exam.topicName,
+            description: exam.description,
+          });
+          setSettings({
+            ...exam.settings,
+            startsAt: toDateTimeLocal(exam.settings.startsAt),
+            endsAt: toDateTimeLocal(exam.settings.endsAt),
+          });
+          setSelected(
+            [...exam.questions].sort((left, right) => left.order - right.order),
+          );
+          return;
+        }
         if (loadedSubjects[0])
           setInfo((current) => ({
             ...current,
@@ -263,18 +293,21 @@ export function ExamWizardPage() {
             : "Không thể tải dữ liệu học vụ",
         ),
       );
-  }, []);
+  }, [examId]);
   useEffect(() => {
     if (!info.subjectId) return;
     void academicDataService
       .getTopics(info.subjectId)
       .then((loadedTopics) => {
         setTopics(loadedTopics);
-        if (loadedTopics[0])
-          setInfo((current) => ({
-            ...current,
-            topicName: loadedTopics[0].name,
-          }));
+        setInfo((current) => ({
+          ...current,
+          topicName:
+            loadedTopics.find((topic) => topic.name === current.topicName)
+              ?.name ??
+            loadedTopics[0]?.name ??
+            "",
+        }));
       })
       .catch((cause) =>
         setError(
@@ -353,7 +386,11 @@ export function ExamWizardPage() {
     setError("");
     const payload: ExamInput = { ...info, questions: selected, settings };
     try {
-      await examService.createExam(payload);
+      if (examId) {
+        await examService.updateExam(examId, payload);
+      } else {
+        await examService.createExam(payload);
+      }
       router.push("/teacher/exams");
     } catch (cause) {
       setError(
@@ -366,9 +403,13 @@ export function ExamWizardPage() {
   return (
     <AssessmentShell>
       <PageHeading
-        eyebrow="Create exam wizard"
-        title="Tạo bài kiểm tra"
-        description="Lưu bản nháp trước, sau đó công bố khi đã kiểm tra đầy đủ nội dung."
+        eyebrow={examId ? "Edit exam" : "Create exam wizard"}
+        title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
+        description={
+          examId
+            ? "Cập nhật nội dung, câu hỏi và cấu hình của bài kiểm tra."
+            : "Lưu bản nháp trước, sau đó công bố khi đã kiểm tra đầy đủ nội dung."
+        }
         action={
           <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
             <ArrowLeft className="size-4" /> Thoát
@@ -632,13 +673,22 @@ export function ExamWizardPage() {
           ) : (
             <Button onClick={() => void save()} disabled={saving}>
               <Send className="size-4" />
-              {saving ? "Đang lưu..." : "Lưu bản nháp"}
+              {saving
+                ? "Đang lưu..."
+                : examId
+                  ? "Lưu thay đổi"
+                  : "Lưu bản nháp"}
             </Button>
           )}
         </div>
       </section>
     </AssessmentShell>
   );
+}
+
+export function ExamEditPage() {
+  const params = useParams<{ id: string }>();
+  return <ExamWizardPage examId={params.id} />;
 }
 
 export function ExamDetailPage() {

@@ -89,6 +89,8 @@ export interface QuestionFilters {
   topicId?: string;
   difficulty?: Difficulty;
   type?: QuestionType;
+  page?: number;
+  limit?: number;
 }
 
 export interface QuestionInput {
@@ -274,6 +276,15 @@ export interface Topic {
 }
 
 export type ExamStatus = "DRAFT" | "SCHEDULED" | "ONGOING" | "ENDED";
+export type StudentExamStatus = "UPCOMING" | "AVAILABLE" | "IN_PROGRESS" | "SUBMITTED" | "ENDED";
+
+export interface StudentExamAttemptSummary {
+  id: string;
+  status: AttemptStatus;
+  startedAt: string;
+  expiresAt: string;
+  submittedAt: string | null;
+}
 
 export interface ExamQuestion {
   questionId: string;
@@ -284,6 +295,8 @@ export interface ExamQuestion {
     content: string;
     type: QuestionType;
     options: QuestionOption[];
+    correctOptionIds?: string[];
+    explanation?: string;
   } | null;
 }
 
@@ -309,6 +322,12 @@ export interface Exam {
   description: string;
   teacherId: string;
   teacherName?: string;
+  attemptedCount?: number;
+  studentStatus?: StudentExamStatus;
+  currentAttempt?: StudentExamAttemptSummary | null;
+  attemptsUsed?: number;
+  attemptsRemaining?: number;
+  canStart?: boolean;
   status: ExamStatus;
   published: boolean;
   questions: ExamQuestion[];
@@ -346,6 +365,7 @@ export interface ExamAttempt {
   studentName: string;
   status: AttemptStatus;
   startedAt: string;
+  expiresAt: string | null;
   submittedAt: string | null;
   answers: ExamAnswer[];
   score: number | null;

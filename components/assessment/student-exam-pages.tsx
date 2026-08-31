@@ -3,11 +3,15 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarClock,
   CheckCircle2,
   Flag,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Eye,
+  Play,
+  RotateCcw,
   Send,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -27,7 +31,30 @@ import {
   type Exam,
   type ExamAnswer,
   type ExamAttempt,
+  type StudentExamStatus,
 } from "@/types/assessment";
+
+const studentStatusMeta: Record<
+  StudentExamStatus,
+  { label: string; tone: string }
+> = {
+  UPCOMING: { label: "Sắp diễn ra", tone: "bg-amber-50 text-amber-700" },
+  AVAILABLE: { label: "Đang mở", tone: "bg-emerald-50 text-emerald-700" },
+  IN_PROGRESS: { label: "Đang làm", tone: "bg-blue-50 text-blue-700" },
+  SUBMITTED: { label: "Đã nộp", tone: "bg-violet-50 text-violet-700" },
+  ENDED: { label: "Đã kết thúc", tone: "bg-slate-100 text-slate-600" },
+};
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString("vi-VN");
+}
+
+function getStudentStatus(exam: Exam): StudentExamStatus {
+  if (exam.studentStatus) return exam.studentStatus;
+  if (exam.status === "SCHEDULED") return "UPCOMING";
+  if (exam.status === "ONGOING") return "AVAILABLE";
+  return "ENDED";
+}
 
 function statusTone(status: Exam["status"]) {
   return {
@@ -153,6 +180,200 @@ export function StudentExamsPage() {
           )}
         </div>
       )}
+    </AssessmentShell>
+  );
+}
+
+export function StudentExamDetailPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const [exam, setExam] = useState<Exam | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void examService
+      .getExamById(params.id)
+      .then(setExam)
+      .catch((cause) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Không thể tải bài kiểm tra",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [params.id]);
+
+  async function start() {
+    if (!exam) return;
+    setStarting(true);
+    setError("");
+    try {
+      const attempt = await examAttemptService.startExam(exam.id);
+      router.push(`/student/attempts/${attempt.id}`);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể bắt đầu bài kiểm tra",
+      );
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  if (loading)
+    return (
+      <AssessmentShell student>
+        <LoadingPanel />
+      </AssessmentShell>
+    );
+  if (error && !exam)
+    return (
+      <AssessmentShell student>
+        <ErrorPanel message={error} />
+      </AssessmentShell>
+    );
+  if (!exam) return null;
+
+  const status = getStudentStatus(exam);
+  const meta = studentStatusMeta[status];
+  const currentAttempt = exam.currentAttempt;
+
+  return (
+    <AssessmentShell student>
+      <PageHeading
+        eyebrow="Exam overview"
+        title={exam.title}
+        description={`${exam.subjectName} · ${exam.className}`}
+        action={
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/student/exams")}
+          >
+            <ArrowLeft className="size-4" /> Danh sách bài
+          </Button>
+        }
+      />
+      {error ? (
+        <div className="mb-5">
+          <ErrorPanel message={error} />
+        </div>
+      ) : null}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
+          <span
+            className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${meta.tone}`}
+          >
+            {meta.label}
+          </span>
+          <h2 className="mt-5 text-xl font-black">Thông tin bài kiểm tra</h2>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">
+            {exam.description ||
+              "Giáo viên không cung cấp mô tả cho bài kiểm tra này."}
+          </p>
+          <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs text-slate-400">Môn học</p>
+              <p className="mt-1 font-black">{exam.subjectName}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs text-slate-400">Giáo viên</p>
+              <p className="mt-1 font-black">
+                {exam.teacherName ?? "Giáo viên phụ trách"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs text-slate-400">Số câu hỏi</p>
+              <p className="mt-1 font-black">{exam.questions.length} câu</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs text-slate-400">Tổng điểm</p>
+              <p className="mt-1 font-black">{exam.totalPoints} điểm</p>
+            </div>
+          </div>
+        </section>
+        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <div className="flex items-center gap-3">
+            <CalendarClock className="size-5 text-brand-600" />
+            <h2 className="font-black">Thời gian làm bài</h2>
+          </div>
+          <dl className="mt-5 space-y-4 text-sm">
+            <div>
+              <dt className="text-xs text-slate-400">Bắt đầu</dt>
+              <dd className="mt-1 font-bold">
+                {formatDate(exam.settings.startsAt)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-400">Kết thúc</dt>
+              <dd className="mt-1 font-bold">
+                {formatDate(exam.settings.endsAt)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-400">Thời lượng</dt>
+              <dd className="mt-1 font-bold">
+                {exam.settings.durationMinutes} phút
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-400">Số lần được phép</dt>
+              <dd className="mt-1 font-bold">
+                {exam.settings.attemptsAllowed} lần · còn{" "}
+                {exam.attemptsRemaining ?? exam.settings.attemptsAllowed} lần
+              </dd>
+            </div>
+          </dl>
+          {status === "IN_PROGRESS" && currentAttempt ? (
+            <Button
+              className="mt-6 w-full"
+              onClick={() =>
+                router.push(`/student/attempts/${currentAttempt.id}`)
+              }
+            >
+              <RotateCcw className="size-4" /> Tiếp tục làm bài
+            </Button>
+          ) : null}
+          {status === "SUBMITTED" && currentAttempt ? (
+            <Button
+              className="mt-6 w-full"
+              variant={exam.canStart ? "outline" : "primary"}
+              onClick={() =>
+                router.push(`/student/attempts/${currentAttempt.id}/result`)
+              }
+            >
+              <Eye className="size-4" /> Xem kết quả
+            </Button>
+          ) : null}
+          {status === "AVAILABLE" || exam.canStart ? (
+            <Button
+              className="mt-2 w-full"
+              disabled={starting}
+              onClick={() => void start()}
+            >
+              <Play className="size-4" />
+              {starting
+                ? "Đang bắt đầu..."
+                : exam.attemptsUsed
+                  ? "Bắt đầu lượt mới"
+                  : "Bắt đầu làm bài"}
+            </Button>
+          ) : null}
+          {status === "UPCOMING" ? (
+            <Button className="mt-6 w-full" disabled>
+              Chưa đến thời gian mở bài
+            </Button>
+          ) : null}
+          {status === "ENDED" ? (
+            <Button className="mt-6 w-full" disabled>
+              Bài kiểm tra đã kết thúc
+            </Button>
+          ) : null}
+        </aside>
+      </div>
     </AssessmentShell>
   );
 }
