@@ -53,7 +53,7 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
 
     setIsSubmitting(true);
     try {
-      await signIn({ accountName, password }, [role]);
+      await signIn({ accountName, password });
       router.replace(getRoleHome(role));
     } catch (error) {
       setApiError(

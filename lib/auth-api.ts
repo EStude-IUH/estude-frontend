@@ -8,6 +8,7 @@ import type {
   RegisterPayload,
   User,
 } from "@/types/auth";
+import { getCurrentPortal } from "@/lib/portal";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1"
@@ -16,6 +17,10 @@ const API_URL = (
 let accessToken: string | null = null;
 let refreshPromise: Promise<AccessTokenResponse> | null = null;
 let unauthorizedHandler: (() => void) | null = null;
+
+function portalAuthPath(path: string): string {
+  return `/auth/${getCurrentPortal()}${path}`;
+}
 
 interface RequestOptions {
   authenticated?: boolean;
@@ -94,7 +99,7 @@ async function request<T>(
 async function refreshAccessToken(): Promise<AccessTokenResponse> {
   if (!refreshPromise) {
     refreshPromise = request<AccessTokenResponse>(
-      "/auth/refresh-token",
+      portalAuthPath("/refresh-token"),
       { method: "POST" },
       { retryOnUnauthorized: false },
     )
@@ -161,7 +166,7 @@ export function authenticatedBlobRequest(
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthSession> {
-    const session = await request<AuthSession>("/auth/login", {
+    const session = await request<AuthSession>(portalAuthPath("/login"), {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -170,7 +175,7 @@ export const authApi = {
   },
 
   async register(payload: RegisterPayload): Promise<AuthSession> {
-    const session = await request<AuthSession>("/auth/register", {
+    const session = await request<AuthSession>("/auth/student/register", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -188,7 +193,7 @@ export const authApi = {
 
   async logout(): Promise<Record<string, never>> {
     try {
-      return await authenticatedRequest<Record<string, never>>("/auth/logout", {
+      return await authenticatedRequest<Record<string, never>>(portalAuthPath("/logout"), {
         method: "POST",
       });
     } finally {
@@ -199,7 +204,7 @@ export const authApi = {
   async logoutAll(): Promise<Record<string, never>> {
     try {
       return await authenticatedRequest<Record<string, never>>(
-        "/auth/logout-all",
+        portalAuthPath("/logout-all"),
         {
           method: "POST",
         },
@@ -215,7 +220,7 @@ export const authApi = {
 
   revokeSession(sessionId: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(
-      `/auth/sessions/${encodeURIComponent(sessionId)}`,
+      portalAuthPath(`/sessions/${encodeURIComponent(sessionId)}`),
       { method: "DELETE" },
     );
   },

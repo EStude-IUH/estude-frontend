@@ -51,10 +51,7 @@ export function LoginForm() {
 
     setIsSubmitting(true);
     try {
-      const signedInUser = await signIn(
-        { accountName, password },
-        ['TEACHER', 'STUDENT'],
-      );
+      const signedInUser = await signIn({ accountName, password });
       router.replace(getRoleHome(signedInUser.role));
     } catch (error) {
       setApiError(

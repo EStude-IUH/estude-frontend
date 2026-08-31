@@ -9,7 +9,7 @@ Frontend Next.js cho luồng đăng ký, đăng nhập và trang tổng quan ESt
 3. Chạy `npm run dev`.
 4. Mở `http://localhost:3000`.
 
-Backend mặc định được gọi tại `http://localhost:5000/api/v1`. Backend cần bật `REFRESH_COOKIE_ENABLED=true` để phiên đăng nhập được khôi phục an toàn sau khi tải lại trang.
+Backend mặc định được gọi tại `http://localhost:5000/api/v1`. Khi production, đặt `NEXT_PUBLIC_API_URL=https://api.estude.io.vn/api/v1`.
 
 ## Khu vực theo vai trò
 
@@ -27,3 +27,5 @@ Route `/dashboard` được giữ để tự chuyển người dùng về đúng
 - `npm run serve:student`: Student tại `http://localhost:3002`.
 
 `serve:all` dùng một Next.js dev server và hai proxy nhẹ để tiết kiệm RAM nhưng vẫn giữ đủ HMR trên cả ba cổng. Khi chạy riêng, mỗi vai trò sử dụng thư mục cache Next.js độc lập.
+
+Middleware nhận diện portal từ hostname production (`admin.estude.io.vn`, `teacher.estude.io.vn`, `student.estude.io.vn`) hoặc cổng local. Mỗi origin gọi endpoint auth tương ứng và dùng refresh cookie riêng, nên có thể mở đồng thời nhiều portal mà không ghi đè phiên.
