@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   KeyRound,
   LoaderCircle,
+  Pencil,
   Plus,
   Upload,
   UserRoundCheck,
@@ -109,6 +110,13 @@ export function AccountManagementPanel() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editAccountName, setEditAccountName] = useState("");
+  const [editAvatarUrl, setEditAvatarUrl] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const [importRole, setImportRole] = useState<ImportRole>("TEACHER");
   const [defaultPassword, setDefaultPassword] = useState("");
@@ -300,6 +308,52 @@ export function AccountManagementPanel() {
     }
   }
 
+  function openEditor(user: User) {
+    setEditingUser(user);
+    setEditFullName(user.fullName);
+    setEditAccountName(user.accountName);
+    setEditAvatarUrl(user.avatarUrl ?? "");
+    setEditError("");
+  }
+
+  function closeEditor() {
+    if (isSavingEdit) return;
+    setEditingUser(null);
+    setEditError("");
+  }
+
+  async function handleEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingUser) return;
+
+    setEditError("");
+    setIsSavingEdit(true);
+    try {
+      await authenticatedRequest<User>(
+        `/users/${encodeURIComponent(editingUser.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            fullName: editFullName.trim(),
+            accountName: editAccountName.trim().toLowerCase(),
+            avatarUrl: editAvatarUrl.trim() || null,
+          }),
+        },
+      );
+      setEditingUser(null);
+      notify("Đã cập nhật thông tin tài khoản", {
+        key: "account-information-updated",
+      });
+      await loadUsers();
+    } catch (error) {
+      setEditError(
+        getErrorMessage(error, "Không thể cập nhật thông tin tài khoản"),
+      );
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
   return (
     <div className="w-full">
       <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
@@ -388,12 +442,13 @@ export function AccountManagementPanel() {
                 <TableHead>Ngày tạo</TableHead>
                 <TableHead>Lần đăng nhập cuối</TableHead>
                 <TableHead>Đang hoạt động</TableHead>
+                <TableHead className="w-20 text-right">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
-              {isLoading ? <TableLoadingBarRow colSpan={7} /> : null}
+              {isLoading ? <TableLoadingBarRow colSpan={8} /> : null}
               {!isLoading && users.length === 0 ? (
-                <TableEmptyRow colSpan={7} />
+                <TableEmptyRow colSpan={8} />
               ) : (
                 users.map((user, index) => (
                   <tr key={user.id} className="transition hover:bg-slate-50/70">
@@ -440,12 +495,22 @@ export function AccountManagementPanel() {
                                 : "Mở khóa tài khoản"
                         }
                         disabled={
-                          user.role === "ADMIN" ||
-                          user.status === "PENDING"
+                          user.role === "ADMIN" || user.status === "PENDING"
                         }
                         loading={updatingUserId === user.id}
                         onCheckedChange={() => setStatusConfirmationUser(user)}
                       />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditor(user)}
+                        aria-label={`Chỉnh sửa tài khoản ${user.fullName}`}
+                        title="Chỉnh sửa tài khoản"
+                      >
+                        <Pencil size={18} strokeWidth={2.5} />
+                      </Button>
                     </TableCell>
                   </tr>
                 ))
@@ -490,6 +555,106 @@ export function AccountManagementPanel() {
           không?
         </p>
       </ConfirmationDialog>
+
+      <Modal
+        open={editingUser !== null}
+        title="Chỉnh sửa tài khoản"
+        description="Cập nhật thông tin đăng nhập và thông tin hiển thị của tài khoản."
+        onClose={closeEditor}
+        width="max-w-xl"
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => void handleEdit(event)}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              className="!rounded-lg"
+              label="Họ và tên"
+              required
+              minLength={2}
+              maxLength={150}
+              value={editFullName}
+              onChange={(event) => setEditFullName(event.target.value)}
+              placeholder="Nhập họ và tên"
+              autoFocus
+            />
+            <Input
+              className="!rounded-lg"
+              label="Tên tài khoản"
+              required
+              minLength={3}
+              maxLength={50}
+              pattern="[a-z0-9._-]{3,50}"
+              value={editAccountName}
+              onChange={(event) =>
+                setEditAccountName(event.target.value.toLowerCase())
+              }
+              placeholder="Nhập tên tài khoản"
+              autoComplete="username"
+            />
+          </div>
+
+          <Input
+            className="!rounded-lg"
+            label="Ảnh đại diện"
+            type="url"
+            maxLength={2048}
+            value={editAvatarUrl}
+            onChange={(event) => setEditAvatarUrl(event.target.value)}
+            placeholder="https://..."
+            hint="Có thể để trống nếu tài khoản chưa có ảnh đại diện."
+          />
+
+          {editingUser ? (
+            <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-slate-400">Vai trò</p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {roleLabels[editingUser.role]}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Trạng thái</p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {statusFilterOptions.find(
+                    (option) => option.value === editingUser.status,
+                  )?.label ?? editingUser.status}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {editError ? (
+            <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+              {editError}
+            </p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="!rounded-lg"
+              disabled={isSavingEdit}
+              onClick={closeEditor}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              className="!rounded-lg"
+              disabled={isSavingEdit}
+            >
+              {isSavingEdit ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Pencil className="size-4" />
+              )}
+              Lưu thay đổi
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal
         open={isImportOpen}
