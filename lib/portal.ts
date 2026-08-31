@@ -45,9 +45,25 @@ export function getPortalFromHost(host: string | null): AuthPortal | null {
   return null;
 }
 
+export function getPortalFromPathname(pathname: string): AuthPortal | null {
+  const firstSegment = pathname.split("/").filter(Boolean)[0];
+  if (
+    firstSegment === "admin" ||
+    firstSegment === "teacher" ||
+    firstSegment === "student"
+  ) {
+    return firstSegment;
+  }
+  return null;
+}
+
 export function getCurrentPortal(): AuthPortal {
   if (typeof window !== "undefined") {
-    return getPortalFromHost(window.location.host) ?? "student";
+    return (
+      getPortalFromHost(window.location.host) ??
+      getPortalFromPathname(window.location.pathname) ??
+      "student"
+    );
   }
   return "student";
 }
