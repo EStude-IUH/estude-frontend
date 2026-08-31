@@ -18,3 +18,12 @@ Backend mặc định được gọi tại `http://localhost:5000/api/v1`. Backe
 - `STUDENT`: `/student/dashboard`
 
 Route `/dashboard` được giữ để tự chuyển người dùng về đúng khu vực theo vai trò.
+
+## Chạy nhiều vai trò khi phát triển
+
+- `npm run serve` hoặc `npm run serve:all`: chạy đồng thời Admin, Teacher và Student.
+- `npm run serve:admin`: Admin tại `http://localhost:3000`.
+- `npm run serve:teacher`: Teacher tại `http://localhost:3001`.
+- `npm run serve:student`: Student tại `http://localhost:3002`.
+
+`serve:all` dùng một Next.js dev server và hai proxy nhẹ để tiết kiệm RAM nhưng vẫn giữ đủ HMR trên cả ba cổng. Khi chạy riêng, mỗi vai trò sử dụng thư mục cache Next.js độc lập.

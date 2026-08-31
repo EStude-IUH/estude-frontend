@@ -8,6 +8,7 @@ import {
   useState,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from "react";
 import { Check, ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -31,8 +32,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       <input
         ref={ref}
         className={cn(
-          "h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-blue-100",
-          Icon && "pl-10",
+          "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+          Icon && "pl-9",
           error && "border-rose-300 focus:border-rose-400 focus:ring-rose-100",
           className,
         )}
@@ -66,32 +67,90 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
+  hint?: string;
+  error?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  function Select({ className, label, children, ...props }, ref) {
+  function Select({ className, label, hint, error, children, ...props }, ref) {
     const control = (
       <span className="relative block">
         <select
           ref={ref}
           className={cn(
-            "h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3.5 pr-10 text-sm text-slate-700 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-blue-100",
+            "h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-9 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+            error &&
+              "border-rose-300 focus:border-rose-400 focus:ring-rose-100",
             className,
           )}
           {...props}
         >
           {children}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
       </span>
     );
-    if (!label) return control;
+    if (!label && !hint && !error) return control;
     return (
       <label className="block">
         <span className="mb-2 block text-sm font-bold text-slate-700">
           {label}
         </span>
         {control}
+        {error || hint ? (
+          <span
+            className={cn(
+              "mt-1.5 block text-xs leading-5",
+              error ? "text-rose-600" : "text-slate-400",
+            )}
+          >
+            {error ?? hint}
+          </span>
+        ) : null}
+      </label>
+    );
+  },
+);
+
+export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+}
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
+  function Textarea({ className, label, hint, error, ...props }, ref) {
+    const control = (
+      <textarea
+        ref={ref}
+        className={cn(
+          "min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+          error && "border-rose-300 focus:border-rose-400 focus:ring-rose-100",
+          className,
+        )}
+        {...props}
+      />
+    );
+
+    if (!label && !hint && !error) return control;
+    return (
+      <label className="block">
+        {label ? (
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            {label}
+          </span>
+        ) : null}
+        {control}
+        {error || hint ? (
+          <span
+            className={cn(
+              "mt-1.5 block text-xs leading-5",
+              error ? "text-rose-600" : "text-slate-400",
+            )}
+          >
+            {error ?? hint}
+          </span>
+        ) : null}
       </label>
     );
   },
@@ -168,7 +227,7 @@ export function CustomSelect({
         aria-labelledby={label ? labelId : undefined}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 text-left text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60",
+          "flex h-10 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
           open && "border-brand-400 ring-4 ring-blue-100",
           buttonClassName,
         )}

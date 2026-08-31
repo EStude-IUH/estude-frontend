@@ -11,10 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "EStude | Không gian học tập số",
-    template: "%s | EStude",
-  },
+  title: "EStude | Không gian học tập số",
   description: "Nền tảng học tập và quản lý lớp học dành cho sinh viên IUH.",
 };
 

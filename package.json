@@ -4,6 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "serve": "npm run serve:all",
+    "serve:all": "concurrently --kill-others --names APP,ROLES --prefix-colors blue,magenta \"npm:serve:admin\" \"npm:serve:roles\"",
+    "serve:admin": "cross-env ESTUDE_APP_ROLE=ADMIN NEXT_DIST_DIR=.next-admin next dev -p 3000",
+    "serve:teacher": "cross-env ESTUDE_APP_ROLE=TEACHER NEXT_DIST_DIR=.next-teacher next dev -p 3001",
+    "serve:student": "cross-env ESTUDE_APP_ROLE=STUDENT NEXT_DIST_DIR=.next-student next dev -p 3002",
+    "serve:roles": "node scripts/serve-role-proxies.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
@@ -19,8 +25,11 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.21",
+    "http-proxy": "^1.18.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"

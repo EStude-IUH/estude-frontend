@@ -151,17 +151,6 @@ export function AcademicDataPanel() {
 
   return (
     <div className="pb-8">
-      <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">
-          Admin workspace
-        </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight">
-          Danh mục hệ thống
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          Quản lý năm học, học kỳ và cấu hình thành phần điểm.
-        </p>
-      </div>
       {error ? (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
           {error}

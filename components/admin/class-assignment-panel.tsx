@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoaderCircle, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CustomSelect } from "@/components/ui/form-control";
+import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import {
   Table,
@@ -233,9 +233,8 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
         )}
       >
         <div className="border-b border-slate-100 p-4">
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Tìm theo tên hoặc tài khoản" className="h-[42px] w-full rounded-lg border border-slate-200 pl-10 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-blue-100" />
+          <div className="max-w-sm">
+            <Input icon={Search} value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Tìm theo tên hoặc tài khoản" />
           </div>
         </div>
         <div className="max-h-[420px] overflow-auto">
