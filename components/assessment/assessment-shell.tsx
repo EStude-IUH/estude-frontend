@@ -99,7 +99,7 @@ export function AssessmentShell({
   async function handleSignOut() {
     setIsAccountMenuOpen(false);
     await signOut();
-    router.replace(student ? "/login" : "/teacher/login");
+    router.replace("/login");
   }
 
   return (

@@ -23,12 +23,10 @@ export function getRoleSessionSettings(role: UserRole): string {
 }
 
 export function getRoleLogin(role: UserRole): string {
-  switch (role) {
-    case "ADMIN":
-      return "/admin/login";
-    case "TEACHER":
-      return "/teacher/login";
-    case "STUDENT":
-      return "/student/login";
-  }
+  const loginPaths: Record<UserRole, string> = {
+    ADMIN: "/login",
+    TEACHER: "/login",
+    STUDENT: "/login",
+  };
+  return loginPaths[role];
 }
