@@ -12,7 +12,6 @@ import {
   ClipboardCheck,
   FilePlus2,
   Library,
-  LayoutDashboard,
   LoaderCircle,
   LogOut,
   Menu,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
+import { StudentShell } from "@/components/student/student-shell";
 import { useAuth } from "@/context/auth-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
 
@@ -38,6 +38,12 @@ export function AssessmentShell({
   children: ReactNode;
   student?: boolean;
 }) {
+  if (student) return <StudentShell>{children}</StudentShell>;
+
+  return <AssessmentWorkspaceShell>{children}</AssessmentWorkspaceShell>;
+}
+
+function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
@@ -55,34 +61,25 @@ export function AssessmentShell({
     return () => document.removeEventListener("mousedown", closeAccountMenu);
   }, []);
 
-  const links: WorkspaceLink[] = student
-    ? [
-        {
-          href: "/student/dashboard",
-          label: "Tổng quan",
-          icon: LayoutDashboard,
-        },
-        { href: "/student/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
-      ]
-    : [
-        { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
-        {
-          href: "/teacher/classes",
-          label: "Lớp học được phân công",
-          icon: School,
-        },
-        {
-          href: "/teacher/materials",
-          label: "Thư viện tài liệu",
-          icon: Library,
-        },
-        {
-          href: "/teacher/question-bank",
-          label: "Ngân hàng câu hỏi",
-          icon: FilePlus2,
-        },
-        { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
-      ];
+  const links: WorkspaceLink[] = [
+    { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
+    {
+      href: "/teacher/classes",
+      label: "Lớp học được phân công",
+      icon: School,
+    },
+    {
+      href: "/teacher/materials",
+      label: "Thư viện tài liệu",
+      icon: Library,
+    },
+    {
+      href: "/teacher/question-bank",
+      label: "Ngân hàng câu hỏi",
+      icon: FilePlus2,
+    },
+    { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
+  ];
 
   const initials =
     user?.fullName
@@ -92,7 +89,7 @@ export function AssessmentShell({
       .map((part) => part[0])
       .join("")
       .toUpperCase() ?? "ES";
-  const roleLabel = student ? "Sinh viên" : "Giảng viên";
+  const roleLabel = "Giảng viên";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ${isSidebarCollapsed ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0" : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"}`;
   const workspaceTitle = getWorkspaceTitle(pathname, links);
 

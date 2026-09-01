@@ -1,45 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
-  Bell,
   BookOpen,
-  CalendarDays,
-  ChevronDown,
   ChevronRight,
-  CircleHelp,
   ClipboardCheck,
   Clock3,
   FileText,
-  LayoutDashboard,
-  LoaderCircle,
-  LogOut,
   MapPin,
-  Settings,
-  UsersRound,
   Video,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
-import { useAuth } from "@/context/auth-context";
-import { getRoleSessionSettings } from "@/lib/role-routes";
-
-const navItems = [
-  {
-    icon: LayoutDashboard,
-    label: "Hôm nay",
-    href: "/student/dashboard",
-  },
-  {
-    icon: ClipboardCheck,
-    label: "Bài kiểm tra",
-    href: "/student/exams",
-  },
-  { icon: CalendarDays, label: "Thời khóa biểu" },
-  { icon: BookOpen, label: "Môn học" },
-  { icon: FileText, label: "Bài tập" },
-  { icon: UsersRound, label: "Nhóm học tập" },
-];
+import { StudentShell } from "@/components/student/student-shell";
 
 const weekDays = [
   { short: "T2", date: "17", label: "Thứ Hai", highlighted: true },
@@ -144,167 +115,11 @@ const courses = [
   },
 ];
 
-function LoadingScreen() {
-  return (
-    <main
-      className="grid min-h-screen place-items-center bg-[#f7fafc]"
-      aria-live="polite"
-    >
-      <div className="text-center">
-        <LoaderCircle className="mx-auto size-8 animate-spin text-brand-600" />
-        <p className="mt-3 text-sm font-medium text-slate-500">
-          Đang tải thời khóa biểu...
-        </p>
-      </div>
-    </main>
-  );
-}
-
 export function StudentDashboardView() {
   const router = useRouter();
-  const pathname = usePathname();
-  const { user, signOut } = useAuth();
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const accountMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
-      if (!accountMenuRef.current?.contains(event.target as Node))
-        setIsAccountMenuOpen(false);
-    }
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
-
-  async function handleSignOut() {
-    setIsSigningOut(true);
-    try {
-      await signOut();
-    } finally {
-      router.replace("/login");
-    }
-  }
-
-  if (!user) return <LoadingScreen />;
-
-  const initials = user.fullName
-    .trim()
-    .split(/\s+/)
-    .slice(-2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#f7fafc] pb-20 text-slate-950 lg:pb-0">
-      <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-full max-w-[1480px] items-center gap-6 px-4 sm:px-6 lg:px-8">
-          <BrandLogo withShadow={false} />
-
-          <nav
-            className="hidden h-full items-center gap-1 lg:flex"
-            aria-label="Điều hướng sinh viên"
-          >
-            {navItems.map(({ icon: Icon, label, href }) => {
-              const active = href
-                ? pathname === href || pathname.startsWith(`${href}/`)
-                : false;
-
-              return (
-                <button
-                  type="button"
-                  key={label}
-                  onClick={() => href && router.push(href)}
-                  className={`relative flex h-full items-center gap-2 px-3 text-sm font-semibold transition ${
-                    active
-                      ? "text-brand-700"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="size-4" /> {label}
-                  {active ? (
-                    <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              className="relative grid size-10 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-              aria-label="Thông báo"
-            >
-              <Bell className="size-4.5" />
-              <span className="absolute right-2 top-2 size-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            </button>
-
-            <div ref={accountMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setIsAccountMenuOpen((current) => !current)}
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-slate-50"
-                aria-expanded={isAccountMenuOpen}
-                aria-haspopup="menu"
-              >
-                <span className="grid size-9 place-items-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
-                  {initials}
-                </span>
-                <span className="hidden max-w-36 truncate text-sm font-bold text-slate-800 sm:block">
-                  {user.fullName}
-                </span>
-                <ChevronDown
-                  className={`size-4 text-slate-400 transition-transform ${isAccountMenuOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {isAccountMenuOpen ? (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
-                  >
-                    <CircleHelp className="size-4" /> Trợ giúp
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() =>
-                      router.push(getRoleSessionSettings(user.role))
-                    }
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
-                  >
-                    <Settings className="size-4" /> Cài đặt
-                  </button>
-                  <div className="my-1 border-t border-slate-100" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => void handleSignOut()}
-                    disabled={isSigningOut}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
-                  >
-                    {isSigningOut ? (
-                      <LoaderCircle className="size-4 animate-spin" />
-                    ) : (
-                      <LogOut className="size-4" />
-                    )}
-                    {isSigningOut ? "Đang đăng xuất..." : "Đăng xuất"}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-[1480px] px-4 pb-8 pt-20 sm:px-6 lg:px-8">
+    <StudentShell>
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
             <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -520,29 +335,6 @@ export function StudentDashboardView() {
             ))}
           </div>
         </section>
-      </main>
-
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-slate-200 bg-white px-2 lg:hidden"
-        aria-label="Điều hướng nhanh"
-      >
-        {navItems.slice(0, 4).map(({ icon: Icon, label, href }) => {
-          const active = href
-            ? pathname === href || pathname.startsWith(`${href}/`)
-            : false;
-
-          return (
-            <button
-              type="button"
-              key={label}
-              onClick={() => href && router.push(href)}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-bold ${active ? "text-brand-700" : "text-slate-400"}`}
-            >
-              <Icon className="size-5" /> {label}
-            </button>
-          );
-        })}
-      </nav>
-    </div>
+    </StudentShell>
   );
 }
