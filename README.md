@@ -6,12 +6,20 @@ Frontend Next.js cho luồng đăng ký, đăng nhập và trang tổng quan ESt
 
 1. Sao chép `.env.example` thành `.env.local` nếu API không chạy tại địa chỉ mặc định.
 2. Chạy `npm install`.
-3. Chạy `npm run dev`.
-4. Mở `http://localhost:3000`.
+3. Chạy portal cần phát triển:
+   - Sinh viên: `npm run dev:student` (cũng là mặc định của `npm run dev`).
+   - Giảng viên: `npm run dev:teacher`.
+   - Quản trị: `npm run dev:admin`.
+4. Mở `http://localhost:3000/login`. Mỗi lần chỉ chạy một portal trên cổng `3000`.
 
 Backend mặc định được gọi tại `http://localhost:5000/api/v1`. Khi production, đặt `NEXT_PUBLIC_API_URL=https://api.estude.io.vn/api/v1`.
 
 ## Khu vực theo vai trò
+
+Khi `NODE_ENV=development`, portal đăng nhập được npm script thiết lập bằng
+`NEXT_PUBLIC_AUTH_PORTAL`. Khi `NODE_ENV=production`, ứng dụng bỏ qua cấu hình portal local và
+tự nhận diện hostname `student.estude.io.vn`, `teacher.estude.io.vn` hoặc
+`admin.estude.io.vn`; tất cả đều dùng path `/login`.
 
 - `ADMIN`: `/admin/dashboard`
 - `TEACHER`: `/teacher/dashboard`

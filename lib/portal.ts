@@ -14,7 +14,21 @@ const LOCAL_PORTALS: Record<string, AuthPortal> = {
   "3002": "student",
 };
 
+function parsePortal(value: string | null | undefined): AuthPortal | null {
+  const portal = value?.trim().toLowerCase();
+  return portal === "admin" || portal === "teacher" || portal === "student"
+    ? portal
+    : null;
+}
+
+function getDevelopmentPortal(): AuthPortal | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  return parsePortal(process.env.NEXT_PUBLIC_AUTH_PORTAL);
+}
+
 export function getPortalFromHost(host: string | null): AuthPortal | null {
+  const developmentPortal = getDevelopmentPortal();
+  if (developmentPortal) return developmentPortal;
   if (!host) return null;
 
   const forwardedHost = host.split(",", 1)[0]?.trim().toLowerCase();
@@ -23,6 +37,7 @@ export function getPortalFromHost(host: string | null): AuthPortal | null {
   try {
     const url = new URL(`http://${forwardedHost}`);
     if (
+      process.env.NODE_ENV === "development" &&
       (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
       LOCAL_PORTALS[url.port]
     ) {
@@ -31,7 +46,7 @@ export function getPortalFromHost(host: string | null): AuthPortal | null {
 
     if (
       url.hostname.endsWith(".estude.io.vn") ||
-      url.hostname.endsWith(".localhost")
+      (process.env.NODE_ENV === "development" && url.hostname.endsWith(".localhost"))
     ) {
       const subdomain = url.hostname.split(".", 1)[0];
       if (subdomain === "admin" || subdomain === "teacher" || subdomain === "student") {
@@ -66,6 +81,10 @@ export function getCurrentPortal(): AuthPortal {
     );
   }
   return "student";
+}
+
+export function getRequestPortal(host: string | null): AuthPortal {
+  return getPortalFromHost(host) ?? "student";
 }
 
 export function getPortalRole(portal: AuthPortal): UserRole {

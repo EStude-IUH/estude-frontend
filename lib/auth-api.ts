@@ -18,8 +18,8 @@ let accessToken: string | null = null;
 let refreshPromise: Promise<AccessTokenResponse> | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
-function portalAuthPath(path: string): string {
-  return `/auth/${getCurrentPortal()}${path}`;
+function portalAuthPath(action: string): string {
+  return `/auth/${getCurrentPortal()}/${action}`;
 }
 
 interface RequestOptions {
@@ -99,7 +99,7 @@ async function request<T>(
 async function refreshAccessToken(): Promise<AccessTokenResponse> {
   if (!refreshPromise) {
     refreshPromise = request<AccessTokenResponse>(
-      portalAuthPath("/refresh-token"),
+      portalAuthPath("refresh-token"),
       { method: "POST" },
       { retryOnUnauthorized: false },
     )
@@ -166,7 +166,7 @@ export function authenticatedBlobRequest(
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthSession> {
-    const session = await request<AuthSession>(portalAuthPath("/login"), {
+    const session = await request<AuthSession>(portalAuthPath("login"), {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -193,9 +193,10 @@ export const authApi = {
 
   async logout(): Promise<Record<string, never>> {
     try {
-      return await authenticatedRequest<Record<string, never>>(portalAuthPath("/logout"), {
-        method: "POST",
-      });
+      return await authenticatedRequest<Record<string, never>>(
+        portalAuthPath("logout"),
+        { method: "POST" },
+      );
     } finally {
       accessToken = null;
     }
@@ -204,7 +205,7 @@ export const authApi = {
   async logoutAll(): Promise<Record<string, never>> {
     try {
       return await authenticatedRequest<Record<string, never>>(
-        portalAuthPath("/logout-all"),
+        portalAuthPath("logout-all"),
         {
           method: "POST",
         },
@@ -220,7 +221,7 @@ export const authApi = {
 
   revokeSession(sessionId: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(
-      portalAuthPath(`/sessions/${encodeURIComponent(sessionId)}`),
+      `${portalAuthPath("sessions")}/${encodeURIComponent(sessionId)}`,
       { method: "DELETE" },
     );
   },

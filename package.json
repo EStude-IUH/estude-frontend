@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run dev:student",
+    "dev:admin": "NEXT_PUBLIC_AUTH_PORTAL=admin next dev",
+    "dev:teacher": "NEXT_PUBLIC_AUTH_PORTAL=teacher next dev",
+    "dev:student": "NEXT_PUBLIC_AUTH_PORTAL=student next dev",
     "serve": "npm run serve:all",
     "serve:all": "concurrently --kill-others --names APP,ROLES --prefix-colors blue,magenta \"npm:serve:admin\" \"npm:serve:roles\"",
     "serve:admin": "cross-env ESTUDE_APP_ROLE=ADMIN NEXT_DIST_DIR=.next-admin next dev -p 3000",
