@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   BrainCircuit,
   ChevronRight,
   Clock3,
   Globe2,
+  KeyRound,
+  LoaderCircle,
   Mail,
   MapPin,
   Save,
@@ -19,6 +21,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-control";
 import { useActionNotification } from "@/components/ui/action-notification";
+import { ApiError, authenticatedRequest } from "@/lib/auth-api";
+import type { DefaultPasswordSettings } from "@/types/users";
 
 function SettingSwitch({
   checked,
@@ -89,7 +93,12 @@ function SectionHeader({
 }
 
 export type SystemSettingsSection =
-  "attendance" | "notifications" | "performance" | "ai-question" | "security";
+  | "attendance"
+  | "notifications"
+  | "performance"
+  | "ai-question"
+  | "default-passwords"
+  | "security";
 
 export function SystemSettingsPanel({
   section = "attendance",
@@ -118,19 +127,96 @@ export function SystemSettingsPanel({
     atRisk: "6.5",
     aiAnalysis: true,
   });
+  const [teacherDefaultPassword, setTeacherDefaultPassword] = useState("");
+  const [studentDefaultPassword, setStudentDefaultPassword] = useState("");
+  const [passwordSettings, setPasswordSettings] =
+    useState<DefaultPasswordSettings | null>(null);
+  const [passwordSettingsError, setPasswordSettingsError] = useState("");
+  const [loadingPasswordSettings, setLoadingPasswordSettings] = useState(false);
+  const [savingPasswordSettings, setSavingPasswordSettings] = useState(false);
 
-  function handleSave() {
+  useEffect(() => {
+    if (section !== "default-passwords") return;
+    let cancelled = false;
+    setLoadingPasswordSettings(true);
+    setPasswordSettingsError("");
+    authenticatedRequest<DefaultPasswordSettings>(
+      "/users/default-password-settings",
+    )
+      .then((settings) => {
+        if (!cancelled) setPasswordSettings(settings);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPasswordSettingsError(
+            error instanceof ApiError
+              ? error.details.join(" · ") || error.message
+              : "Không thể tải cấu hình mật khẩu mặc định",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPasswordSettings(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section]);
+
+  async function handleSave() {
+    if (section === "default-passwords") {
+      if (!teacherDefaultPassword && !studentDefaultPassword) {
+        setPasswordSettingsError(
+          "Vui lòng nhập ít nhất một mật khẩu cần cập nhật.",
+        );
+        return;
+      }
+      setSavingPasswordSettings(true);
+      setPasswordSettingsError("");
+      try {
+        const settings = await authenticatedRequest<DefaultPasswordSettings>(
+          "/users/default-password-settings",
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              ...(teacherDefaultPassword ? { teacherDefaultPassword } : {}),
+              ...(studentDefaultPassword ? { studentDefaultPassword } : {}),
+            }),
+          },
+        );
+        setPasswordSettings(settings);
+        setTeacherDefaultPassword("");
+        setStudentDefaultPassword("");
+        notify("Đã cập nhật mật khẩu mặc định", {
+          key: "default-passwords-saved",
+        });
+      } catch (error) {
+        setPasswordSettingsError(
+          error instanceof ApiError
+            ? error.details.join(" · ") || error.message
+            : "Không thể cập nhật mật khẩu mặc định",
+        );
+      } finally {
+        setSavingPasswordSettings(false);
+      }
+      return;
+    }
     notify("Đã lưu cấu hình hệ thống", { key: "system-settings-saved" });
   }
 
   return (
     <div className="w-full pb-8">
-      <div className="mb-3 flex justify-end">
-        <Button className="w-fit !rounded-lg" onClick={handleSave}>
-          <Save className="size-4" />
-          Lưu cấu hình
-        </Button>
-      </div>
+      {section !== "default-passwords" ? (
+        <div className="mb-3 flex justify-end">
+          <Button
+            className="w-fit !rounded-lg"
+            onClick={() => void handleSave()}
+          >
+            <Save className="size-4" />
+            Lưu cấu hình
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4">
         <section
@@ -321,6 +407,137 @@ export function SystemSettingsPanel({
               label="Bật phân tích học lực bằng AI"
               description="Tự động tổng hợp dữ liệu điểm số và điểm danh để phát hiện sớm rủi ro."
             />
+          </div>
+        </section>
+
+        <section
+          className={`${section === "default-passwords" ? "" : "hidden"} mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}
+        >
+          <SectionHeader
+            icon={KeyRound}
+            title="Mật khẩu mặc định"
+            description="Thiết lập riêng mật khẩu ban đầu cho tài khoản giáo viên và học sinh được tạo bằng Excel."
+            tone="bg-indigo-50 text-indigo-600"
+          />
+
+          {loadingPasswordSettings ? (
+            <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
+              <LoaderCircle className="size-4 animate-spin" /> Đang tải cấu
+              hình...
+            </p>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Tài khoản giáo viên
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Áp dụng khi import danh sách giáo viên.
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      passwordSettings?.teacherConfigured
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {passwordSettings?.teacherConfigured
+                      ? "Đã cấu hình"
+                      : "Chưa cấu hình"}
+                  </span>
+                </div>
+                <Input
+                  icon={KeyRound}
+                  type="password"
+                  showPasswordToggle
+                  label="Mật khẩu mới"
+                  minLength={1}
+                  maxLength={128}
+                  value={teacherDefaultPassword}
+                  onChange={(event) =>
+                    setTeacherDefaultPassword(event.target.value)
+                  }
+                  placeholder={
+                    passwordSettings?.teacherConfigured
+                      ? "Nhập để thay đổi"
+                      : "Ví dụ: Teacher@123"
+                  }
+                  hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Tài khoản học sinh
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Áp dụng khi import danh sách học sinh.
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      passwordSettings?.studentConfigured
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {passwordSettings?.studentConfigured
+                      ? "Đã cấu hình"
+                      : "Chưa cấu hình"}
+                  </span>
+                </div>
+                <Input
+                  icon={KeyRound}
+                  type="password"
+                  showPasswordToggle
+                  label="Mật khẩu mới"
+                  minLength={1}
+                  maxLength={128}
+                  value={studentDefaultPassword}
+                  onChange={(event) =>
+                    setStudentDefaultPassword(event.target.value)
+                  }
+                  placeholder={
+                    passwordSettings?.studentConfigured
+                      ? "Nhập để thay đổi"
+                      : "Ví dụ: Student@123"
+                  }
+                  hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+          )}
+
+          {passwordSettingsError ? (
+            <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+              {passwordSettingsError}
+            </p>
+          ) : null}
+
+          <div className="mt-6 flex flex-col-reverse gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-xs leading-5 text-slate-500">
+              Hệ thống không hiển thị lại mật khẩu đã lưu. Bỏ trống ô của vai
+              trò không cần thay đổi.
+            </p>
+            <Button
+              className="shrink-0 !rounded-lg"
+              disabled={savingPasswordSettings || loadingPasswordSettings}
+              onClick={() => void handleSave()}
+            >
+              {savingPasswordSettings ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              {savingPasswordSettings ? "Đang lưu..." : "Lưu cấu hình"}
+            </Button>
           </div>
         </section>
 

@@ -1,4 +1,4 @@
-import type { User } from '@/types/auth';
+import type { User } from "@/types/auth";
 
 export interface UsersPage {
   items: User[];
@@ -21,4 +21,10 @@ export interface ImportUsersResult {
   createdCount: number;
   failedCount: number;
   errors: ImportUserError[];
+}
+
+export interface DefaultPasswordSettings {
+  teacherConfigured: boolean;
+  studentConfigured: boolean;
+  updatedAt: string | null;
 }

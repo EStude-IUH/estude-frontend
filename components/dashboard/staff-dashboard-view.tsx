@@ -34,6 +34,7 @@ import { OverviewDashboard } from "@/components/dashboard/overview-dashboard";
 import { WeeklyTimetable } from "@/components/dashboard/weekly-timetable";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
 import { UserManagementPanel } from "@/components/admin/user-management-panel";
+import { StudentDetailPanel } from "@/components/admin/student-detail-panel";
 import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
 import { SubjectManagementPanel } from "@/components/admin/subject-management-panel";
 import { ClassManagementPanel } from "@/components/admin/class-management-panel";
@@ -83,6 +84,11 @@ const settingsSubItems = [
     section: "ai-question",
   },
   {
+    label: "Mật khẩu mặc định",
+    href: "/admin/settings/default-passwords",
+    section: "default-passwords",
+  },
+  {
     label: "Bảo mật & phiên",
     href: "/admin/settings/security",
     section: "security",
@@ -119,6 +125,11 @@ const managedCourses = [
     tone: "from-emerald-600 to-teal-500",
   },
 ];
+
+const userSubItems = [
+  { label: "Giáo viên", href: "/admin/users/teachers", role: "TEACHER" },
+  { label: "Học sinh", href: "/admin/users/students", role: "STUDENT" },
+] as const;
 
 const upcomingWork = [
   {
@@ -171,6 +182,9 @@ export function StaffDashboardView() {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(
     pathname.startsWith("/admin/settings"),
   );
+  const [isUsersMenuOpen, setIsUsersMenuOpen] = useState(
+    pathname.startsWith("/admin/users"),
+  );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -189,6 +203,7 @@ export function StaffDashboardView() {
   useEffect(() => {
     setIsAccountMenuOpen(false);
     setIsSettingsMenuOpen(pathname.startsWith("/admin/settings"));
+    setIsUsersMenuOpen(pathname.startsWith("/admin/users"));
   }, [pathname]);
 
   async function handleSignOut() {
@@ -270,7 +285,12 @@ export function StaffDashboardView() {
     ...(user.role === "TEACHER" ? staffNavItems : []),
   ];
   const isAccountsPage = pathname === "/admin/accounts";
-  const isUsersPage = pathname === "/admin/users";
+  const isUsersPage = pathname.startsWith("/admin/users");
+  const studentDetailId =
+    pathname.match(/^\/admin\/users\/students\/([^/]+)$/)?.[1] ?? "";
+  const usersRole = pathname.startsWith("/admin/users/students")
+    ? "STUDENT"
+    : "TEACHER";
   const isAcademicDataPage = pathname === "/admin/academic-data";
   const isSubjectsPage = pathname === "/admin/subjects";
   const isClassesPage = pathname === "/admin/classes";
@@ -289,11 +309,16 @@ export function StaffDashboardView() {
   const activeMenuLabel = pathname.startsWith("/admin/settings")
     ? (settingsSubItems.find((item) => item.href === pathname)?.label ??
       "Cấu hình hệ thống")
-    : (navItems.find(
-        (item) =>
-          item.href === pathname ||
-          (item.href === "/teacher/classes" && isTeacherClassDetailPage),
-      )?.label ?? "Tổng quan");
+    : pathname.startsWith("/admin/users")
+      ? studentDetailId
+        ? "Chi tiết học sinh"
+        : (userSubItems.find((item) => item.href === pathname)?.label ??
+          "Giáo viên")
+      : (navItems.find(
+          (item) =>
+            item.href === pathname ||
+            (item.href === "/teacher/classes" && isTeacherClassDetailPage),
+        )?.label ?? "Tổng quan");
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
     isSidebarCollapsed
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
@@ -464,6 +489,62 @@ export function StaffDashboardView() {
             aria-label="Điều hướng khu vực điều hành"
           >
             {navItems.map(({ icon: NavIcon, label, href }) => {
+              if (href === "/admin/users") {
+                return (
+                  <div key={label}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isUsersPage || pathname === "/admin/users") {
+                          router.push("/admin/users/teachers");
+                        } else {
+                          setIsUsersMenuOpen((current) => !current);
+                        }
+                        setIsMenuOpen(false);
+                      }}
+                      title={isSidebarCollapsed ? label : undefined}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-300 ${
+                        isUsersPage
+                          ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                      } ${sidebarItemLayout}`}
+                    >
+                      <NavIcon className="size-5 shrink-0" aria-hidden="true" />
+                      <span className={sidebarLabelClass}>{label}</span>
+                      <ChevronDown
+                        className={`ml-auto size-4 shrink-0 transition-transform ${
+                          isUsersMenuOpen ? "rotate-180" : ""
+                        } ${isSidebarCollapsed ? "lg:hidden" : ""}`}
+                      />
+                    </button>
+                    {isUsersMenuOpen && !isSidebarCollapsed ? (
+                      <div className="relative ml-5 mt-1 space-y-1 pl-3 before:absolute before:bottom-3 before:left-0 before:top-0 before:w-px before:rounded-full before:bg-blue-100">
+                        {userSubItems.map((item) => {
+                          const active = pathname.startsWith(item.href);
+                          return (
+                            <button
+                              type="button"
+                              key={item.href}
+                              onClick={() => {
+                                router.push(item.href);
+                                setIsMenuOpen(false);
+                              }}
+                              className={`relative flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition before:absolute before:-left-3 before:top-1/2 before:h-3 before:w-3 before:-translate-y-1/2 before:rounded-bl-xl before:border-b before:border-l before:border-blue-100 before:bg-transparent ${
+                                active
+                                  ? "bg-blue-50 text-brand-700 shadow-sm shadow-blue-100/50"
+                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
               const active =
                 href === pathname ||
                 (href === "/teacher/classes" && isTeacherClassDetailPage);
@@ -586,7 +667,11 @@ export function StaffDashboardView() {
             ) : isAccountsPage ? (
               <AccountManagementPanel />
             ) : isUsersPage ? (
-              <UserManagementPanel />
+              studentDetailId ? (
+                <StudentDetailPanel studentId={studentDetailId} />
+              ) : (
+                <UserManagementPanel role={usersRole} />
+              )
             ) : pathname.endsWith("/dashboard") ? (
               user.role === "TEACHER" ? (
                 <WeeklyTimetable />

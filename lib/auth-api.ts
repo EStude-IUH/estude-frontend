@@ -127,6 +127,86 @@ export function authenticatedRequest<T>(
   return request<T>(path, init, { authenticated: true });
 }
 
+export type UploadProgressPhase = "uploading" | "processing";
+
+export function authenticatedUploadRequest<T>(
+  path: string,
+  formData: FormData,
+  onProgress: (percent: number, phase: UploadProgressPhase) => void,
+): Promise<T> {
+  function send(retryOnUnauthorized: boolean): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_URL}${path}`);
+      xhr.withCredentials = true;
+      if (accessToken) {
+        xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+      }
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (!event.lengthComputable || event.total === 0) return;
+        onProgress(Math.round((event.loaded / event.total) * 70), "uploading");
+      });
+      xhr.upload.addEventListener("load", () => {
+        onProgress(70, "processing");
+      });
+      xhr.addEventListener("error", () => {
+        reject(
+          new ApiError("Không thể kết nối đến máy chủ. Vui lòng thử lại.", 0),
+        );
+      });
+      xhr.addEventListener("load", () => {
+        void (async () => {
+          if (xhr.status === 401 && retryOnUnauthorized) {
+            try {
+              await refreshAccessToken();
+              resolve(await send(false));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
+          if (xhr.status === 401) {
+            accessToken = null;
+            unauthorizedHandler?.();
+          }
+
+          const payload = (() => {
+            try {
+              return JSON.parse(xhr.responseText) as
+                ApiEnvelope<T> | ApiErrorEnvelope;
+            } catch {
+              return null;
+            }
+          })();
+          if (
+            xhr.status < 200 ||
+            xhr.status >= 300 ||
+            !payload ||
+            payload.success === false
+          ) {
+            const errorPayload =
+              payload && payload.success === false ? payload : null;
+            reject(
+              new ApiError(
+                errorPayload?.message ??
+                  "Không thể kết nối đến máy chủ. Vui lòng thử lại.",
+                xhr.status,
+                errorPayload?.errors ?? [],
+              ),
+            );
+            return;
+          }
+          resolve(payload.data);
+        })();
+      });
+      xhr.send(formData);
+    });
+  }
+
+  return send(true);
+}
+
 async function requestBlob(
   path: string,
   init: RequestInit = {},

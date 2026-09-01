@@ -13,7 +13,13 @@ export function Table({
   ...props
 }: TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <table className={cn("w-full text-left text-sm", className)} {...props} />
+    <table
+      className={cn(
+        "w-full text-left text-[13px] text-slate-700 [&_td]:!text-[13px] [&_th]:!text-[13px]",
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -24,7 +30,7 @@ export function TableHeader({
   return (
     <thead
       className={cn(
-        "bg-slate-50 text-xs uppercase tracking-wide text-slate-500",
+        "bg-slate-50 text-[13px] uppercase tracking-wide text-slate-500",
         className,
       )}
       {...props}
@@ -47,7 +53,10 @@ export function TableHead({
 }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className={cn("whitespace-nowrap px-4 py-3.5 font-bold", className)}
+      className={cn(
+        "whitespace-nowrap px-4 py-3.5 !text-[13px] font-bold",
+        className,
+      )}
       {...props}
     />
   );
@@ -57,7 +66,12 @@ export function TableCell({
   className,
   ...props
 }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("px-4 py-3.5", className)} {...props} />;
+  return (
+    <td
+      className={cn("px-4 py-3.5 !text-[13px] text-slate-700", className)}
+      {...props}
+    />
+  );
 }
 
 export function TableLoadingBarRow({ colSpan }: { colSpan: number }) {

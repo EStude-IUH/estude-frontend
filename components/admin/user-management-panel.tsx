@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Eye, LoaderCircle, Pencil, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AuditActor } from "@/components/admin/audit-actor";
 import {
   Table,
   TableBody,
@@ -28,12 +30,6 @@ const roleLabels: Record<ManagedRole, string> = {
   TEACHER: "Giáo viên",
   STUDENT: "Học sinh",
 };
-
-const roleFilterOptions = [
-  { value: "", label: "Tất cả đối tượng" },
-  { value: "TEACHER", label: "Giáo viên" },
-  { value: "STUDENT", label: "Học sinh" },
-];
 
 const statusFilterOptions = [
   { value: "", label: "Tất cả trạng thái" },
@@ -61,6 +57,25 @@ function formatDate(value: string | null): string {
   }).format(new Date(value));
 }
 
+function formatDateOnly(value?: string | null): string {
+  if (!value) return "--";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function displayValue(value?: string | null): string {
+  return value?.trim() || "--";
+}
+
+function formatGender(gender?: User["gender"]): string {
+  if (gender === "M") return "Nam";
+  if (gender === "F") return "Nữ";
+  return "--";
+}
+
 function getInitial(fullName: string): string {
   return fullName.trim().split(/\s+/).at(-1)?.charAt(0).toUpperCase() ?? "?";
 }
@@ -77,7 +92,8 @@ function getStatusClass(status: UserStatus): string {
   return "bg-slate-100 text-slate-600";
 }
 
-export function UserManagementPanel() {
+export function UserManagementPanel({ role }: { role: ManagedRole }) {
+  const router = useRouter();
   const { notify } = useActionNotification();
   const [users, setUsers] = useState<User[]>([]);
   const [page, setPage] = useState(1);
@@ -86,7 +102,6 @@ export function UserManagementPanel() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
@@ -100,21 +115,25 @@ export function UserManagementPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
-  const buildQuery = useCallback(
-    () => {
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("limit", String(limit));
-      params.set("excludeRole", "ADMIN");
-      if (submittedSearch) params.set("search", submittedSearch);
-      if (roleFilter) params.set("role", roleFilter);
-      if (statusFilter) params.set("status", statusFilter);
-      if (createdFrom) params.set("createdFrom", createdFrom);
-      if (createdTo) params.set("createdTo", createdTo);
-      return params;
-    },
-    [createdFrom, createdTo, limit, page, roleFilter, statusFilter, submittedSearch],
-  );
+  const buildQuery = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    params.set("role", role);
+    if (submittedSearch) params.set("search", submittedSearch);
+    if (statusFilter) params.set("status", statusFilter);
+    if (createdFrom) params.set("createdFrom", createdFrom);
+    if (createdTo) params.set("createdTo", createdTo);
+    return params;
+  }, [
+    createdFrom,
+    createdTo,
+    limit,
+    page,
+    role,
+    statusFilter,
+    submittedSearch,
+  ]);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -127,7 +146,9 @@ export function UserManagementPanel() {
       setTotalUsers(result.meta.total);
       setTotalPages(Math.max(result.meta.totalPages, 1));
     } catch (error) {
-      setListError(getErrorMessage(error, "Không thể tải danh sách người dùng"));
+      setListError(
+        getErrorMessage(error, "Không thể tải danh sách người dùng"),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -136,6 +157,12 @@ export function UserManagementPanel() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
+
+  useEffect(() => {
+    setPage(1);
+    setViewedUser(null);
+    setSelectedUser(null);
+  }, [role]);
 
   function openEditor(user: User) {
     setViewedUser(null);
@@ -147,6 +174,10 @@ export function UserManagementPanel() {
   }
 
   function openViewer(user: User) {
+    if (user.role === "STUDENT") {
+      router.push(`/admin/users/students/${encodeURIComponent(user.id)}`);
+      return;
+    }
     setViewedUser(user);
   }
 
@@ -180,16 +211,18 @@ export function UserManagementPanel() {
       });
       await loadUsers();
     } catch (error) {
-      setEditError(getErrorMessage(error, "Không thể cập nhật thông tin người dùng"));
+      setEditError(
+        getErrorMessage(error, "Không thể cập nhật thông tin người dùng"),
+      );
     } finally {
       setIsSaving(false);
     }
   }
 
   return (
-    <div className="w-full">
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
-        <div className="grid gap-3 xl:grid-cols-[minmax(220px,360px)_180px_190px_230px]">
+    <div className="flex h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+      <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+        <div className="grid gap-3 xl:grid-cols-[minmax(220px,420px)_190px_230px]">
           <DebouncedSearchInput
             className="!h-[42px] !rounded-lg focus:!ring-0"
             value={search}
@@ -199,16 +232,6 @@ export function UserManagementPanel() {
               setSubmittedSearch(value);
             }}
             placeholder="Tìm theo họ tên hoặc mã người dùng"
-          />
-          <CustomSelect
-            value={roleFilter}
-            options={roleFilterOptions}
-            buttonClassName="!h-[42px] !rounded-lg !ring-0"
-            ariaLabel="Lọc theo đối tượng"
-            onValueChange={(value) => {
-              setRoleFilter(value);
-              setPage(1);
-            }}
           />
           <CustomSelect
             value={statusFilter}
@@ -233,33 +256,70 @@ export function UserManagementPanel() {
         </div>
       </div>
 
-      <section className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
         {listError ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" /> {listError}
           </p>
         ) : null}
 
-        <div className="overflow-x-auto">
-          <Table className="min-w-[1020px]">
-            <TableHeader className="!bg-brand-600 !text-white">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Table
+            className={`${
+              role === "STUDENT" ? "min-w-[2850px]" : "min-w-[2550px]"
+            } [&_td]:whitespace-nowrap`}
+          >
+            <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
               <tr>
                 <TableHead className="w-14 text-center">#</TableHead>
-                <TableHead>Họ và tên</TableHead>
-                <TableHead>Mã người dùng</TableHead>
-                <TableHead>Đối tượng</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead>Lần đăng nhập cuối</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
+                <TableHead className="min-w-[260px]">Họ và tên</TableHead>
+                <TableHead className="min-w-[170px]">Mã người dùng</TableHead>
+                <TableHead className="min-w-[130px]">Ngày sinh</TableHead>
+                <TableHead className="min-w-[110px]">Giới tính</TableHead>
+                <TableHead className="min-w-[180px]">Tỉnh/Thành phố</TableHead>
+                <TableHead className="min-w-[320px]">Địa chỉ cụ thể</TableHead>
+                <TableHead className="min-w-[170px]">CCCD</TableHead>
+                <TableHead className="min-w-[240px]">Email</TableHead>
+                <TableHead className="min-w-[160px]">Số điện thoại</TableHead>
+                {role === "STUDENT" ? (
+                  <>
+                    <TableHead className="min-w-[150px]">Niên khóa</TableHead>
+                    <TableHead className="min-w-[150px]">Lớp</TableHead>
+                  </>
+                ) : null}
+                <TableHead className="min-w-[170px]">Trạng thái</TableHead>
+                <TableHead className="min-w-[190px]">
+                  Lần đăng nhập cuối
+                </TableHead>
+                <TableHead className="min-w-[240px]">Người thực hiện</TableHead>
+                <TableHead className="min-w-[110px] text-right">
+                  Thao tác
+                </TableHead>
               </tr>
             </TableHeader>
             <TableBody>
-              {isLoading ? <TableLoadingBarRow colSpan={7} /> : null}
+              {isLoading ? (
+                <TableLoadingBarRow colSpan={role === "STUDENT" ? 16 : 14} />
+              ) : null}
               {!isLoading && users.length === 0 ? (
-                <TableEmptyRow colSpan={7} message="Không có người dùng phù hợp." />
+                <TableEmptyRow
+                  colSpan={role === "STUDENT" ? 16 : 14}
+                  message={`Không có ${roleLabels[role].toLowerCase()} phù hợp.`}
+                />
               ) : (
                 users.map((user, index) => (
-                  <tr key={user.id} className="transition hover:bg-slate-50/70">
+                  <tr
+                    key={user.id}
+                    className="cursor-pointer transition hover:bg-slate-50/70 focus-visible:bg-blue-50 focus-visible:outline-none"
+                    tabIndex={0}
+                    onClick={() => openViewer(user)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openViewer(user);
+                      }
+                    }}
+                  >
                     <TableCell className="text-center text-xs text-slate-400">
                       {(page - 1) * limit + index + 1}
                     </TableCell>
@@ -268,23 +328,50 @@ export function UserManagementPanel() {
                         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-brand-700">
                           {getInitial(user.fullName)}
                         </span>
-                        <span className="font-bold text-slate-900">{user.fullName}</span>
+                        <span className="font-bold text-slate-900">
+                          {user.fullName}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs font-semibold text-brand-700">
                       {user.accountName}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-slate-700">
+                      {formatDateOnly(user.birthday)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-slate-700">
+                      {formatGender(user.gender)}
+                    </TableCell>
+                    <TableCell className="min-w-36 text-slate-700">
+                      {displayValue(user.provinceCity)}
+                    </TableCell>
+                    <TableCell className="min-w-64 text-slate-700">
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                          user.role === "TEACHER"
-                            ? "bg-violet-50 text-violet-700"
-                            : "bg-cyan-50 text-cyan-700"
-                        }`}
+                        className="block max-w-72 truncate"
+                        title={displayValue(user.specificAddress)}
                       >
-                        {roleLabels[user.role as ManagedRole]}
+                        {displayValue(user.specificAddress)}
                       </span>
                     </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs text-slate-700">
+                      {displayValue(user.cccd)}
+                    </TableCell>
+                    <TableCell className="min-w-52 text-slate-700">
+                      {displayValue(user.email)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-slate-700">
+                      {displayValue(user.phoneNumber)}
+                    </TableCell>
+                    {role === "STUDENT" ? (
+                      <>
+                        <TableCell className="whitespace-nowrap text-slate-700">
+                          {displayValue(user.course)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-slate-700">
+                          {displayValue(user.grade)}
+                        </TableCell>
+                      </>
+                    ) : null}
                     <TableCell>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${getStatusClass(user.status)}`}
@@ -292,8 +379,11 @@ export function UserManagementPanel() {
                         {statusLabels[user.status]}
                       </span>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                    <TableCell className="whitespace-nowrap text-xs text-slate-600">
                       {formatDate(user.lastLoginAt)}
+                    </TableCell>
+                    <TableCell className="min-w-56 whitespace-nowrap">
+                      <AuditActor user={user} />
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -301,7 +391,10 @@ export function UserManagementPanel() {
                           variant="ghost"
                           size="sm"
                           className="size-9 !rounded-lg px-0 text-slate-500 hover:bg-blue-50 hover:text-brand-700"
-                          onClick={() => openViewer(user)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openViewer(user);
+                          }}
                           aria-label={`Xem thông tin ${user.fullName}`}
                           title="Xem thông tin"
                         >
@@ -311,7 +404,10 @@ export function UserManagementPanel() {
                           variant="ghost"
                           size="sm"
                           className="size-9 !rounded-lg px-0 text-brand-700 hover:bg-blue-50"
-                          onClick={() => openEditor(user)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEditor(user);
+                          }}
                           aria-label={`Chỉnh sửa thông tin ${user.fullName}`}
                           title="Chỉnh sửa"
                         >
@@ -327,9 +423,10 @@ export function UserManagementPanel() {
         </div>
 
         <DataTableFooter
+          className="shrink-0 bg-white"
           rowCount={users.length}
           totalItems={totalUsers}
-          itemLabel="người dùng"
+          itemLabel={role === "TEACHER" ? "giáo viên" : "học sinh"}
           page={page}
           totalPages={totalPages}
           pageSize={limit}
@@ -343,10 +440,10 @@ export function UserManagementPanel() {
 
       <Modal
         open={viewedUser !== null}
-        title="Thông tin người dùng"
-        description="Thông tin cơ bản của giáo viên hoặc học sinh."
+        title={`Thông tin ${roleLabels[role].toLowerCase()}`}
+        description={`Thông tin chi tiết của ${roleLabels[role].toLowerCase()}.`}
         onClose={() => setViewedUser(null)}
-        width="max-w-xl"
+        width="max-w-4xl"
       >
         {viewedUser ? (
           <div className="space-y-5">
@@ -389,6 +486,108 @@ export function UserManagementPanel() {
                   {formatDate(viewedUser.lastLoginAt)}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-slate-400">Cập nhật bởi</p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {viewedUser.updatedByFullName ??
+                    viewedUser.updatedByAccountName ??
+                    "--"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Cập nhật lúc</p>
+                <p className="mt-1 font-bold text-slate-800">
+                  {formatDate(viewedUser.updatedByAt ?? null)}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="mb-3 text-sm font-extrabold text-slate-900">
+                Thông tin hồ sơ đã import
+              </h4>
+              <div className="grid gap-x-5 gap-y-4 rounded-xl border border-slate-100 bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <p className="text-xs text-slate-400">Ngày sinh</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {formatDateOnly(viewedUser.birthday)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Giới tính</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {formatGender(viewedUser.gender)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Tỉnh/Thành phố</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {displayValue(viewedUser.provinceCity)}
+                  </p>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <p className="text-xs text-slate-400">Địa chỉ cụ thể</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {displayValue(viewedUser.specificAddress)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">CCCD</p>
+                  <p className="mt-1 font-mono font-semibold text-slate-800">
+                    {displayValue(viewedUser.cccd)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Email</p>
+                  <p className="mt-1 break-all font-semibold text-slate-800">
+                    {displayValue(viewedUser.email)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Số điện thoại</p>
+                  <p className="mt-1 font-semibold text-slate-800">
+                    {displayValue(viewedUser.phoneNumber)}
+                  </p>
+                </div>
+                {viewedUser.role === "STUDENT" ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-slate-400">Niên khóa</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {displayValue(viewedUser.course)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Lớp</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {displayValue(viewedUser.grade)}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
+                {viewedUser.role === "TEACHER" ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-slate-400">Bằng cấp</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {displayValue(viewedUser.degree)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Ngày cấp</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {formatDateOnly(viewedUser.issueDate)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Ngày tham gia</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {formatDateOnly(viewedUser.joinDate)}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">
@@ -417,7 +616,10 @@ export function UserManagementPanel() {
         onClose={closeEditor}
         width="max-w-xl"
       >
-        <form className="space-y-4" onSubmit={(event) => void handleSave(event)}>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => void handleSave(event)}
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               className="!rounded-lg"
@@ -436,7 +638,9 @@ export function UserManagementPanel() {
               minLength={3}
               maxLength={50}
               value={accountName}
-              onChange={(event) => setAccountName(event.target.value.toLowerCase())}
+              onChange={(event) =>
+                setAccountName(event.target.value.toLowerCase())
+              }
               placeholder="Nhập mã người dùng"
             />
           </div>
@@ -469,7 +673,9 @@ export function UserManagementPanel() {
           ) : null}
 
           {editError ? (
-            <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{editError}</p>
+            <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+              {editError}
+            </p>
           ) : null}
 
           <div className="flex justify-end gap-2 pt-2">
@@ -483,7 +689,9 @@ export function UserManagementPanel() {
               Hủy
             </Button>
             <Button type="submit" className="!rounded-lg" disabled={isSaving}>
-              {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {isSaving ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : null}
               Lưu thông tin
             </Button>
           </div>

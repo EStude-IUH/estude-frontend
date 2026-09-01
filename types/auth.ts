@@ -8,7 +8,25 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   avatarUrl: string | null;
+  phoneNumber?: string | null;
+  email?: string | null;
+  gender?: "M" | "F" | null;
+  birthday?: string | null;
+  provinceCity?: string | null;
+  specificAddress?: string | null;
+  cccd?: string | null;
+  degree?: string | null;
+  issueDate?: string | null;
+  joinDate?: string | null;
+  course?: string | null;
+  grade?: string | null;
   createdAt: string;
+  updatedAt: string;
+  updatedById?: string | null;
+  updatedByAccountName?: string | null;
+  updatedByAt?: string | null;
+  updatedByFullName?: string | null;
+  updatedByAvatarUrl?: string | null;
   lastLoginAt: string | null;
 }
 
