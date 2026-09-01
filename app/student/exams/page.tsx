@@ -1,6 +1,5 @@
-import { RoleGate } from "@/components/auth/role-gate";
-import { StudentExamsPage } from "@/components/assessment/student-exam-pages";
+import { redirect } from "next/navigation";
 
 export default function StudentExamsRoute() {
-  return <RoleGate allowedRole="STUDENT"><StudentExamsPage /></RoleGate>;
+  redirect("/student/courses");
 }

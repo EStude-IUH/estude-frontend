@@ -9,7 +9,6 @@ import {
   CalendarDays,
   ChevronDown,
   CircleHelp,
-  ClipboardCheck,
   FileText,
   LayoutDashboard,
   LoaderCircle,
@@ -34,12 +33,10 @@ const studentNavItems: StudentNavItem[] = [
     href: "/student/dashboard",
   },
   {
-    icon: ClipboardCheck,
-    label: "Bài kiểm tra",
-    href: "/student/exams",
+    icon: CalendarDays,
+    label: "Thời khóa biểu",
   },
-  { icon: CalendarDays, label: "Thời khóa biểu" },
-  { icon: BookOpen, label: "Môn học" },
+  { icon: BookOpen, label: "Môn học", href: "/student/courses" },
   { icon: FileText, label: "Bài tập" },
   { icon: UsersRound, label: "Nhóm học tập" },
 ];
@@ -47,10 +44,11 @@ const studentNavItems: StudentNavItem[] = [
 function isNavItemActive(pathname: string, href?: string): boolean {
   if (!href) return false;
 
-  if (href === "/student/exams") {
+  if (href === "/student/courses") {
     return (
       pathname === href ||
       pathname.startsWith(`${href}/`) ||
+      pathname.startsWith("/student/exams/") ||
       pathname.startsWith("/student/attempts/")
     );
   }

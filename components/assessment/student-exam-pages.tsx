@@ -65,7 +65,13 @@ function statusTone(status: Exam["status"]) {
   }[status];
 }
 
-export function StudentExamsPage() {
+export function StudentExamList({
+  classId,
+  subjectId,
+}: {
+  classId: string;
+  subjectId: string;
+}) {
   const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,14 +80,21 @@ export function StudentExamsPage() {
   useEffect(() => {
     void examService
       .getExams()
-      .then(setExams)
+      .then((items) =>
+        setExams(
+          items.filter(
+            (exam) =>
+              exam.classId === classId && exam.subjectId === subjectId,
+          ),
+        ),
+      )
       .catch((cause) =>
         setError(
           cause instanceof Error ? cause.message : "Không thể tải bài kiểm tra",
         ),
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [classId, subjectId]);
   async function start(exam: Exam) {
     setStarting(exam.id);
     setError("");
@@ -98,13 +111,9 @@ export function StudentExamsPage() {
       setStarting("");
     }
   }
+
   return (
-    <AssessmentShell student>
-      <PageHeading
-        eyebrow="Student workspace"
-        title="Bài kiểm tra của tôi"
-        description="Chỉ bắt đầu bài khi đang trong thời gian được giáo viên cho phép."
-      />
+    <>
       {error ? (
         <div className="mb-5">
           <ErrorPanel message={error} />
@@ -162,25 +171,34 @@ export function StudentExamsPage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  className="mt-4 w-full"
-                  disabled={exam.status !== "ONGOING" || starting === exam.id}
-                  onClick={() => void start(exam)}
-                >
-                  {starting === exam.id
-                    ? "Đang mở bài..."
-                    : exam.status === "ONGOING"
-                      ? "Bắt đầu làm bài"
-                      : exam.status === "SCHEDULED"
-                        ? "Chưa đến giờ mở"
-                        : "Không thể bắt đầu"}
-                </Button>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/student/exams/${exam.id}`)}
+                  >
+                    <Eye className="size-4" /> Xem chi tiết
+                  </Button>
+                  <Button
+                    disabled={
+                      exam.status !== "ONGOING" || starting === exam.id
+                    }
+                    onClick={() => void start(exam)}
+                  >
+                    {starting === exam.id
+                      ? "Đang mở bài..."
+                      : exam.status === "ONGOING"
+                        ? "Bắt đầu làm bài"
+                        : exam.status === "SCHEDULED"
+                          ? "Chưa đến giờ mở"
+                          : "Không thể bắt đầu"}
+                  </Button>
+                </div>
               </article>
             ))
           )}
         </div>
       )}
-    </AssessmentShell>
+    </>
   );
 }
 
@@ -251,9 +269,13 @@ export function StudentExamDetailPage() {
         action={
           <Button
             variant="ghost"
-            onClick={() => router.push("/student/exams")}
+            onClick={() =>
+              router.push(
+                `/student/courses/${encodeURIComponent(exam.classId)}/${encodeURIComponent(exam.subjectId)}`,
+              )
+            }
           >
-            <ArrowLeft className="size-4" /> Danh sách bài
+            <ArrowLeft className="size-4" /> Quay lại môn học
           </Button>
         }
       />
@@ -381,6 +403,7 @@ export function StudentExamDetailPage() {
 export function StudentAttemptPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const answerStorageKey = `estude:exam-attempt:${params.id}:answers`;
   const [attempt, setAttempt] = useState<(ExamAttempt & { exam: Exam }) | null>(
     null,
   );
@@ -400,12 +423,35 @@ export function StudentAttemptPage() {
         loaded.answers.forEach((answer) => {
           mapped[answer.questionId] = answer;
         });
+        if (loaded.status === "SUBMITTED") {
+          window.localStorage.removeItem(answerStorageKey);
+        } else {
+          try {
+            const storedAnswers = JSON.parse(
+              window.localStorage.getItem(answerStorageKey) ?? "[]",
+            ) as ExamAnswer[];
+            if (Array.isArray(storedAnswers)) {
+              storedAnswers.forEach((answer) => {
+                if (answer?.questionId) mapped[answer.questionId] = answer;
+              });
+            }
+          } catch {
+            window.localStorage.removeItem(answerStorageKey);
+          }
+        }
         setAnswers(mapped);
-        const elapsed = Math.floor(
-          (Date.now() - new Date(loaded.startedAt).getTime()) / 1000,
-        );
         setSecondsLeft(
-          Math.max(0, loaded.exam.settings.durationMinutes * 60 - elapsed),
+          Math.max(
+            0,
+            Math.floor(
+              ((loaded.expiresAt
+                ? new Date(loaded.expiresAt).getTime()
+                : new Date(loaded.startedAt).getTime() +
+                  loaded.exam.settings.durationMinutes * 60_000) -
+                Date.now()) /
+                1000,
+            ),
+          ),
         );
       })
       .catch((cause) =>
@@ -414,7 +460,7 @@ export function StudentAttemptPage() {
         ),
       )
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [answerStorageKey, params.id]);
   const orderedQuestions = useMemo(
     () =>
       attempt
@@ -447,18 +493,15 @@ export function StudentAttemptPage() {
       }
     );
   }
-  async function save(answer: ExamAnswer) {
-    setAnswers((current) => ({ ...current, [answer.questionId]: answer }));
-    setSaving(true);
-    try {
-      await examAttemptService.saveAnswer(params.id, answer);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Không thể lưu câu trả lời",
+  function saveLocally(answer: ExamAnswer) {
+    setAnswers((current) => {
+      const updated = { ...current, [answer.questionId]: answer };
+      window.localStorage.setItem(
+        answerStorageKey,
+        JSON.stringify(Object.values(updated)),
       );
-    } finally {
-      setSaving(false);
-    }
+      return updated;
+    });
   }
   function setChoice(optionId: string) {
     if (!currentQuestion) return;
@@ -469,7 +512,7 @@ export function StudentAttemptPage() {
         ? questionAnswer.selectedOptionIds.filter((id) => id !== optionId)
         : [...questionAnswer.selectedOptionIds, optionId]
       : [optionId];
-    void save({ ...questionAnswer, selectedOptionIds: selected });
+    saveLocally({ ...questionAnswer, selectedOptionIds: selected });
   }
   async function submit(auto = false) {
     if (!attempt || attempt.status === "SUBMITTED") return;
@@ -480,7 +523,8 @@ export function StudentAttemptPage() {
     setConfirming(false);
     setSaving(true);
     try {
-      await examAttemptService.submitExam(params.id);
+      await examAttemptService.submitExam(params.id, Object.values(answers));
+      window.localStorage.removeItem(answerStorageKey);
       router.push(`/student/attempts/${params.id}/result`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không thể nộp bài");
@@ -540,7 +584,9 @@ export function StudentAttemptPage() {
             </span>
             <button
               type="button"
-              onClick={() => void save({ ...answer, flagged: !answer.flagged })}
+              onClick={() =>
+                saveLocally({ ...answer, flagged: !answer.flagged })
+              }
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${answer.flagged ? "bg-amber-50 text-amber-700" : "text-slate-400 hover:bg-slate-50"}`}
             >
               <Flag className="size-4" />
@@ -557,23 +603,18 @@ export function StudentAttemptPage() {
               {currentQuestion.question
                 ? QUESTION_TYPE_LABELS[currentQuestion.question.type]
                 : ""}{" "}
-              · Câu trả lời được lưu tự động trên máy chủ.
+              · Câu trả lời chỉ được lưu tạm trong phiên làm bài trên thiết bị
+              này.
             </p>
             <div className="mt-6 space-y-3">
               {currentQuestion.question?.type === "ESSAY" ? (
                 <Textarea
                   value={answer.essayText}
                   onChange={(event) =>
-                    setAnswers((current) => ({
-                      ...current,
-                      [answer.questionId]: {
-                        ...answer,
-                        essayText: event.target.value,
-                      },
-                    }))
-                  }
-                  onBlur={() =>
-                    void save(currentAnswer(currentQuestion.questionId))
+                    saveLocally({
+                      ...answer,
+                      essayText: event.target.value,
+                    })
                   }
                   rows={8}
                   className="min-h-48"
@@ -607,7 +648,7 @@ export function StudentAttemptPage() {
               <ChevronLeft className="size-4" /> Câu trước
             </Button>
             <span className="text-xs text-slate-400">
-              {saving ? "Đang lưu..." : "Đã lưu trên máy chủ"}
+              {saving ? "Đang nộp bài..." : "Đã lưu tạm trên thiết bị"}
             </span>
             {index === orderedQuestions.length - 1 ? (
               <Button onClick={() => void submit()}>
@@ -725,8 +766,15 @@ export function StudentResultPage() {
         title="Đã nộp bài thành công"
         description="Bài làm của bạn đã được ghi nhận trên hệ thống."
         action={
-          <Button variant="ghost" onClick={() => router.push("/student/exams")}>
-            <ArrowLeft className="size-4" /> Danh sách bài
+          <Button
+            variant="ghost"
+            onClick={() =>
+              router.push(
+                `/student/courses/${encodeURIComponent(attempt.exam.classId)}/${encodeURIComponent(attempt.exam.subjectId)}`,
+              )
+            }
+          >
+            <ArrowLeft className="size-4" /> Quay lại môn học
           </Button>
         }
       />

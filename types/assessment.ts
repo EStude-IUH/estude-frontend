@@ -208,6 +208,8 @@ export interface TeacherAssignedClass {
   subjects: Array<Pick<Subject, "id" | "code" | "name">>;
 }
 
+export type StudentCourse = SubjectTeacherAssignment;
+
 export interface LearningMaterial {
   id: string;
   topicId: string | null;

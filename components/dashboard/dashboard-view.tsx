@@ -220,10 +220,10 @@ export function StudentDashboardView() {
               </div>
               <button
                 type="button"
-                onClick={() => router.push("/student/exams")}
+                onClick={() => router.push("/student/courses")}
                 className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-sm font-bold text-white transition hover:bg-brand-700"
               >
-                Xem và làm bài kiểm tra <ChevronRight className="size-4" />
+                Vào môn học để làm bài <ChevronRight className="size-4" />
               </button>
             </section>
 

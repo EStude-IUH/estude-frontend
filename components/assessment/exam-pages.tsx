@@ -2,12 +2,26 @@
 
 import Link from "next/link";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  BookOpen,
+  CalendarClock,
   Check,
   ChevronRight,
+  CirclePlus,
+  Clock3,
+  Edit3,
+  Eye,
+  FileCheck2,
+  FileQuestion,
   GripVertical,
+  ListChecks,
+  Search,
+  Settings2,
   Send,
   Trash2,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -31,21 +45,36 @@ import {
   type ExamQuestion,
   type ExamSettings,
   type Question,
-  type SchoolClass,
   type Subject,
+  type TeacherAssignedClass,
   type Topic,
 } from "@/types/assessment";
 
-const blankSettings: ExamSettings = {
-  startsAt: "2026-08-20T08:00",
-  endsAt: "2026-08-30T23:59",
-  durationMinutes: 45,
-  attemptsAllowed: 1,
-  shuffleQuestions: false,
-  shuffleAnswers: false,
-  showScoreImmediately: true,
-  showCorrectAnswers: true,
-};
+const wizardSteps = [
+  { label: "Thông tin", description: "Môn học và lớp", icon: BookOpen },
+  { label: "Câu hỏi", description: "Xây dựng nội dung", icon: ListChecks },
+  { label: "Cấu hình", description: "Thời gian làm bài", icon: Settings2 },
+  { label: "Kiểm tra", description: "Xác nhận và lưu", icon: FileCheck2 },
+];
+
+function createBlankSettings(): ExamSettings {
+  const startsAt = new Date();
+  startsAt.setMinutes(0, 0, 0);
+  startsAt.setHours(startsAt.getHours() + 1);
+  const endsAt = new Date(startsAt);
+  endsAt.setDate(endsAt.getDate() + 7);
+
+  return {
+    startsAt: toDateTimeLocal(startsAt.toISOString()),
+    endsAt: toDateTimeLocal(endsAt.toISOString()),
+    durationMinutes: 45,
+    attemptsAllowed: 1,
+    shuffleQuestions: false,
+    shuffleAnswers: false,
+    showScoreImmediately: true,
+    showCorrectAnswers: true,
+  };
+}
 
 function toDateTimeLocal(value: string): string {
   const date = new Date(value);
@@ -62,15 +91,52 @@ function statusClass(status: Exam["status"]) {
   }[status];
 }
 
+function formatExamDate(value: string): string {
+  return new Date(value).toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatClassLabel(
+  classes: TeacherAssignedClass[],
+  classId: string,
+  fallbackName: string,
+): string {
+  const schoolClass = classes.find((item) => item.id === classId);
+  if (!schoolClass) return fallbackName;
+  return schoolClass.code === schoolClass.name
+    ? schoolClass.code
+    : `${schoolClass.code} · ${schoolClass.name}`;
+}
+
 export function TeacherExamsPage() {
   const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
+  const [assignedClasses, setAssignedClasses] = useState<TeacherAssignedClass[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | Exam["status"]>(
+    "ALL",
+  );
+  const [publishingId, setPublishingId] = useState("");
+
   async function load() {
     setLoading(true);
+    setError("");
     try {
-      setExams(await examService.getExams());
+      const [loadedExams, loadedClasses] = await Promise.all([
+        examService.getExams(),
+        academicDataService.getTeacherAssignedClasses(),
+      ]);
+      setExams(loadedExams);
+      setAssignedClasses(loadedClasses);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Không thể tải bài kiểm tra",
@@ -82,7 +148,16 @@ export function TeacherExamsPage() {
   useEffect(() => {
     void load();
   }, []);
+
   async function publish(exam: Exam) {
+    if (
+      !window.confirm(
+        `Công bố bài kiểm tra “${exam.title}”? Sinh viên sẽ nhìn thấy bài theo lịch đã cấu hình.`,
+      )
+    )
+      return;
+    setPublishingId(exam.id);
+    setError("");
     try {
       const updated = await examService.publishExam(exam.id);
       setExams((items) =>
@@ -94,8 +169,11 @@ export function TeacherExamsPage() {
           ? cause.message
           : "Không thể công bố bài kiểm tra",
       );
+    } finally {
+      setPublishingId("");
     }
   }
+
   async function remove(exam: Exam) {
     if (!window.confirm(`Xóa bài kiểm tra “${exam.title}”?`)) return;
     try {
@@ -107,18 +185,125 @@ export function TeacherExamsPage() {
       );
     }
   }
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleExams = exams.filter((exam) => {
+    const matchesStatus =
+      statusFilter === "ALL" || exam.status === statusFilter;
+    const matchesQuery =
+      !normalizedQuery ||
+      exam.title.toLowerCase().includes(normalizedQuery) ||
+      exam.subjectName.toLowerCase().includes(normalizedQuery) ||
+      formatClassLabel(assignedClasses, exam.classId, exam.className)
+        .toLowerCase()
+        .includes(normalizedQuery);
+    return matchesStatus && matchesQuery;
+  });
+  const draftCount = exams.filter((exam) => !exam.published).length;
+  const activeCount = exams.filter(
+    (exam) => exam.status === "SCHEDULED" || exam.status === "ONGOING",
+  ).length;
+  const totalQuestionCount = exams.reduce(
+    (total, exam) => total + exam.questions.length,
+    0,
+  );
+
   return (
     <AssessmentShell>
-      <PageHeading
-        eyebrow="Teacher workspace"
-        title="Bài kiểm tra"
-        description="Tạo đề, công bố lịch làm và theo dõi bài nộp của học sinh."
-        action={
-          <Link href="/teacher/exams/new">
-            <Button>+ Tạo bài kiểm tra</Button>
+      <PageHeading title="Bài kiểm tra" />
+      <section className="mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 via-brand-600 to-cyan-500 p-6 text-white shadow-lg shadow-brand-700/15 sm:p-7">
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-bold text-blue-100">
+              <FileQuestion className="size-4" /> Không gian đánh giá
+            </div>
+            <h1 className="mt-2 text-2xl font-black sm:text-3xl">
+              Quản lý bài kiểm tra
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-50/90">
+              Tạo đề theo môn học được phân công, hoàn thiện bản nháp và công bố
+              đúng lịch cho sinh viên.
+            </p>
+          </div>
+          <Link href="/teacher/exams/new" className="shrink-0">
+            <Button className="w-full bg-white text-brand-700 hover:bg-blue-50 md:w-auto">
+              <CirclePlus className="size-4" /> Tạo bài kiểm tra
+            </Button>
           </Link>
-        }
-      />
+        </div>
+      </section>
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: "Tổng bài kiểm tra",
+            value: exams.length,
+            icon: FileQuestion,
+            tone: "bg-blue-50 text-brand-700",
+          },
+          {
+            label: "Bản nháp cần hoàn thiện",
+            value: draftCount,
+            icon: Edit3,
+            tone: "bg-amber-50 text-amber-700",
+          },
+          {
+            label: "Đang/sắp diễn ra",
+            value: activeCount,
+            icon: CalendarClock,
+            tone: "bg-emerald-50 text-emerald-700",
+          },
+          {
+            label: "Tổng số câu đã dùng",
+            value: totalQuestionCount,
+            icon: ListChecks,
+            tone: "bg-violet-50 text-violet-700",
+          },
+        ].map(({ label, value, icon: Icon, tone }) => (
+          <div
+            key={label}
+            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <span
+              className={`grid size-11 place-items-center rounded-xl ${tone}`}
+            >
+              <Icon className="size-5" />
+            </span>
+            <div>
+              <p className="text-2xl font-black text-slate-950">{value}</p>
+              <p className="text-xs font-semibold text-slate-500">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <section className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+        <Input
+          icon={Search}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Tìm theo tên bài, môn học hoặc lớp..."
+          className="sm:min-w-80"
+        />
+        <Select
+          value={statusFilter}
+          onChange={(event) =>
+            setStatusFilter(event.target.value as "ALL" | Exam["status"])
+          }
+          className="sm:w-52"
+          aria-label="Lọc trạng thái"
+        >
+          <option value="ALL">Tất cả trạng thái</option>
+          <option value="DRAFT">Bản nháp</option>
+          <option value="SCHEDULED">Sắp diễn ra</option>
+          <option value="ONGOING">Đang diễn ra</option>
+          <option value="ENDED">Đã kết thúc</option>
+        </Select>
+        <span className="text-xs font-semibold text-slate-400 sm:ml-auto sm:pr-2">
+          Hiển thị {visibleExams.length}/{exams.length} bài
+        </span>
+      </section>
+
       {error ? (
         <div className="mb-5">
           <ErrorPanel message={error} />
@@ -127,89 +312,159 @@ export function TeacherExamsPage() {
       {loading ? (
         <LoadingPanel />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {exams.length === 0 ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {visibleExams.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-14 text-center text-sm text-slate-500">
-              Chưa có bài kiểm tra. Hãy tạo đề đầu tiên.
+              <FileQuestion className="mx-auto size-9 text-slate-300" />
+              <p className="mt-3 font-bold text-slate-700">
+                {exams.length === 0
+                  ? "Chưa có bài kiểm tra"
+                  : "Không tìm thấy bài kiểm tra phù hợp"}
+              </p>
+              <p className="mt-1">
+                {exams.length === 0
+                  ? "Hãy tạo bản nháp đầu tiên cho lớp của bạn."
+                  : "Thử thay đổi từ khóa hoặc bộ lọc trạng thái."}
+              </p>
             </div>
           ) : (
-            exams.map((exam) => (
+            visibleExams.map((exam) => (
               <article
                 key={exam.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-brand-200 hover:shadow-lg"
+                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}
+                <div className="border-b border-slate-100 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}
+                        >
+                          {EXAM_STATUS_LABELS[exam.status]}
+                        </span>
+                        {!exam.published ? (
+                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                            Có thể chỉnh sửa
+                          </span>
+                        ) : null}
+                      </div>
+                      <h2 className="mt-3 truncate text-lg font-black text-slate-950">
+                        {exam.title}
+                      </h2>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                        <BookOpen className="size-3.5" /> {exam.subjectName}
+                        <span className="text-slate-300">·</span>
+                        <UsersRound className="size-3.5" />
+                        {formatClassLabel(
+                          assignedClasses,
+                          exam.classId,
+                          exam.className,
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void remove(exam)}
+                      className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-300 opacity-70 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                      aria-label={`Xóa ${exam.title}`}
                     >
-                      {EXAM_STATUS_LABELS[exam.status]}
-                    </span>
-                    <h2 className="mt-3 text-lg font-black text-slate-950">
-                      {exam.title}
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {exam.subjectName} · {exam.className}
-                    </p>
+                      <Trash2 className="size-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void remove(exam)}
-                    className="grid size-9 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                    aria-label="Xóa"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 border-y border-slate-100 py-4 text-sm">
-                  <div>
-                    <p className="text-xs text-slate-400">Câu hỏi</p>
+                <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4">
+                  <div className="bg-white p-4">
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      Câu hỏi
+                    </p>
                     <p className="mt-1 font-extrabold">
-                      {exam.questions.length} câu · {exam.totalPoints} điểm
+                      {exam.questions.length} câu
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Thời lượng</p>
+                  <div className="bg-white p-4">
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      Tổng điểm
+                    </p>
+                    <p className="mt-1 font-extrabold">
+                      {exam.totalPoints} điểm
+                    </p>
+                  </div>
+                  <div className="bg-white p-4">
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      Thời lượng
+                    </p>
                     <p className="mt-1 font-extrabold">
                       {exam.settings.durationMinutes} phút
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Bắt đầu</p>
-                    <p className="mt-1 font-semibold text-slate-700">
-                      {new Date(exam.settings.startsAt).toLocaleString("vi-VN")}
+                  <div className="bg-white p-4">
+                    <p className="text-[11px] font-semibold text-slate-400">
+                      Số lượt làm
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Kết thúc</p>
-                    <p className="mt-1 font-semibold text-slate-700">
-                      {new Date(exam.settings.endsAt).toLocaleString("vi-VN")}
+                    <p className="mt-1 font-extrabold">
+                      {exam.settings.attemptsAllowed} lần
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push(`/teacher/exams/${exam.id}`)}
-                  >
-                    Xem chi tiết
-                  </Button>
-                  {exam.published ? (
+                <div className="border-t border-slate-100 bg-slate-50/60 p-4">
+                  <div className="mb-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                    <p className="flex items-center gap-2">
+                      <CalendarClock className="size-4 text-brand-500" />
+                      Mở:{" "}
+                      <strong className="text-slate-700">
+                        {formatExamDate(exam.settings.startsAt)}
+                      </strong>
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Clock3 className="size-4 text-rose-400" />
+                      Đóng:{" "}
+                      <strong className="text-slate-700">
+                        {formatExamDate(exam.settings.endsAt)}
+                      </strong>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      variant="secondary"
-                      onClick={() =>
-                        router.push(`/teacher/exams/${exam.id}/submissions`)
-                      }
+                      variant="outline"
+                      onClick={() => router.push(`/teacher/exams/${exam.id}`)}
                     >
-                      Bài nộp
+                      <Eye className="size-3.5" /> Chi tiết
                     </Button>
-                  ) : (
-                    <Button size="sm" onClick={() => void publish(exam)}>
-                      Công bố
-                    </Button>
-                  )}
+                    {!exam.published ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() =>
+                            router.push(`/teacher/exams/${exam.id}/edit`)
+                          }
+                        >
+                          <Edit3 className="size-3.5" /> Chỉnh sửa
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => void publish(exam)}
+                          disabled={publishingId === exam.id}
+                        >
+                          <Send className="size-3.5" />
+                          {publishingId === exam.id
+                            ? "Đang công bố..."
+                            : "Công bố"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          router.push(`/teacher/exams/${exam.id}/submissions`)
+                        }
+                      >
+                        <FileCheck2 className="size-3.5" /> Bài nộp
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </article>
             ))
@@ -225,11 +480,14 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
   const [step, setStep] = useState(1);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<ExamQuestion[]>([]);
+  const [initializing, setInitializing] = useState(true);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [publishedExam, setPublishedExam] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [info, setInfo] = useState({
     title: "",
@@ -240,20 +498,30 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
     topicName: "",
     description: "",
   });
-  const [settings, setSettings] = useState<ExamSettings>(blankSettings);
+  const [settings, setSettings] = useState<ExamSettings>(createBlankSettings);
+
   useEffect(() => {
     const examRequest = examId
       ? examService.getExamById(examId)
       : Promise.resolve(null);
     void Promise.all([
       academicDataService.getSubjects(),
-      academicDataService.getClasses(),
+      academicDataService.getTeacherAssignedClasses(),
       examRequest,
     ])
       .then(([loadedSubjects, loadedClasses, exam]) => {
-        setSubjects(loadedSubjects);
+        const assignedSubjectIds = new Set(
+          loadedClasses.flatMap((schoolClass) =>
+            schoolClass.subjects.map((subject) => subject.id),
+          ),
+        );
+        const assignedSubjects = loadedSubjects.filter((subject) =>
+          assignedSubjectIds.has(subject.id),
+        );
+        setSubjects(assignedSubjects);
         setClasses(loadedClasses);
         if (exam) {
+          setPublishedExam(exam.published);
           setInfo({
             title: exam.title,
             subjectId: exam.subjectId,
@@ -273,18 +541,27 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
           );
           return;
         }
-        if (loadedSubjects[0])
+        const firstClass = loadedClasses[0];
+        const firstSubject = assignedSubjects.find(
+          (subject) => subject.id === firstClass?.subjects[0]?.id,
+        );
+        if (firstSubject)
           setInfo((current) => ({
             ...current,
-            subjectId: loadedSubjects[0].id,
-            subjectName: loadedSubjects[0].name,
+            subjectId: firstSubject.id,
+            subjectName: firstSubject.name,
           }));
-        if (loadedClasses[0])
+        if (firstClass)
           setInfo((current) => ({
             ...current,
-            classId: loadedClasses[0].id,
-            className: loadedClasses[0].name,
+            classId: firstClass.id,
+            className: firstClass.name,
           }));
+        if (!firstClass || !firstSubject) {
+          setError(
+            "Bạn chưa được phân công môn học và lớp để tạo bài kiểm tra.",
+          );
+        }
       })
       .catch((cause) =>
         setError(
@@ -292,8 +569,10 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
             ? cause.message
             : "Không thể tải dữ liệu học vụ",
         ),
-      );
+      )
+      .finally(() => setInitializing(false));
   }, [examId]);
+
   useEffect(() => {
     if (!info.subjectId) return;
     void academicDataService
@@ -315,33 +594,64 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
         ),
       );
   }, [info.subjectId]);
+
   useEffect(() => {
+    if (!info.subjectId) {
+      setQuestions([]);
+      return;
+    }
+    setLoadingQuestions(true);
     void questionBankService
-      .getQuestions()
+      .getQuestions({ subjectId: info.subjectId })
       .then(setQuestions)
       .catch((cause) =>
         setError(
           cause instanceof Error ? cause.message : "Không thể tải câu hỏi",
         ),
-      );
-  }, []);
+      )
+      .finally(() => setLoadingQuestions(false));
+  }, [info.subjectId]);
+
+  const availableClasses = classes.filter((schoolClass) =>
+    schoolClass.subjects.some((subject) => subject.id === info.subjectId),
+  );
+  const currentClassLabel = formatClassLabel(
+    classes,
+    info.classId,
+    info.className,
+  );
+
   function updateInfo(key: keyof typeof info, value: string) {
     setInfo((current) => ({ ...current, [key]: value }));
   }
   function chooseSubject(value: string) {
     const subject = subjects.find((item) => item.id === value);
     if (!subject) return;
+    const firstCompatibleClass = classes.find((schoolClass) =>
+      schoolClass.subjects.some((item) => item.id === subject.id),
+    );
     setInfo((current) => ({
       ...current,
       subjectId: subject.id,
       subjectName: subject.name,
+      classId: firstCompatibleClass?.id ?? "",
+      className: firstCompatibleClass?.name ?? "",
       topicName: "",
     }));
+    setSelected([]);
+    setSearch("");
   }
+
+  function normalizeOrder(items: ExamQuestion[]): ExamQuestion[] {
+    return items.map((item, order) => ({ ...item, order }));
+  }
+
   function toggleQuestion(question: Question) {
     setSelected((items) =>
       items.some((item) => item.questionId === question.id)
-        ? items.filter((item) => item.questionId !== question.id)
+        ? normalizeOrder(
+            items.filter((item) => item.questionId !== question.id),
+          )
         : [
             ...items,
             {
@@ -352,9 +662,40 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
           ],
     );
   }
+
+  function updateQuestionPoints(questionId: string, points: number) {
+    setSelected((items) =>
+      items.map((item) =>
+        item.questionId === questionId
+          ? { ...item, points: Math.max(0, points) }
+          : item,
+      ),
+    );
+  }
+
+  function moveQuestion(questionId: string, direction: -1 | 1) {
+    setSelected((items) => {
+      const currentIndex = items.findIndex(
+        (item) => item.questionId === questionId,
+      );
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= items.length)
+        return items;
+      const reordered = [...items];
+      [reordered[currentIndex], reordered[nextIndex]] = [
+        reordered[nextIndex],
+        reordered[currentIndex],
+      ];
+      return normalizeOrder(reordered);
+    });
+  }
+
   const filteredQuestions = questions.filter(
     (question) =>
-      !search || question.content.toLowerCase().includes(search.toLowerCase()),
+      question.subjectId === info.subjectId &&
+      (!search ||
+        question.content.toLowerCase().includes(search.toLowerCase()) ||
+        question.topicName.toLowerCase().includes(search.toLowerCase())),
   );
   const selectedQuestionObjects = selected
     .map((item) => ({
@@ -365,6 +706,10 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
   function canNext() {
     if (step === 1 && !info.title.trim()) {
       setError("Vui lòng nhập tên bài kiểm tra");
+      return false;
+    }
+    if (step === 1 && (!info.subjectId || !info.classId)) {
+      setError("Vui lòng chọn môn học và lớp được phân công");
       return false;
     }
     if (
@@ -379,18 +724,49 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
       setError("Hãy chọn ít nhất một câu hỏi");
       return false;
     }
+    if (step === 2 && selected.some((item) => item.points <= 0)) {
+      setError("Điểm của mỗi câu hỏi phải lớn hơn 0");
+      return false;
+    }
+    if (step === 3) {
+      const startsAt = new Date(settings.startsAt).getTime();
+      const endsAt = new Date(settings.endsAt).getTime();
+      if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) {
+        setError("Vui lòng nhập đầy đủ thời gian mở và đóng bài");
+        return false;
+      }
+      if (startsAt >= endsAt) {
+        setError("Thời gian kết thúc phải sau thời gian bắt đầu");
+        return false;
+      }
+      if (settings.durationMinutes <= 0 || settings.attemptsAllowed <= 0) {
+        setError("Thời lượng và số lần làm bài phải lớn hơn 0");
+        return false;
+      }
+    }
     return true;
   }
-  async function save() {
+
+  async function save(publishAfterSave = false) {
     setSaving(true);
     setError("");
-    const payload: ExamInput = { ...info, questions: selected, settings };
+    const payload: ExamInput = {
+      ...info,
+      questions: normalizeOrder(selected),
+      settings: {
+        ...settings,
+        startsAt: new Date(settings.startsAt).toISOString(),
+        endsAt: new Date(settings.endsAt).toISOString(),
+      },
+    };
     try {
+      let savedExam: Exam;
       if (examId) {
-        await examService.updateExam(examId, payload);
+        savedExam = await examService.updateExam(examId, payload);
       } else {
-        await examService.createExam(payload);
+        savedExam = await examService.createExam(payload);
       }
+      if (publishAfterSave) await examService.publishExam(savedExam.id);
       router.push("/teacher/exams");
     } catch (cause) {
       setError(
@@ -400,288 +776,642 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
       setSaving(false);
     }
   }
+
+  if (initializing)
+    return (
+      <AssessmentShell>
+        <LoadingPanel />
+      </AssessmentShell>
+    );
+
+  if (publishedExam)
+    return (
+      <AssessmentShell>
+        <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <FileCheck2 className="mx-auto size-10 text-amber-600" />
+          <h1 className="mt-3 text-xl font-black text-slate-950">
+            Bài kiểm tra đã được công bố
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Chỉ bản nháp chưa công bố mới có thể chỉnh sửa nội dung và câu hỏi.
+          </p>
+          <Button
+            className="mt-5"
+            onClick={() => router.push("/teacher/exams")}
+          >
+            <ArrowLeft className="size-4" /> Quay lại danh sách
+          </Button>
+        </div>
+      </AssessmentShell>
+    );
+
   return (
     <AssessmentShell>
       <PageHeading
-        eyebrow={examId ? "Edit exam" : "Create exam wizard"}
         title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
-        description={
-          examId
-            ? "Cập nhật nội dung, câu hỏi và cấu hình của bài kiểm tra."
-            : "Lưu bản nháp trước, sau đó công bố khi đã kiểm tra đầy đủ nội dung."
-        }
-        action={
-          <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
-            <ArrowLeft className="size-4" /> Thoát
-          </Button>
-        }
       />
-      <div className="mb-5 grid grid-cols-4 gap-2">
-        {["Thông tin", "Chọn câu hỏi", "Cấu hình", "Xem trước"].map(
-          (label, index) => (
-            <div
+      <div className="mb-5 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+            {examId ? (
+              <Edit3 className="size-5" />
+            ) : (
+              <CirclePlus className="size-5" />
+            )}
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
+              {examId ? "Bản nháp" : "Thiết lập đề mới"}
+            </p>
+            <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
+              {examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Hoàn thành 4 bước, kiểm tra lại đề rồi lưu nháp hoặc công bố.
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
+          <ArrowLeft className="size-4" /> Thoát
+        </Button>
+      </div>
+
+      <div className="mb-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {wizardSteps.map(({ label, description, icon: Icon }, index) => {
+          const stepNumber = index + 1;
+          const active = step === stepNumber;
+          const completed = step > stepNumber;
+          return (
+            <button
+              type="button"
               key={label}
-              className={`rounded-xl px-3 py-3 text-center text-xs font-black ${step === index + 1 ? "bg-brand-600 text-white" : step > index + 1 ? "bg-emerald-50 text-emerald-700" : "bg-white text-slate-400"}`}
+              onClick={() => completed && setStep(stepNumber)}
+              className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${active ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-600/15" : completed ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-400"}`}
             >
-              <span className="mr-1">{index + 1}.</span>
-              {label}
-            </div>
-          ),
-        )}
+              <span
+                className={`grid size-9 shrink-0 place-items-center rounded-lg ${active ? "bg-white/15" : completed ? "bg-white" : "bg-slate-50"}`}
+              >
+                {completed ? (
+                  <Check className="size-4" />
+                ) : (
+                  <Icon className="size-4" />
+                )}
+              </span>
+              <span>
+                <span className="block text-xs font-black">
+                  {stepNumber}. {label}
+                </span>
+                <span
+                  className={`mt-0.5 block text-[11px] ${active ? "text-blue-100" : "opacity-70"}`}
+                >
+                  {description}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
       {error ? (
         <div className="mb-5">
           <ErrorPanel message={error} />
         </div>
       ) : null}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        {step === 1 ? (
-          <div className="grid gap-5 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <Input
-                label="Tên bài kiểm tra"
-                value={info.title}
-                onChange={(event) => updateInfo("title", event.target.value)}
-                placeholder="Ví dụ: Kiểm tra giữa kỳ React"
-              />
-            </div>
-            <Select label="Môn học" value={info.subjectId} onChange={(event) => chooseSubject(event.target.value)}>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-            </Select>
-            <Select label="Lớp học" value={info.classId} onChange={(event) => {
-                  const item =
-                    classes.find((value) => value.id === event.target.value) ??
-                    classes[0];
-                  if (!item) return;
-                  setInfo((current) => ({
-                    ...current,
-                    classId: item.id,
-                    className: item.name,
-                  }));
-                }}>
-                {classes.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-            </Select>
-            <Select label="Chủ đề" value={info.topicName} onChange={(event) => updateInfo("topicName", event.target.value)}>
-              <option value="">Chọn chủ đề</option>
-              {topics.map((topic) => <option key={topic.id} value={topic.name}>{topic.name}</option>)}
-            </Select>
-            <div className="md:col-span-2">
-              <Textarea
-                label="Mô tả"
-                value={info.description}
-                onChange={(event) =>
-                  updateInfo("description", event.target.value)
-                }
-                rows={4}
-              />
-            </div>
-          </div>
-        ) : null}
-        {step === 2 ? (
-          <div>
-            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div>
-                <h2 className="text-lg font-black">
-                  Chọn từ ngân hàng câu hỏi
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_290px]">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+          {step === 1 ? (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-lg font-black text-slate-950">
+                  Thông tin chung
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Đã chọn {selected.length} câu ·{" "}
-                  {selected.reduce((sum, item) => sum + item.points, 0)} điểm
+                  Chọn đúng môn và lớp mà bạn được phân công giảng dạy.
                 </p>
               </div>
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Tìm câu hỏi..."
-                className="sm:w-72"
-              />
-            </div>
-            <div className="mt-5 max-h-[480px] space-y-2 overflow-y-auto">
-              {filteredQuestions.map((question) => {
-                const chosen = selected.some(
-                  (item) => item.questionId === question.id,
-                );
-                return (
-                  <button
-                    key={question.id}
-                    type="button"
-                    onClick={() => toggleQuestion(question)}
-                    className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${chosen ? "border-brand-300 bg-brand-50" : "border-slate-100 hover:border-brand-200"}`}
-                  >
-                    <span
-                      className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}
-                    >
-                      {chosen ? <Check className="size-4" /> : null}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-bold text-slate-800">
-                        {question.content}
-                      </span>
-                      <span className="mt-1 block text-xs text-slate-500">
-                        {question.subjectName} · {question.topicName} ·{" "}
-                        {question.defaultPoints} điểm
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-        {step === 3 ? (
-          <div className="grid gap-5 md:grid-cols-2">
-            <Input
-                label="Thời gian bắt đầu"
-                type="datetime-local"
-                value={settings.startsAt}
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    startsAt: event.target.value,
-                  }))
-                }
-            />
-            <Input
-                label="Thời gian kết thúc"
-                type="datetime-local"
-                value={settings.endsAt}
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    endsAt: event.target.value,
-                  }))
-                }
-            />
-            <Input
-                label="Thời lượng (phút)"
-                type="number"
-                min="1"
-                value={settings.durationMinutes}
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    durationMinutes: Number(event.target.value),
-                  }))
-                }
-            />
-            <Input
-                label="Số lần được phép"
-                type="number"
-                min="1"
-                value={settings.attemptsAllowed}
-                onChange={(event) =>
-                  setSettings((current) => ({
-                    ...current,
-                    attemptsAllowed: Number(event.target.value),
-                  }))
-                }
-            />
-            <div className="space-y-3 md:col-span-2">
-              {(
-                [
-                  ["shuffleQuestions", "Trộn thứ tự câu hỏi"],
-                  ["shuffleAnswers", "Trộn đáp án"],
-                  ["showScoreImmediately", "Hiển thị điểm ngay sau khi nộp"],
-                  ["showCorrectAnswers", "Cho xem đáp án đúng"],
-                ] as const
-              ).map(([key, label]) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 text-sm font-semibold text-slate-700"
-                >
-                  <input
-                    type="checkbox"
-                    checked={settings[key]}
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <Input
+                    label="Tên bài kiểm tra"
+                    required
+                    value={info.title}
                     onChange={(event) =>
-                      setSettings((current) => ({
-                        ...current,
-                        [key]: event.target.checked,
-                      }))
+                      updateInfo("title", event.target.value)
                     }
-                    className="size-4 accent-brand-600"
+                    placeholder="Ví dụ: Kiểm tra giữa kỳ React"
+                    hint="Tên ngắn gọn, giúp sinh viên dễ nhận biết."
                   />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {step === 4 ? (
-          <div>
-            <div className="rounded-2xl bg-slate-950 p-5 text-white">
-              <p className="text-xs font-bold uppercase tracking-wide text-cyan-300">
-                Xem trước
-              </p>
-              <h2 className="mt-2 text-2xl font-black">{info.title}</h2>
-              <p className="mt-1 text-sm text-slate-300">
-                {info.subjectName} · {info.className} · {selected.length} câu ·{" "}
-                {selected.reduce((sum, item) => sum + item.points, 0)} điểm
-              </p>
-            </div>
-            <div className="mt-5 space-y-3">
-              {selectedQuestionObjects.map(({ question, points }, index) => (
-                <div
-                  key={question!.id}
-                  className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
+                </div>
+                <Select
+                  label="Môn học"
+                  required
+                  value={info.subjectId}
+                  onChange={(event) => chooseSubject(event.target.value)}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-slate-800">
-                      {question!.content}
+                  <option value="">Chọn môn được phân công</option>
+                  {subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  label="Lớp học"
+                  required
+                  value={info.classId}
+                  onChange={(event) => {
+                    const item =
+                      availableClasses.find(
+                        (value) => value.id === event.target.value,
+                      ) ?? availableClasses[0];
+                    if (!item) return;
+                    setInfo((current) => ({
+                      ...current,
+                      classId: item.id,
+                      className: item.name,
+                    }));
+                  }}
+                >
+                  <option value="">Chọn lớp được phân công</option>
+                  {availableClasses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  label="Chủ đề"
+                  value={info.topicName}
+                  onChange={(event) =>
+                    updateInfo("topicName", event.target.value)
+                  }
+                >
+                  <option value="">Chọn chủ đề</option>
+                  {topics.map((topic) => (
+                    <option key={topic.id} value={topic.name}>
+                      {topic.name}
+                    </option>
+                  ))}
+                </Select>
+                <div className="md:col-span-2">
+                  <Textarea
+                    label="Mô tả"
+                    value={info.description}
+                    onChange={(event) =>
+                      updateInfo("description", event.target.value)
+                    }
+                    rows={4}
+                    placeholder="Mục tiêu, phạm vi kiến thức hoặc lưu ý cho sinh viên..."
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {step === 2 ? (
+            <div>
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                  <h2 className="text-lg font-black">
+                    Xây dựng danh sách câu hỏi
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Chỉ hiển thị câu hỏi thuộc môn{" "}
+                    {info.subjectName || "đã chọn"}.
+                  </p>
+                </div>
+                <Input
+                  icon={Search}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Tìm nội dung hoặc chủ đề..."
+                  className="sm:w-72"
+                />
+              </div>
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-sm font-black text-slate-800">
+                      Ngân hàng câu hỏi
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {points} điểm · {question!.options.length} đáp án
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                      {filteredQuestions.length} câu
+                    </span>
+                  </div>
+                  <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
+                    {loadingQuestions ? (
+                      <div className="py-12 text-center text-sm text-slate-400">
+                        Đang tải câu hỏi...
+                      </div>
+                    ) : filteredQuestions.length === 0 ? (
+                      <div className="py-12 text-center">
+                        <FileQuestion className="mx-auto size-8 text-slate-300" />
+                        <p className="mt-2 text-sm font-bold text-slate-600">
+                          Chưa có câu hỏi phù hợp
+                        </p>
+                        <Link
+                          href="/teacher/question-bank/new"
+                          className="mt-2 inline-block text-xs font-bold text-brand-600 hover:text-brand-800"
+                        >
+                          Tạo câu hỏi cho môn này
+                        </Link>
+                      </div>
+                    ) : (
+                      filteredQuestions.map((question) => {
+                        const chosen = selected.some(
+                          (item) => item.questionId === question.id,
+                        );
+                        return (
+                          <button
+                            key={question.id}
+                            type="button"
+                            onClick={() => toggleQuestion(question)}
+                            className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition ${chosen ? "border-brand-300 bg-brand-50 ring-1 ring-brand-100" : "border-slate-100 hover:border-brand-200 hover:bg-slate-50"}`}
+                          >
+                            <span
+                              className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}
+                            >
+                              {chosen ? <Check className="size-4" /> : null}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="line-clamp-2 block text-sm font-bold leading-5 text-slate-800">
+                                {question.content}
+                              </span>
+                              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
+                                {question.topicName || "Chưa phân chủ đề"} ·{" "}
+                                {question.defaultPoints} điểm
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-brand-100 bg-brand-50/30">
+                  <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-3">
+                    <p className="text-sm font-black text-brand-900">
+                      Đề đã chọn
+                    </p>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                      {selected.length} câu ·{" "}
+                      {selected.reduce((sum, item) => sum + item.points, 0)}{" "}
+                      điểm
+                    </span>
+                  </div>
+                  <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
+                    {selectedQuestionObjects.length === 0 ? (
+                      <div className="py-12 text-center text-sm text-slate-400">
+                        Chọn câu hỏi từ danh sách bên trái để xây dựng đề.
+                      </div>
+                    ) : (
+                      selectedQuestionObjects.map(
+                        ({ question, points }, index) => (
+                          <div
+                            key={question!.id}
+                            className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-600 text-xs font-black text-white">
+                                {index + 1}
+                              </span>
+                              <p className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800">
+                                {question!.content}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => toggleQuestion(question!)}
+                                className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                                aria-label="Bỏ câu hỏi"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+                            <div className="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 pt-3">
+                              <Input
+                                type="number"
+                                min="0.25"
+                                step="0.25"
+                                value={points}
+                                onChange={(event) =>
+                                  updateQuestionPoints(
+                                    question!.id,
+                                    Number(event.target.value),
+                                  )
+                                }
+                                className="h-8 w-24"
+                                aria-label={`Điểm câu ${index + 1}`}
+                              />
+                              <span className="mr-auto text-[11px] font-semibold text-slate-400">
+                                điểm
+                              </span>
+                              <button
+                                type="button"
+                                disabled={index === 0}
+                                onClick={() => moveQuestion(question!.id, -1)}
+                                className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30"
+                                aria-label="Đưa câu hỏi lên"
+                              >
+                                <ArrowUp className="size-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  index === selectedQuestionObjects.length - 1
+                                }
+                                onClick={() => moveQuestion(question!.id, 1)}
+                                className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30"
+                                aria-label="Đưa câu hỏi xuống"
+                              >
+                                <ArrowDown className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ),
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {step === 3 ? (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-lg font-black text-slate-950">
+                  Cấu hình làm bài
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Thiết lập thời gian mở đề, thời lượng và quyền xem kết quả.
+                </p>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2">
+                <Input
+                  label="Thời gian bắt đầu"
+                  type="datetime-local"
+                  value={settings.startsAt}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      startsAt: event.target.value,
+                    }))
+                  }
+                />
+                <Input
+                  label="Thời gian kết thúc"
+                  type="datetime-local"
+                  value={settings.endsAt}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      endsAt: event.target.value,
+                    }))
+                  }
+                />
+                <Input
+                  label="Thời lượng (phút)"
+                  type="number"
+                  min="1"
+                  value={settings.durationMinutes}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      durationMinutes: Number(event.target.value),
+                    }))
+                  }
+                />
+                <Input
+                  label="Số lần được phép"
+                  type="number"
+                  min="1"
+                  value={settings.attemptsAllowed}
+                  onChange={(event) =>
+                    setSettings((current) => ({
+                      ...current,
+                      attemptsAllowed: Number(event.target.value),
+                    }))
+                  }
+                />
+                <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                  {(
+                    [
+                      ["shuffleQuestions", "Trộn thứ tự câu hỏi"],
+                      ["shuffleAnswers", "Trộn đáp án"],
+                      [
+                        "showScoreImmediately",
+                        "Hiển thị điểm ngay sau khi nộp",
+                      ],
+                      ["showCorrectAnswers", "Cho xem đáp án đúng"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/40"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={settings[key]}
+                        onChange={(event) =>
+                          setSettings((current) => ({
+                            ...current,
+                            [key]: event.target.checked,
+                          }))
+                        }
+                        className="size-4 accent-brand-600"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {step === 4 ? (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-lg font-black text-slate-950">
+                  Kiểm tra trước khi lưu
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Rà soát nội dung, điểm số và lịch làm bài trước khi công bố.
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-brand-900 p-5 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-cyan-300">
+                      Bản xem trước
+                    </p>
+                    <h2 className="mt-2 text-2xl font-black">{info.title}</h2>
+                    <p className="mt-1 text-sm text-slate-300">
+                      {info.subjectName} · {currentClassLabel}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
+                    Chưa công bố
+                  </span>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-4">
+                  <div>
+                    <p className="text-[11px] text-slate-400">Số câu</p>
+                    <p className="mt-1 font-black">{selected.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Tổng điểm</p>
+                    <p className="mt-1 font-black">
+                      {selected.reduce((sum, item) => sum + item.points, 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Thời lượng</p>
+                    <p className="mt-1 font-black">
+                      {settings.durationMinutes} phút
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Lượt làm</p>
+                    <p className="mt-1 font-black">
+                      {settings.attemptsAllowed} lần
                     </p>
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2">
+                <p className="flex items-center gap-2 text-slate-600">
+                  <CalendarClock className="size-4 text-brand-600" /> Mở:{" "}
+                  <strong>{formatExamDate(settings.startsAt)}</strong>
+                </p>
+                <p className="flex items-center gap-2 text-slate-600">
+                  <Clock3 className="size-4 text-rose-500" /> Đóng:{" "}
+                  <strong>{formatExamDate(settings.endsAt)}</strong>
+                </p>
+              </div>
+              <div className="mt-5 space-y-3">
+                {selectedQuestionObjects.map(({ question, points }, index) => (
+                  <div
+                    key={question!.id}
+                    className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {question!.content}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {points} điểm · {question!.options.length} đáp án
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
-        <div className="mt-7 flex justify-between border-t border-slate-100 pt-5">
-          <Button
-            variant="outline"
-            disabled={step === 1 || saving}
-            onClick={() => {
-              setError("");
-              setStep((value) => value - 1);
-            }}
-          >
-            {step === 1 ? "Hủy" : "Quay lại"}
-          </Button>
-          {step < 4 ? (
+          ) : null}
+          <div className="mt-7 flex justify-between border-t border-slate-100 pt-5">
             <Button
+              variant="outline"
+              disabled={saving}
               onClick={() => {
-                if (canNext()) {
-                  setError("");
-                  setStep((value) => value + 1);
-                }
+                setError("");
+                if (step === 1) router.push("/teacher/exams");
+                else setStep((value) => value - 1);
               }}
             >
-              Tiếp theo <ChevronRight className="size-4" />
+              {step === 1 ? "Hủy" : "Quay lại"}
             </Button>
-          ) : (
-            <Button onClick={() => void save()} disabled={saving}>
-              <Send className="size-4" />
-              {saving
-                ? "Đang lưu..."
-                : examId
-                  ? "Lưu thay đổi"
-                  : "Lưu bản nháp"}
-            </Button>
-          )}
-        </div>
-      </section>
+            {step < 4 ? (
+              <Button
+                onClick={() => {
+                  if (canNext()) {
+                    setError("");
+                    setStep((value) => value + 1);
+                  }
+                }}
+              >
+                Tiếp theo <ChevronRight className="size-4" />
+              </Button>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void save(false)}
+                  disabled={saving}
+                >
+                  <FileCheck2 className="size-4" />
+                  {saving
+                    ? "Đang lưu..."
+                    : examId
+                      ? "Lưu thay đổi"
+                      : "Lưu bản nháp"}
+                </Button>
+                <Button onClick={() => void save(true)} disabled={saving}>
+                  <Send className="size-4" />
+                  {saving ? "Đang xử lý..." : "Lưu và công bố"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </section>
+        <aside className="sticky top-20 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card xl:block">
+          <div className="border-b border-slate-100 bg-slate-50 p-4">
+            <p className="text-sm font-black text-slate-900">
+              Tóm tắt bài kiểm tra
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Cập nhật theo nội dung đang nhập
+            </p>
+          </div>
+          <div className="space-y-4 p-4 text-sm">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Tên bài
+              </p>
+              <p className="mt-1 line-clamp-2 font-bold text-slate-800">
+                {info.title || "Chưa đặt tên"}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-brand-50 p-3">
+                <p className="text-[11px] text-brand-600">Câu hỏi</p>
+                <p className="mt-1 text-lg font-black text-brand-800">
+                  {selected.length}
+                </p>
+              </div>
+              <div className="rounded-xl bg-violet-50 p-3">
+                <p className="text-[11px] text-violet-600">Tổng điểm</p>
+                <p className="mt-1 text-lg font-black text-violet-800">
+                  {selected.reduce((sum, item) => sum + item.points, 0)}
+                </p>
+              </div>
+            </div>
+            <dl className="space-y-3 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Môn học</dt>
+                <dd className="max-w-36 truncate font-bold">
+                  {info.subjectName || "—"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Lớp</dt>
+                <dd className="max-w-36 truncate font-bold">
+                  {currentClassLabel || "—"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Thời lượng</dt>
+                <dd className="font-bold">{settings.durationMinutes} phút</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Số lượt làm</dt>
+                <dd className="font-bold">{settings.attemptsAllowed}</dd>
+              </div>
+            </dl>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+              Bạn có thể tiếp tục chỉnh sửa khi bài vẫn ở trạng thái bản nháp.
+            </div>
+          </div>
+        </aside>
+      </div>
     </AssessmentShell>
   );
 }
@@ -788,13 +1518,24 @@ export function ExamDetailPage() {
               </dd>
             </div>
           </dl>
-          <Button
-            className="mt-6 w-full"
-            variant="secondary"
-            onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}
-          >
-            Xem bài nộp
-          </Button>
+          {!exam.published ? (
+            <Button
+              className="mt-6 w-full"
+              onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}
+            >
+              <Edit3 className="size-4" /> Chỉnh sửa bản nháp
+            </Button>
+          ) : (
+            <Button
+              className="mt-6 w-full"
+              variant="secondary"
+              onClick={() =>
+                router.push(`/teacher/exams/${exam.id}/submissions`)
+              }
+            >
+              <FileCheck2 className="size-4" /> Xem bài nộp
+            </Button>
+          )}
         </aside>
       </div>
     </AssessmentShell>

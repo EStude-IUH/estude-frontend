@@ -13,6 +13,7 @@ import type {
   QuestionInput,
   Subject,
   SubjectTeacherAssignment,
+  StudentCourse,
   TeacherAssignedClass,
   ClassTopic,
   ClassTopicInput,
@@ -134,6 +135,9 @@ export const academicDataService = {
   },
   getTeacherAssignedClasses(): Promise<TeacherAssignedClass[]> {
     return authenticatedRequest<TeacherAssignedClass[]>("/teacher/assigned-classes");
+  },
+  getStudentCourses(): Promise<StudentCourse[]> {
+    return authenticatedRequest<StudentCourse[]>("/student/courses");
   },
   getTeacherAssignedClass(classId: string): Promise<TeacherAssignedClass> {
     return authenticatedRequest<TeacherAssignedClass>(`/teacher/assigned-classes/${encodeURIComponent(classId)}`);
@@ -335,14 +339,10 @@ export const examAttemptService = {
   getAttempt(id: string): Promise<ExamAttempt & { exam: Exam }> {
     return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}`);
   },
-  saveAnswer(id: string, answer: ExamAnswer, keepalive = false): Promise<ExamAttempt> {
-    return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/answers`, {
-      method: "PATCH",
-      body: JSON.stringify(answer),
-      keepalive,
+  submitExam(id: string, answers: ExamAnswer[]): Promise<ExamAttempt> {
+    return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
     });
-  },
-  submitExam(id: string): Promise<ExamAttempt> {
-    return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/submit`, { method: "POST" });
   },
 };
