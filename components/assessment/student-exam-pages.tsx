@@ -13,6 +13,7 @@ import {
   Play,
   RotateCcw,
   Send,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -825,6 +826,12 @@ export function StudentResultPage() {
             Bài làm đã được ghi nhận. Kết quả sẽ hiển thị khi giáo viên công bố.
           </div>
         )}
+        <Button
+          className="mt-5 w-full"
+          onClick={() => router.push(`/student/attempts/${attempt.id}/study`)}
+        >
+          <Sparkles className="size-4" /> Phân tích và ôn tập với AI
+        </Button>
       </div>
     </AssessmentShell>
   );

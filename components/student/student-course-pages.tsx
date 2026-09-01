@@ -3,6 +3,8 @@
 import {
   ArrowLeft,
   BookOpen,
+  BrainCircuit,
+  CheckCircle2,
   ClipboardCheck,
   GraduationCap,
   Hash,
@@ -14,8 +16,8 @@ import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-she
 import { StudentExamList } from "@/components/assessment/student-exam-pages";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
-import { academicDataService } from "@/lib/assessment-api";
-import type { StudentCourse } from "@/types/assessment";
+import { academicDataService, examService } from "@/lib/assessment-api";
+import type { Exam, StudentCourse } from "@/types/assessment";
 
 function courseHref(course: StudentCourse): string {
   return `/student/courses/${encodeURIComponent(course.classId)}/${encodeURIComponent(course.subjectId)}`;
@@ -119,7 +121,7 @@ export function StudentCoursesPage() {
   );
 }
 
-type CourseSection = "overview" | "exams";
+type CourseSection = "overview" | "exams" | "review";
 
 export function StudentCourseDetailPage() {
   const params = useParams<{ classId: string; subjectId: string }>();
@@ -224,6 +226,16 @@ export function StudentCourseDetailPage() {
                   <span className="absolute inset-x-2 bottom-0 h-0.5 bg-brand-600" />
                 ) : null}
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection("review")}
+                className={`relative flex h-14 shrink-0 items-center gap-2 px-3 text-sm font-bold ${activeSection === "review" ? "text-brand-700" : "text-slate-500 hover:text-slate-900"}`}
+              >
+                <BrainCircuit className="size-4" /> Ôn tập
+                {activeSection === "review" ? (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 bg-brand-600" />
+                ) : null}
+              </button>
             </nav>
           </section>
 
@@ -248,7 +260,7 @@ export function StudentCourseDetailPage() {
                   </div>
                 </div>
               </section>
-            ) : (
+            ) : activeSection === "exams" ? (
               <section>
                 <div className="mb-4">
                   <h2 className="text-xl font-black text-slate-950">
@@ -263,10 +275,108 @@ export function StudentCourseDetailPage() {
                   subjectId={course.subjectId}
                 />
               </section>
+            ) : (
+              <StudentReviewList
+                classId={course.classId}
+                subjectId={course.subjectId}
+              />
             )}
           </div>
         </>
       )}
     </StudentShell>
+  );
+}
+
+function StudentReviewList({
+  classId,
+  subjectId,
+}: {
+  classId: string;
+  subjectId: string;
+}) {
+  const router = useRouter();
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void examService
+      .getExams()
+      .then((items) =>
+        setExams(
+          items.filter(
+            (exam) =>
+              exam.classId === classId &&
+              exam.subjectId === subjectId &&
+              exam.currentAttempt?.status === "SUBMITTED",
+          ),
+        ),
+      )
+      .catch((cause) =>
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Không thể tải nội dung ôn tập",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [classId, subjectId]);
+
+  if (loading) return <LoadingPanel />;
+  if (error) return <ErrorPanel message={error} />;
+
+  return (
+    <section>
+      <div className="mb-4">
+        <h2 className="text-xl font-black text-slate-950">Phân tích và ôn tập</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Chọn một bài đã nộp để xem phần kiến thức còn yếu và luyện câu hỏi
+          thích ứng.
+        </p>
+      </div>
+      {exams.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <BrainCircuit className="mx-auto size-9 text-slate-300" />
+          <p className="mt-3 text-sm font-semibold text-slate-500">
+            Chưa có bài kiểm tra đã nộp để phân tích.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {exams.map((exam) => (
+            <article
+              key={exam.id}
+              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"
+            >
+              <div className="flex items-start gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
+                  <CheckCircle2 className="size-5" />
+                </span>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-emerald-600">
+                    Đã nộp bài
+                  </p>
+                  <h3 className="mt-1 font-black text-slate-950">{exam.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {exam.questions.length} câu · {exam.totalPoints} điểm
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="mt-5 w-full"
+                onClick={() =>
+                  router.push(
+                    `/student/attempts/${exam.currentAttempt?.id}/study`,
+                  )
+                }
+              >
+                <BrainCircuit className="size-4" /> Xem phân tích và ôn tập
+              </Button>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

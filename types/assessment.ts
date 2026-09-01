@@ -375,6 +375,90 @@ export interface ExamAttempt {
   durationSeconds: number | null;
 }
 
+export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE";
+
+export interface StudyTopicPerformance {
+  topicName: string;
+  totalQuestions: number;
+  correctCount: number;
+  missedCount: number;
+  pointsEarned: number;
+  pointsPossible: number;
+  accuracy: number;
+}
+
+export interface StudyWeakArea {
+  id: string;
+  topicName: string;
+  sourceType: StudySourceType;
+  missedCount: number;
+  totalQuestions: number;
+  accuracy: number;
+  diagnosis: string;
+  reviewSummary: string;
+  keyPoints: string[];
+  sourceReferences: Array<{ documentName: string; page: number }>;
+}
+
+export interface StudyAnalysisReport {
+  aiStatus: "READY" | "FALLBACK";
+  summary: string;
+  exam: {
+    id: string;
+    title: string;
+    classId: string;
+    className: string;
+    subjectId: string;
+    subjectName: string;
+  };
+  performance: {
+    score: number | null;
+    totalPoints: number;
+    accuracy: number;
+    correctCount: number;
+    totalQuestions: number;
+    ungradedEssayCount: number;
+  };
+  topicPerformance: StudyTopicPerformance[];
+  weakAreas: StudyWeakArea[];
+}
+
+export interface StudyPracticeQuestion {
+  id: string;
+  topicName: string;
+  sourceType: StudySourceType;
+  content: string;
+  options: Array<{ id: string; label: string; text: string }>;
+  correctOptionIds?: string[];
+  explanation?: string;
+  selectedOptionIds?: string[];
+  correct?: boolean;
+}
+
+export interface StudyPracticeSet {
+  id: string;
+  analysisId: string;
+  status: "READY" | "SUBMITTED";
+  score: number | null;
+  correctCount: number | null;
+  submittedAt: string | null;
+  questions: StudyPracticeQuestion[];
+  totalQuestions: number;
+}
+
+export interface StudyAnalysis {
+  id: string;
+  attemptId: string;
+  examId: string;
+  studentId: string;
+  classId: string;
+  subjectId: string;
+  report: StudyAnalysisReport;
+  generatedAt: string;
+  updatedAt: string;
+  practiceSet: StudyPracticeSet | null;
+}
+
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   SINGLE_CHOICE: "Một đáp án",
   MULTIPLE_CHOICE: "Nhiều đáp án",

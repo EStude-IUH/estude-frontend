@@ -27,6 +27,8 @@ import type {
   UpdateGeneratedQuestionInput,
   DifficultyLevelDefinition,
   SystemDifficultySettings,
+  StudyAnalysis,
+  StudyPracticeSet,
   TeacherDifficultySettings,
 } from "@/types/assessment";
 
@@ -344,5 +346,25 @@ export const examAttemptService = {
       method: "POST",
       body: JSON.stringify({ answers }),
     });
+  },
+  createStudyAnalysis(id: string): Promise<StudyAnalysis> {
+    return authenticatedRequest<StudyAnalysis>(
+      `/exam-attempts/${encodeURIComponent(id)}/study-analysis`,
+      { method: "POST" },
+    );
+  },
+  getStudyAnalysis(id: string): Promise<StudyAnalysis> {
+    return authenticatedRequest<StudyAnalysis>(
+      `/exam-attempts/${encodeURIComponent(id)}/study-analysis`,
+    );
+  },
+  submitStudyPractice(
+    id: string,
+    answers: Array<{ questionId: string; selectedOptionIds: string[] }>,
+  ): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(
+      `/study-practice-sets/${encodeURIComponent(id)}/submit`,
+      { method: "POST", body: JSON.stringify({ answers }) },
+    );
   },
 };
