@@ -14,6 +14,7 @@ export interface Question {
   topicId: string;
   topicName: string;
   content: string;
+  keyword?: string | null;
   type: QuestionType;
   difficulty: Difficulty;
   options: QuestionOption[];
@@ -134,7 +135,9 @@ export interface Subject {
   code: string;
   name: string;
   description: string;
+  keyword?: string | null;
   isActive: boolean;
+  createdById?: string | null;
   deletedAt?: string | null;
 }
 
@@ -167,6 +170,7 @@ export interface SchoolClass {
   academicYearId: string;
   code: string;
   name: string;
+  keyword?: string | null;
   isActive: boolean;
   deletedAt?: string | null;
 }
@@ -175,6 +179,7 @@ export interface ClassRosterMember {
   id: string;
   fullName: string;
   accountName: string;
+  keyword?: string | null;
   role: "TEACHER" | "STUDENT";
   status: string;
   avatarUrl: string | null;
@@ -195,6 +200,7 @@ export interface SubjectTeacherAssignment {
   classId: string;
   subjectId: string;
   teacherId: string;
+  keyword?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -215,6 +221,7 @@ export interface TeacherAssignedClass {
   code: string;
   name: string;
   academicYearId: string;
+  keyword?: string | null;
   studentCount: number;
   subjects: Array<Pick<Subject, "id" | "code" | "name">>;
 }
@@ -226,6 +233,7 @@ export interface LearningMaterial {
   topicId: string | null;
   teacherId: string;
   originalName: string;
+  keyword?: string | null;
   s3Key: string;
   mimeType: string;
   size: number;
@@ -266,6 +274,7 @@ export interface ClassTopic {
   teacherId: string;
   name: string;
   description: string;
+  keyword?: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -285,6 +294,7 @@ export interface Topic {
   subjectId: string;
   name: string;
   description: string;
+  keyword?: string | null;
   isActive: boolean;
 }
 
@@ -327,6 +337,7 @@ export interface ExamSettings {
 export interface Exam {
   id: string;
   title: string;
+  keyword?: string | null;
   subjectId: string;
   subjectName: string;
   classId: string;

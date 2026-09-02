@@ -305,7 +305,6 @@ export function AccountManagementPanel() {
           password: newPassword,
           confirmPassword: newPassword,
           role: newRole,
-          status: "PENDING",
         }),
       });
       setNewFullName("");
@@ -394,7 +393,7 @@ export function AccountManagementPanel() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+    <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
       {isImporting ? (
         <div
           role="dialog"
@@ -505,14 +504,14 @@ export function AccountManagementPanel() {
         </div>
       </div>
 
-      <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
         {listError ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" /> {listError}
           </p>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 shrink overflow-auto">
           <Table className="min-w-[1250px]">
             <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
               <tr>

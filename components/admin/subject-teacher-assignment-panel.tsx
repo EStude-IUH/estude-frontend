@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import type { SchoolClass, Subject, SubjectTeacherAssignment } from "@/types/assessment";
 import type { UsersPage } from "@/types/users";
 
@@ -63,15 +64,8 @@ export function SubjectTeacherAssignmentPanel() {
   useEffect(() => { void load(); }, []);
 
   const filteredAssignments = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
     return assignments.filter((item) => {
-      const matchesSearch = !normalized
-        || item.teacher.fullName.toLowerCase().includes(normalized)
-        || item.teacher.accountName.toLowerCase().includes(normalized)
-        || item.subject.name.toLowerCase().includes(normalized)
-        || item.subject.code.toLowerCase().includes(normalized)
-        || item.schoolClass.name.toLowerCase().includes(normalized)
-        || item.schoolClass.code.toLowerCase().includes(normalized);
+      const matchesSearch = matchesSearchKeyword(item.keyword, search);
       return matchesSearch
         && (!classFilter || item.classId === classFilter)
         && (!subjectFilter || item.subjectId === subjectFilter)

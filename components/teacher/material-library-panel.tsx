@@ -19,6 +19,7 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import type {
   ClassTopic,
   LearningMaterial,
@@ -86,18 +87,8 @@ export function TeacherMaterialLibraryPanel() {
   }, [load]);
 
   const filteredMaterials = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase("vi");
-    if (!keyword) return materials;
     return materials.filter((material) =>
-      [
-        material.originalName,
-        ...(material.assignments ?? []).flatMap((assignment) => [
-          assignment.name,
-          assignment.schoolClass.name,
-          assignment.schoolClass.code,
-          assignment.subject.name,
-        ]),
-      ].some((value) => value.toLocaleLowerCase("vi").includes(keyword)),
+      matchesSearchKeyword(material.keyword, search),
     );
   }, [materials, search]);
 

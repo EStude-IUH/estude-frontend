@@ -666,8 +666,11 @@ export function StudentDetailPanel({
                       placeholder="Chưa có học kỳ"
                       ariaLabel="Lọc biểu đồ theo học kỳ"
                       disabled={data.semesterResults.length === 0}
-                      className="w-56 max-w-[55%] shrink-0"
+                      showSelectedIndicator={false}
+                      className="w-48 max-w-[55%] shrink-0"
                       buttonClassName="!h-8 !rounded-md !px-2.5 !text-xs !ring-0"
+                      menuClassName="!p-1"
+                      optionClassName="!px-2.5 !py-1.5"
                     />
                   </div>
                   <div className="min-h-0 flex-1 [&>*]:h-full">

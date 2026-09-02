@@ -205,9 +205,12 @@ export interface CustomSelectProps {
   label?: string;
   className?: string;
   buttonClassName?: string;
+  menuClassName?: string;
+  optionClassName?: string;
   placement?: "top" | "bottom";
   disabled?: boolean;
   ariaLabel?: string;
+  showSelectedIndicator?: boolean;
 }
 
 export function CustomSelect({
@@ -218,9 +221,12 @@ export function CustomSelect({
   label,
   className,
   buttonClassName,
+  menuClassName,
+  optionClassName,
   placement = "bottom",
   disabled = false,
   ariaLabel,
+  showSelectedIndicator = true,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -287,6 +293,7 @@ export function CustomSelect({
             placement === "bottom"
               ? "left-0 top-full mt-2"
               : "bottom-full left-0 mb-2",
+            menuClassName,
           )}
         >
           {options.map((option) => {
@@ -306,10 +313,13 @@ export function CustomSelect({
                   selected
                     ? "bg-brand-600 font-bold text-white"
                     : "text-slate-700 hover:bg-blue-50 hover:text-brand-700",
+                  optionClassName,
                 )}
               >
                 <span>{option.label}</span>
-                {selected ? <Check className="size-4 shrink-0" /> : null}
+                {selected && showSelectedIndicator ? (
+                  <Check className="size-4 shrink-0" />
+                ) : null}
               </button>
             );
           })}

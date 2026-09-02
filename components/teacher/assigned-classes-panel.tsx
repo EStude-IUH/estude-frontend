@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowRight, BookOpenCheck, LoaderCircle, Search, School, UserRound, UsersRound, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { academicDataService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { Button } from "@/components/ui/button";
 import type { ClassRoster, TeacherAssignedClass } from "@/types/assessment";
 import {
@@ -71,22 +72,14 @@ export function TeacherAssignedClassesPanel() {
   }, [loadRoster, selectedClassId]);
 
   const filteredClasses = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase("vi");
-    if (!keyword) return classes;
-    return classes.filter((item) =>
-      [item.code, item.name, ...item.subjects.flatMap((subject) => [subject.code, subject.name])]
-        .some((value) => value.toLocaleLowerCase("vi").includes(keyword)),
-    );
+    return classes.filter((item) => matchesSearchKeyword(item.keyword, search));
   }, [classes, search]);
 
   const selectedClass = classes.find((item) => item.id === selectedClassId) ?? null;
   const filteredStudents = useMemo(() => {
-    const keyword = studentSearch.trim().toLocaleLowerCase("vi");
     const students = roster?.students ?? [];
-    if (!keyword) return students;
     return students.filter((student) =>
-      [student.fullName, student.accountName]
-        .some((value) => value.toLocaleLowerCase("vi").includes(keyword)),
+      matchesSearchKeyword(student.keyword, studentSearch),
     );
   }, [roster, studentSearch]);
 

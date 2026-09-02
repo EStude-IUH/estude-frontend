@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/data-table";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
 import type { ClassRoster } from "@/types/assessment";
 import type { UsersPage } from "@/types/users";
@@ -88,11 +89,8 @@ export function ClassAssignmentContent({ classId }: { classId: string }) {
   ];
 
   const filteredAvailableStudents = useMemo(() => {
-    const keyword = studentSearch.trim().toLocaleLowerCase("vi");
-    if (!keyword) return availableStudents;
     return availableStudents.filter((student) =>
-      [student.fullName, student.accountName]
-        .some((value) => value.toLocaleLowerCase("vi").includes(keyword)),
+      matchesSearchKeyword(student.keyword, studentSearch),
     );
   }, [availableStudents, studentSearch]);
 

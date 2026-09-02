@@ -220,7 +220,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+    <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
       <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
         <div className="grid gap-3 xl:grid-cols-[minmax(220px,420px)_190px_230px]">
           <DebouncedSearchInput
@@ -256,14 +256,14 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
         </div>
       </div>
 
-      <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
         {listError ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" /> {listError}
           </p>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 shrink overflow-auto">
           <Table
             className={`${
               role === "STUDENT" ? "min-w-[2120px]" : "min-w-[2060px]"

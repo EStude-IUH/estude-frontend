@@ -10,6 +10,7 @@ import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { ApiError } from "@/lib/auth-api";
 import type { AcademicYear, SchoolClass } from "@/types/assessment";
 import { ClassAssignmentContent } from "@/components/admin/class-assignment-panel";
@@ -44,8 +45,7 @@ export function ClassManagementPanel() {
   const [saving, setSaving] = useState(false);
 
   const filteredClasses = useMemo(() => classes.filter((item) => {
-    const normalized = search.trim().toLowerCase();
-    const matchesSearch = !normalized || item.code.toLowerCase().includes(normalized) || item.name.toLowerCase().includes(normalized);
+    const matchesSearch = matchesSearchKeyword(item.keyword, search);
     const matchesStatus = !statusFilter || (statusFilter === "ACTIVE" ? item.isActive : !item.isActive);
     const matchesYear = !yearFilter || item.academicYearId === yearFilter;
     return matchesSearch && matchesStatus && matchesYear;

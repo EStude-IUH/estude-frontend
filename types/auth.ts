@@ -5,6 +5,7 @@ export interface User {
   id: string;
   fullName: string;
   accountName: string;
+  keyword?: string | null;
   role: UserRole;
   status: UserStatus;
   avatarUrl: string | null;

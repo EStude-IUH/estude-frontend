@@ -38,6 +38,7 @@ import {
   examService,
   questionBankService,
 } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import {
   EXAM_STATUS_LABELS,
   type Exam,
@@ -186,17 +187,10 @@ export function TeacherExamsPage() {
     }
   }
 
-  const normalizedQuery = query.trim().toLowerCase();
   const visibleExams = exams.filter((exam) => {
     const matchesStatus =
       statusFilter === "ALL" || exam.status === statusFilter;
-    const matchesQuery =
-      !normalizedQuery ||
-      exam.title.toLowerCase().includes(normalizedQuery) ||
-      exam.subjectName.toLowerCase().includes(normalizedQuery) ||
-      formatClassLabel(assignedClasses, exam.classId, exam.className)
-        .toLowerCase()
-        .includes(normalizedQuery);
+    const matchesQuery = matchesSearchKeyword(exam.keyword, query);
     return matchesStatus && matchesQuery;
   });
   const draftCount = exams.filter((exam) => !exam.published).length;
@@ -693,9 +687,7 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
   const filteredQuestions = questions.filter(
     (question) =>
       question.subjectId === info.subjectId &&
-      (!search ||
-        question.content.toLowerCase().includes(search.toLowerCase()) ||
-        question.topicName.toLowerCase().includes(search.toLowerCase())),
+      matchesSearchKeyword(question.keyword, search),
   );
   const selectedQuestionObjects = selected
     .map((item) => ({

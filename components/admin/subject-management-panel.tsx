@@ -29,6 +29,7 @@ import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { ApiError } from "@/lib/auth-api";
 import type { Subject, SubjectImportResult } from "@/types/assessment";
 
@@ -75,12 +76,7 @@ export function SubjectManagementPanel() {
   const filteredSubjects = useMemo(
     () =>
       subjects.filter((subject) => {
-        const normalized = search.trim().toLowerCase();
-        const matchesSearch =
-          !normalized ||
-          subject.code.toLowerCase().includes(normalized) ||
-          subject.name.toLowerCase().includes(normalized) ||
-          subject.description.toLowerCase().includes(normalized);
+        const matchesSearch = matchesSearchKeyword(subject.keyword, search);
         const matchesStatus =
           !statusFilter ||
           (statusFilter === "ACTIVE" ? subject.isActive : !subject.isActive);
@@ -115,6 +111,11 @@ export function SubjectManagementPanel() {
     setEditingSubject(null);
     setForm({ code: "", name: "", description: "", isActive: true });
     setIsModalOpen(true);
+  }
+  function openImport() {
+    setImportError("");
+    setImportResult(null);
+    setIsImportOpen(true);
   }
   function openEdit(subject: Subject) {
     setEditingSubject(subject);
@@ -209,10 +210,10 @@ export function SubjectManagementPanel() {
   }
 
   return (
-    <div className="w-full">
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+    <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+      <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(260px,1fr)_200px]">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(260px,420px)_200px]">
             <Input
               icon={Search}
                 value={search}
@@ -234,18 +235,6 @@ export function SubjectManagementPanel() {
             />
           </div>
           <div className="flex shrink-0 justify-end gap-2">
-            <Button
-              className="!h-[42px] !rounded-lg"
-              variant="outline"
-              onClick={() => {
-                setImportError("");
-                setImportResult(null);
-                setIsImportOpen(true);
-              }}
-            >
-              <Upload className="size-4" />
-              Import Excel
-            </Button>
             <Button className="!h-[42px] !rounded-lg" onClick={openCreate}>
               <Plus className="size-4" />
               Thêm môn học
@@ -253,16 +242,16 @@ export function SubjectManagementPanel() {
           </div>
         </div>
       </div>
-      <section className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+      <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
         {error ? (
           <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
             <XCircle className="size-4" />
             {error}
           </p>
         ) : null}
-        <div className="overflow-x-auto">
+        <div className="min-h-0 shrink overflow-auto">
           <Table className="min-w-[900px]">
-            <TableHeader className="!bg-brand-600 !text-white">
+            <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
               <tr>
                 <TableHead className="w-14 text-center">#</TableHead>
                 <TableHead>Mã môn học</TableHead>
@@ -336,6 +325,7 @@ export function SubjectManagementPanel() {
           </Table>
         </div>
         <DataTableFooter
+          className="shrink-0 bg-white"
           rowCount={pagedSubjects.length}
           totalItems={filteredSubjects.length}
           itemLabel="môn học"
@@ -460,12 +450,6 @@ export function SubjectManagementPanel() {
         title={editingSubject ? "Chỉnh sửa môn học" : "Thêm môn học"}
         description="Môn học được dùng chung qua nhiều năm học."
         onClose={() => setIsModalOpen(false)}
-        footer={
-          <Button type="submit" form="subject-form" disabled={saving}>
-            {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
-            {editingSubject ? "Lưu thay đổi" : "Thêm môn học"}
-          </Button>
-        }
       >
         <form
           id="subject-form"
@@ -507,6 +491,45 @@ export function SubjectManagementPanel() {
             />
             Đang hoạt động
           </label>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            {!editingSubject ? (
+              <Button
+                variant="secondary"
+                className="!rounded-lg"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  openImport();
+                }}
+              >
+                <Upload className="size-4" />
+                Import từ Excel
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="!rounded-lg"
+                disabled={saving}
+                onClick={() => setIsModalOpen(false)}
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                className="!rounded-lg"
+                disabled={saving}
+              >
+                {saving ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
+                {editingSubject ? "Lưu thay đổi" : "Thêm môn học"}
+              </Button>
+            </div>
+          </div>
         </form>
       </Modal>
       <ConfirmationDialog
