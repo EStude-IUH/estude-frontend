@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeft,
   BookOpen,
   CalendarDays,
   CheckCircle2,
@@ -20,6 +19,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BarChart } from "@/components/ui/bar-chart";
+import { CustomSelect } from "@/components/ui/form-control";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
 import type { User } from "@/types/auth";
 
@@ -54,6 +55,14 @@ interface StudentOverview {
       teacher: { id: string; fullName: string; accountName: string };
     }>;
   }>;
+  subjectResults: Array<{
+    subjectId: string;
+    subjectCode: string;
+    subjectName: string;
+    examCount: number;
+    averagePercentage: number | null;
+    classAveragePercentage: number | null;
+  }>;
   semesterResults: Array<{
     id: string;
     name: string;
@@ -64,6 +73,17 @@ interface StudentOverview {
     academicYearName: string;
     examCount: number;
     averagePercentage: number | null;
+  }>;
+  termSubjectResults?: Array<{
+    termId: string;
+    subjectResults: Array<{
+      subjectId: string;
+      subjectCode: string;
+      subjectName: string;
+      examCount: number;
+      averagePercentage: number | null;
+      classAveragePercentage: number | null;
+    }>;
   }>;
   examResults: Array<{
     id: string;
@@ -130,6 +150,14 @@ function displayValue(value?: string | null) {
   return value?.trim() || "--";
 }
 
+function toTenPointScale(value: number | null): number | null {
+  return value === null ? null : value / 10;
+}
+
+function formatTenPointScore(value: number): string {
+  return value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
 function getInitial(name: string) {
   return name.trim().split(/\s+/).at(-1)?.charAt(0).toUpperCase() ?? "?";
 }
@@ -165,10 +193,17 @@ function ScoreBadge({ value }: { value: number | null }) {
   );
 }
 
-export function StudentDetailPanel({ studentId }: { studentId: string }) {
+export function StudentDetailPanel({
+  studentId,
+  onStudentNameChange,
+}: {
+  studentId: string;
+  onStudentNameChange?: (name: string) => void;
+}) {
   const router = useRouter();
   const [data, setData] = useState<StudentOverview | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [selectedTermId, setSelectedTermId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -176,11 +211,18 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
     setIsLoading(true);
     setError("");
     try {
-      setData(
-        await authenticatedRequest<StudentOverview>(
-          `/users/${encodeURIComponent(studentId)}/student-overview`,
-        ),
+      const detail = await authenticatedRequest<StudentOverview>(
+        `/users/${encodeURIComponent(studentId)}/student-overview${process.env.NODE_ENV === "development" ? "?mockSubjectScores=true" : ""}`,
       );
+      const defaultTerm =
+        detail.semesterResults.find((term) => term.status === "ACTIVE") ??
+        [...detail.semesterResults].sort(
+          (left, right) =>
+            Date.parse(right.startsAt) - Date.parse(left.startsAt),
+        )[0];
+      setSelectedTermId(defaultTerm?.id ?? "");
+      setData(detail);
+      onStudentNameChange?.(detail.student.fullName);
     } catch (cause) {
       setError(
         cause instanceof ApiError
@@ -190,7 +232,7 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
     } finally {
       setIsLoading(false);
     }
-  }, [studentId]);
+  }, [onStudentNameChange, studentId]);
 
   useEffect(() => {
     void loadDetail();
@@ -244,6 +286,29 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
     ) ??
     data.enrollments.find((item) => item.isActive) ??
     data.enrollments[0];
+  const chartSubjectResults = selectedTermId
+    ? (data.termSubjectResults?.find(
+        (term) => term.termId === selectedTermId,
+      )?.subjectResults ?? [])
+    : [];
+  const sortedSemesterResults = [...data.semesterResults].sort(
+    (left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt),
+  );
+  const selectedTermIndex = sortedSemesterResults.findIndex(
+    (term) => term.id === selectedTermId,
+  );
+  const previousTerm =
+    selectedTermIndex > 0 ? sortedSemesterResults[selectedTermIndex - 1] : null;
+  const previousTermSubjectResults = previousTerm
+    ? data.termSubjectResults?.find((term) => term.termId === previousTerm.id)
+        ?.subjectResults
+    : undefined;
+  const previousSubjectResultById = new Map(
+    previousTermSubjectResults?.map((subject) => [
+      subject.subjectId,
+      subject,
+    ]) ?? [],
+  );
 
   const renderSubjects = () =>
     allSubjects.length ? (
@@ -418,23 +483,9 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
     );
 
   return (
-    <div className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden">
-      <div className="mb-2 flex shrink-0 items-center gap-2 text-[13px] text-slate-500">
-        <button
-          type="button"
-          onClick={() => router.push("/admin/users/students")}
-          className="inline-flex items-center gap-1.5 font-semibold transition hover:text-brand-700"
-        >
-          <ArrowLeft className="size-4" /> Học sinh
-        </button>
-        <span>/</span>
-        <span className="truncate font-bold text-slate-800">
-          {student.fullName}
-        </span>
-      </div>
-
-      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[310px_minmax(0,1fr)]">
-        <aside className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-card">
+    <div className="flex h-[calc(100dvh-88px)] min-h-0 flex-col overflow-hidden bg-[#F5F9FF]">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden bg-[#F5F9FF] xl:grid-cols-[310px_minmax(0,1fr)]">
+        <aside className="min-h-0 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-center">
             <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-2xl font-extrabold text-brand-700">
               {getInitial(student.fullName)}
@@ -525,16 +576,9 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
             </dl>
           </div>
         </aside>
-
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-          <div className="grid shrink-0 grid-cols-2 gap-2 p-3 lg:grid-cols-5">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="grid shrink-0 grid-cols-2 gap-2 p-3 lg:grid-cols-4 lg:py-2">
             {[
-              {
-                label: "Lớp học",
-                value: summary.classCount,
-                icon: School,
-                tone: "bg-blue-50 text-blue-700",
-              },
               {
                 label: "Môn học",
                 value: summary.subjectCount,
@@ -567,7 +611,7 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
             ].map((card) => (
               <div
                 key={card.label}
-                className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 p-3"
+                className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 p-3 lg:py-3"
               >
                 <span
                   className={`grid size-10 shrink-0 place-items-center rounded-xl ${card.tone}`}
@@ -593,7 +637,7 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`border-b-2 px-4 py-3 text-[13px] font-bold transition ${activeTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                  className={`border-b-2 px-4 py-2 text-[13px] font-bold transition ${activeTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                 >
                   {tab.label}
                   {tab.id === "warnings" && summary.warningCount
@@ -604,67 +648,72 @@ export function StudentDetailPanel({ studentId }: { studentId: string }) {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             {activeTab === "overview" ? (
-              <div className="space-y-5">
-                <div>
-                  <h3 className="mb-3 text-sm font-extrabold text-slate-900">
-                    Lớp học hiện tại
-                  </h3>
-                  {data.enrollments.length ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {data.enrollments.map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-slate-200 p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-bold text-slate-900">
-                                {item.class.name}
-                              </p>
-                              <p className="mt-1 font-mono text-xs font-semibold text-brand-700">
-                                {item.class.code}
-                              </p>
-                            </div>
-                            <span
-                              className={`rounded-full px-2 py-1 text-xs font-bold ${item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-                            >
-                              {item.isActive ? "Đang học" : "Đã kết thúc"}
-                            </span>
-                          </div>
-                          <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
-                            <div>
-                              <p className="text-xs text-slate-400">Năm học</p>
-                              <p className="mt-1 font-semibold text-slate-700">
-                                {item.academicYear?.name ?? "--"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-400">Số môn</p>
-                              <p className="mt-1 font-semibold text-slate-700">
-                                {item.subjects.length}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState message="Học sinh chưa được xếp vào lớp học." />
-                  )}
+              <div className="grid h-full min-h-0 grid-rows-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
+                <div className="flex min-h-0 flex-col">
+                  <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Kết quả theo học kỳ
+                    </h3>
+                    <CustomSelect
+                      value={selectedTermId}
+                      options={sortedSemesterResults.map((term) => ({
+                        value: term.id,
+                        label: `${term.name} · ${term.academicYearName}`,
+                      }))}
+                      onValueChange={setSelectedTermId}
+                      placeholder="Chưa có học kỳ"
+                      ariaLabel="Lọc biểu đồ theo học kỳ"
+                      disabled={data.semesterResults.length === 0}
+                      className="w-56 max-w-[55%] shrink-0"
+                      buttonClassName="!h-8 !rounded-md !px-2.5 !text-xs !ring-0"
+                    />
+                  </div>
+                  <div className="min-h-0 flex-1 [&>*]:h-full">
+                    <BarChart
+                      ariaLabel="Biểu đồ điểm trung bình theo môn"
+                      items={chartSubjectResults.map((subject) => ({
+                        id: subject.subjectId,
+                        label: subject.subjectName,
+                        shortLabel: subject.subjectCode,
+                        value: toTenPointScale(subject.averagePercentage),
+                        secondaryValue: previousTermSubjectResults
+                          ? toTenPointScale(
+                              previousSubjectResultById.get(subject.subjectId)
+                                ?.averagePercentage ?? null,
+                            )
+                          : undefined,
+                        comparisonValue: toTenPointScale(
+                          subject.classAveragePercentage,
+                        ),
+                        secondaryComparisonValue: previousTermSubjectResults
+                          ? toTenPointScale(
+                              previousSubjectResultById.get(subject.subjectId)
+                                ?.classAveragePercentage ?? null,
+                            )
+                          : undefined,
+                      }))}
+                      maxItems={12}
+                      maxValue={10}
+                      valueLabel="Điểm học sinh"
+                      secondaryLabel="Kỳ trước"
+                      comparisonLabel="Trung bình lớp"
+                      comparisonLegendLabel="TB lớp kỳ này"
+                      secondaryComparisonLabel="Trung bình lớp kỳ trước"
+                      secondaryComparisonLegendLabel="TB lớp kỳ trước"
+                      valueFormatter={formatTenPointScore}
+                      emptyMessage="Chưa có điểm môn học trong học kỳ."
+                    />
+                  </div>
                 </div>
-                <div>
-                  <h3 className="mb-3 text-sm font-extrabold text-slate-900">
-                    Kết quả theo học kỳ
-                  </h3>
-                  {renderSemesters()}
-                </div>
-                <div>
-                  <h3 className="mb-3 text-sm font-extrabold text-slate-900">
+                <div className="flex min-h-0 flex-col">
+                  <h3 className="mb-2 shrink-0 text-sm font-extrabold text-slate-900">
                     Cảnh báo cần chú ý
                   </h3>
-                  {renderWarnings()}
+                  <div className="min-h-0 flex-1 overflow-y-auto [&>*]:!min-h-0 [&>*]:h-full">
+                    {renderWarnings()}
+                  </div>
                 </div>
               </div>
             ) : null}

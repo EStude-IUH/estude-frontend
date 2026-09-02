@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   BookOpen,
+  Download,
   Edit3,
+  FileSpreadsheet,
   LoaderCircle,
   Plus,
   Search,
   Trash2,
+  Upload,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +30,7 @@ import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
 import { ApiError } from "@/lib/auth-api";
-import type { Subject } from "@/types/assessment";
+import type { Subject, SubjectImportResult } from "@/types/assessment";
 
 const statusOptions = [
   { value: "", label: "Tất cả trạng thái" },
@@ -42,6 +45,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 export function SubjectManagementPanel() {
   const { notify } = useActionNotification();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -59,6 +63,14 @@ export function SubjectManagementPanel() {
     isActive: true,
   });
   const [saving, setSaving] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importResult, setImportResult] =
+    useState<SubjectImportResult | null>(null);
 
   const filteredSubjects = useMemo(
     () =>
@@ -149,6 +161,53 @@ export function SubjectManagementPanel() {
     }
   }
 
+  async function handleDownloadImportTemplate() {
+    setIsDownloadingTemplate(true);
+    setImportError("");
+    try {
+      const blob = await academicDataService.downloadSubjectImportTemplate();
+      downloadBlob(blob, "mau-import-mon-hoc.xlsx");
+    } catch (cause) {
+      setImportError(errorMessage(cause, "Không thể tải tệp Excel mẫu"));
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  }
+
+  async function handleImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setImportError("");
+    setImportResult(null);
+    if (!importFile) {
+      setImportError("Vui lòng chọn tệp Excel .xlsx");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(0);
+    try {
+      const result = await academicDataService.importSubjects(
+        importFile,
+        (percent) => setImportProgress(percent),
+      );
+      setImportResult(result);
+      setImportFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await loadSubjects();
+      if (result.failedCount === 0) {
+        setIsImportOpen(false);
+        notify(`Đã import ${result.createdCount} môn học`, {
+          key: "subjects-imported",
+        });
+      }
+    } catch (cause) {
+      setImportError(errorMessage(cause, "Không thể import tệp Excel"));
+    } finally {
+      setIsImporting(false);
+      setImportProgress(0);
+    }
+  }
+
   return (
     <div className="w-full">
       <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
@@ -174,7 +233,19 @@ export function SubjectManagementPanel() {
               }}
             />
           </div>
-          <div className="flex shrink-0 justify-end">
+          <div className="flex shrink-0 justify-end gap-2">
+            <Button
+              className="!h-[42px] !rounded-lg"
+              variant="outline"
+              onClick={() => {
+                setImportError("");
+                setImportResult(null);
+                setIsImportOpen(true);
+              }}
+            >
+              <Upload className="size-4" />
+              Import Excel
+            </Button>
             <Button className="!h-[42px] !rounded-lg" onClick={openCreate}>
               <Plus className="size-4" />
               Thêm môn học
@@ -279,6 +350,112 @@ export function SubjectManagementPanel() {
         />
       </section>
       <Modal
+        open={isImportOpen}
+        title="Import danh sách môn học"
+        description="Tải file mẫu, điền dữ liệu và import từ tệp Excel .xlsx."
+        onClose={() => {
+          if (!isImporting) setIsImportOpen(false);
+        }}
+      >
+        <form className="space-y-4" onSubmit={(event) => void handleImport(event)}>
+          <Button
+            className="w-full"
+            variant="secondary"
+            disabled={isDownloadingTemplate || isImporting}
+            onClick={() => void handleDownloadImportTemplate()}
+          >
+            {isDownloadingTemplate ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            Tải file Excel mẫu
+          </Button>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-700">
+              Danh sách môn học
+            </span>
+            <span className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center transition hover:border-brand-400 hover:bg-blue-50">
+              <FileSpreadsheet className="size-6 text-brand-600" />
+              <span className="mt-2 max-w-full truncate text-sm font-semibold text-slate-700">
+                {importFile?.name ?? "Chọn tệp .xlsx"}
+              </span>
+              <span className="mt-1 text-xs text-slate-400">Tối đa 10 MB</span>
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              disabled={isImporting}
+              onChange={(event) => {
+                setImportFile(event.target.files?.[0] ?? null);
+                setImportError("");
+                setImportResult(null);
+              }}
+            />
+          </label>
+
+          {isImporting ? (
+            <div>
+              <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
+                <span>Đang import môn học...</span>
+                <span>{importProgress}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-brand-600 transition-[width]"
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {importError ? (
+            <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
+              {importError}
+            </p>
+          ) : null}
+
+          {importResult ? (
+            <div className="rounded-xl border border-slate-200 p-4 text-sm">
+              <p className="font-bold text-emerald-700">
+                Đã tạo {importResult.createdCount}/{importResult.totalRows} môn học
+              </p>
+              {importResult.errors.length ? (
+                <div className="mt-3 max-h-36 space-y-1 overflow-y-auto border-t border-slate-100 pt-3 text-xs text-rose-600">
+                  {importResult.errors.map((item) => (
+                    <p key={`${item.row}-${item.code ?? ""}`}>
+                      Dòng {item.row}
+                      {item.code ? ` · ${item.code}` : ""}: {item.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              disabled={isImporting}
+              onClick={() => setIsImportOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button type="submit" disabled={isImporting || !importFile}>
+              {isImporting ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              Import môn học
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
         open={isModalOpen}
         title={editingSubject ? "Chỉnh sửa môn học" : "Thêm môn học"}
         description="Môn học được dùng chung qua nhiều năm học."
@@ -348,4 +525,15 @@ export function SubjectManagementPanel() {
       </ConfirmationDialog>
     </div>
   );
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }

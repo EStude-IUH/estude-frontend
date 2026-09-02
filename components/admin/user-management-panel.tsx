@@ -266,7 +266,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
         <div className="min-h-0 flex-1 overflow-auto">
           <Table
             className={`${
-              role === "STUDENT" ? "min-w-[2850px]" : "min-w-[2550px]"
+              role === "STUDENT" ? "min-w-[2120px]" : "min-w-[2060px]"
             } [&_td]:whitespace-nowrap`}
           >
             <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
@@ -277,9 +277,9 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                 <TableHead className="min-w-[130px]">Ngày sinh</TableHead>
                 <TableHead className="min-w-[110px]">Giới tính</TableHead>
                 <TableHead className="min-w-[180px]">Tỉnh/Thành phố</TableHead>
-                <TableHead className="min-w-[320px]">Địa chỉ cụ thể</TableHead>
-                <TableHead className="min-w-[170px]">CCCD</TableHead>
-                <TableHead className="min-w-[240px]">Email</TableHead>
+                {role !== "STUDENT" ? (
+                  <TableHead className="min-w-[240px]">Email</TableHead>
+                ) : null}
                 <TableHead className="min-w-[160px]">Số điện thoại</TableHead>
                 {role === "STUDENT" ? (
                   <>
@@ -299,11 +299,11 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableLoadingBarRow colSpan={role === "STUDENT" ? 16 : 14} />
+                <TableLoadingBarRow colSpan={role === "STUDENT" ? 13 : 12} />
               ) : null}
               {!isLoading && users.length === 0 ? (
                 <TableEmptyRow
-                  colSpan={role === "STUDENT" ? 16 : 14}
+                  colSpan={role === "STUDENT" ? 13 : 12}
                   message={`Không có ${roleLabels[role].toLowerCase()} phù hợp.`}
                 />
               ) : (
@@ -345,20 +345,11 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                     <TableCell className="min-w-36 text-slate-700">
                       {displayValue(user.provinceCity)}
                     </TableCell>
-                    <TableCell className="min-w-64 text-slate-700">
-                      <span
-                        className="block max-w-72 truncate"
-                        title={displayValue(user.specificAddress)}
-                      >
-                        {displayValue(user.specificAddress)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-xs text-slate-700">
-                      {displayValue(user.cccd)}
-                    </TableCell>
-                    <TableCell className="min-w-52 text-slate-700">
-                      {displayValue(user.email)}
-                    </TableCell>
+                    {role !== "STUDENT" ? (
+                      <TableCell className="min-w-52 text-slate-700">
+                        {displayValue(user.email)}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="whitespace-nowrap text-slate-700">
                       {displayValue(user.phoneNumber)}
                     </TableCell>

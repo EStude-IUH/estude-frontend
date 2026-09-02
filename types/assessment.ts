@@ -138,6 +138,17 @@ export interface Subject {
   deletedAt?: string | null;
 }
 
+export interface SubjectImportResult {
+  totalRows: number;
+  createdCount: number;
+  failedCount: number;
+  errors: Array<{
+    row: number;
+    code?: string;
+    message: string;
+  }>;
+}
+
 export interface GradeComponent {
   id: string;
   subjectId: string;

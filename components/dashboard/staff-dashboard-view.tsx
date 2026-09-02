@@ -187,6 +187,7 @@ export function StaffDashboardView() {
   );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [studentDetailName, setStudentDetailName] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -204,6 +205,7 @@ export function StaffDashboardView() {
     setIsAccountMenuOpen(false);
     setIsSettingsMenuOpen(pathname.startsWith("/admin/settings"));
     setIsUsersMenuOpen(pathname.startsWith("/admin/users"));
+    setStudentDetailName("");
   }, [pathname]);
 
   async function handleSignOut() {
@@ -343,9 +345,32 @@ export function StaffDashboardView() {
             <Menu className="size-5" />
           </button>
 
-          <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
-            {activeMenuLabel}
-          </h1>
+          {studentDetailId ? (
+            <nav
+              className="flex min-w-0 items-center gap-2 text-[13px] font-semibold sm:gap-3 sm:text-sm"
+              aria-label="Vị trí hiện tại"
+            >
+              <button
+                type="button"
+                onClick={() => router.push("/admin/users/students")}
+                className="shrink-0 text-slate-500 transition hover:text-brand-700"
+              >
+                Học sinh
+              </button>
+              <ChevronRight className="size-4 shrink-0 text-slate-400" />
+              <span className="hidden shrink-0 text-slate-500 sm:inline">
+                Chi tiết học sinh
+              </span>
+              <ChevronRight className="hidden size-4 shrink-0 text-slate-400 sm:block" />
+              <span className="truncate font-bold text-brand-700">
+                {studentDetailName || "Đang tải..."}
+              </span>
+            </nav>
+          ) : (
+            <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
+              {activeMenuLabel}
+            </h1>
+          )}
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <button
@@ -642,7 +667,7 @@ export function StaffDashboardView() {
               isTeacherClassesPage ||
               isTeacherMaterialsPage ||
               isTeacherClassDetailPage
-                ? "w-full"
+                ? `w-full ${studentDetailId ? "bg-[#F5F9FF]" : ""}`
                 : "mx-auto max-w-[1280px]"
             }
           >
@@ -668,7 +693,10 @@ export function StaffDashboardView() {
               <AccountManagementPanel />
             ) : isUsersPage ? (
               studentDetailId ? (
-                <StudentDetailPanel studentId={studentDetailId} />
+                <StudentDetailPanel
+                  studentId={studentDetailId}
+                  onStudentNameChange={setStudentDetailName}
+                />
               ) : (
                 <UserManagementPanel role={usersRole} />
               )

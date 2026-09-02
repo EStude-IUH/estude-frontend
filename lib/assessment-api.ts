@@ -1,4 +1,9 @@
-import { authenticatedRequest } from "@/lib/auth-api";
+import {
+  authenticatedBlobRequest,
+  authenticatedRequest,
+  authenticatedUploadRequest,
+  type UploadProgressPhase,
+} from "@/lib/auth-api";
 import type {
   Exam,
   ExamAttempt,
@@ -12,6 +17,7 @@ import type {
   QuestionFilters,
   QuestionInput,
   Subject,
+  SubjectImportResult,
   SubjectTeacherAssignment,
   StudentCourse,
   TeacherAssignedClass,
@@ -45,6 +51,21 @@ export const academicDataService = {
   },
   getSubjects(includeInactive = false): Promise<Subject[]> {
     return authenticatedRequest<Subject[]>(`/subjects${includeInactive ? "?includeInactive=true" : ""}`);
+  },
+  downloadSubjectImportTemplate(): Promise<Blob> {
+    return authenticatedBlobRequest("/subjects/import-template");
+  },
+  importSubjects(
+    file: File,
+    onProgress: (percent: number, phase: UploadProgressPhase) => void,
+  ): Promise<SubjectImportResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return authenticatedUploadRequest<SubjectImportResult>(
+      "/subjects/import",
+      formData,
+      onProgress,
+    );
   },
   getClasses(academicYearId?: string, includeInactive = false): Promise<SchoolClass[]> {
     const params = new URLSearchParams();
