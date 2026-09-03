@@ -196,9 +196,13 @@ function ScoreBadge({ value }: { value: number | null }) {
 export function StudentDetailPanel({
   studentId,
   onStudentNameChange,
+  viewerRole = "ADMIN",
+  backHref = "/admin/users/students",
 }: {
   studentId: string;
   onStudentNameChange?: (name: string) => void;
+  viewerRole?: "ADMIN" | "TEACHER";
+  backHref?: string;
 }) {
   const router = useRouter();
   const [data, setData] = useState<StudentOverview | null>(null);
@@ -206,13 +210,14 @@ export function StudentDetailPanel({
   const [selectedTermId, setSelectedTermId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const isTeacherView = viewerRole === "TEACHER";
 
   const loadDetail = useCallback(async () => {
     setIsLoading(true);
     setError("");
     try {
       const detail = await authenticatedRequest<StudentOverview>(
-        `/users/${encodeURIComponent(studentId)}/student-overview${process.env.NODE_ENV === "development" ? "?mockSubjectScores=true" : ""}`,
+        `/users/${encodeURIComponent(studentId)}/student-overview${viewerRole === "ADMIN" && process.env.NODE_ENV === "development" ? "?mockSubjectScores=true" : ""}`,
       );
       const defaultTerm =
         detail.semesterResults.find((term) => term.status === "ACTIVE") ??
@@ -232,7 +237,7 @@ export function StudentDetailPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [onStudentNameChange, studentId]);
+  }, [onStudentNameChange, studentId, viewerRole]);
 
   useEffect(() => {
     void loadDetail();
@@ -268,7 +273,7 @@ export function StudentDetailPanel({
           <div className="mt-4 flex justify-center gap-2">
             <Button
               variant="outline"
-              onClick={() => router.push("/admin/users/students")}
+              onClick={() => router.push(backHref)}
             >
               Quay lại danh sách
             </Button>
@@ -448,29 +453,40 @@ export function StudentDetailPanel({
 
   const renderWarnings = () =>
     data.warnings.length ? (
-      <div className="grid gap-3 lg:grid-cols-2">
+      <ul className="space-y-2" aria-label="Danh sách cảnh báo học tập">
         {data.warnings.map((warning) => (
-          <div
+          <li
             key={warning.id}
-            className={`rounded-xl border p-4 ${warning.level === "HIGH" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
+            className={`rounded-xl border px-3.5 py-3 ${warning.level === "HIGH" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
           >
             <div className="flex items-start gap-3">
               <AlertTriangle
-                className={`mt-0.5 size-5 shrink-0 ${warning.level === "HIGH" ? "text-rose-600" : "text-amber-600"}`}
+                className={`mt-0.5 size-4 shrink-0 ${warning.level === "HIGH" ? "text-rose-600" : "text-amber-600"}`}
               />
-              <div>
-                <p className="font-bold text-slate-900">{warning.title}</p>
-                <p className="mt-1 text-[13px] leading-5 text-slate-600">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-[13px] font-bold text-slate-900">
+                    {warning.title}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${warning.level === "HIGH" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}
+                  >
+                    {warning.level === "HIGH" ? "Mức cao" : "Cần chú ý"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
                   {warning.description}
                 </p>
-                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Cảnh báo học tập tự động
+                <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  {warning.type === "LOW_SCORE"
+                    ? "Cảnh báo điểm thấp"
+                    : "Cảnh báo chưa hoàn thành bài kiểm tra"}
                 </p>
               </div>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     ) : (
       <div className="grid min-h-52 place-items-center rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 text-center">
         <div>
@@ -508,50 +524,58 @@ export function StudentDetailPanel({
               Thông tin chung
             </h3>
             <dl className="mt-3 space-y-3 text-[13px]">
-              <div className="flex items-start gap-2.5">
-                <UserRound className="mt-0.5 size-4 shrink-0 text-slate-400" />
-                <div>
-                  <dt className="text-xs text-slate-400">
-                    Ngày sinh · Giới tính
-                  </dt>
-                  <dd className="mt-0.5 font-semibold text-slate-700">
-                    {formatDate(student.birthday)} ·{" "}
-                    {student.gender === "M"
-                      ? "Nam"
-                      : student.gender === "F"
-                        ? "Nữ"
-                        : "--"}
-                  </dd>
+              {!isTeacherView ? (
+                <>
+                  <div className="flex items-start gap-2.5">
+                    <UserRound className="mt-0.5 size-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="text-xs text-slate-400">
+                        Ngày sinh · Giới tính
+                      </dt>
+                      <dd className="mt-0.5 font-semibold text-slate-700">
+                        {formatDate(student.birthday)} ·{" "}
+                        {student.gender === "M"
+                          ? "Nam"
+                          : student.gender === "F"
+                            ? "Nữ"
+                            : "--"}
+                      </dd>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Phone className="mt-0.5 size-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="text-xs text-slate-400">Số điện thoại</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-700">
+                        {displayValue(student.phoneNumber)}
+                      </dd>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Mail className="mt-0.5 size-4 shrink-0 text-slate-400" />
+                    <div className="min-w-0">
+                      <dt className="text-xs text-slate-400">Email</dt>
+                      <dd className="mt-0.5 break-all font-semibold text-slate-700">
+                        {displayValue(student.email)}
+                      </dd>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="text-xs text-slate-400">Địa chỉ</dt>
+                      <dd className="mt-0.5 font-semibold leading-5 text-slate-700">
+                        {displayValue(student.specificAddress)},{" "}
+                        {displayValue(student.provinceCity)}
+                      </dd>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-500">
+                  Thông tin liên hệ và dữ liệu cá nhân được ẩn theo quyền giáo viên.
                 </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Phone className="mt-0.5 size-4 shrink-0 text-slate-400" />
-                <div>
-                  <dt className="text-xs text-slate-400">Số điện thoại</dt>
-                  <dd className="mt-0.5 font-semibold text-slate-700">
-                    {displayValue(student.phoneNumber)}
-                  </dd>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Mail className="mt-0.5 size-4 shrink-0 text-slate-400" />
-                <div className="min-w-0">
-                  <dt className="text-xs text-slate-400">Email</dt>
-                  <dd className="mt-0.5 break-all font-semibold text-slate-700">
-                    {displayValue(student.email)}
-                  </dd>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" />
-                <div>
-                  <dt className="text-xs text-slate-400">Địa chỉ</dt>
-                  <dd className="mt-0.5 font-semibold leading-5 text-slate-700">
-                    {displayValue(student.specificAddress)},{" "}
-                    {displayValue(student.provinceCity)}
-                  </dd>
-                </div>
-              </div>
+              )}
               <div className="flex items-start gap-2.5">
                 <CalendarDays className="mt-0.5 size-4 shrink-0 text-slate-400" />
                 <div>
@@ -714,7 +738,7 @@ export function StudentDetailPanel({
                   <h3 className="mb-2 shrink-0 text-sm font-extrabold text-slate-900">
                     Cảnh báo cần chú ý
                   </h3>
-                  <div className="min-h-0 flex-1 overflow-y-auto [&>*]:!min-h-0 [&>*]:h-full">
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                     {renderWarnings()}
                   </div>
                 </div>

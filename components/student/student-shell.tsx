@@ -164,8 +164,13 @@ export function StudentShell({ children }: { children: ReactNode }) {
                 <span className="grid size-9 place-items-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
                   {initials}
                 </span>
-                <span className="hidden max-w-36 truncate text-sm font-bold text-slate-800 sm:block">
-                  {user.fullName}
+                <span className="hidden min-w-0 text-left sm:block">
+                  <span className="block max-w-40 truncate text-sm font-bold leading-5 text-slate-800">
+                    {user.fullName}
+                  </span>
+                  <span className="block max-w-40 truncate font-mono text-[11px] font-semibold leading-4 text-brand-600">
+                    Mã HS: {user.accountName}
+                  </span>
                 </span>
                 <ChevronDown
                   className={`size-4 text-slate-400 transition-transform ${isAccountMenuOpen ? "rotate-180" : ""}`}

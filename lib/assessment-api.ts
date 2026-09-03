@@ -11,6 +11,7 @@ import type {
   ExamAnswer,
   AcademicYear,
   ClassRoster,
+  AvailableStudentsPage,
   GradeComponent,
   SchoolClass,
   Question,
@@ -20,7 +21,9 @@ import type {
   SubjectImportResult,
   SubjectTeacherAssignment,
   StudentCourse,
+  StudentCourseDetail,
   TeacherAssignedClass,
+  TeacherManagedStudent,
   ClassTopic,
   ClassTopicInput,
   LearningMaterial,
@@ -36,6 +39,8 @@ import type {
   StudyAnalysis,
   StudyPracticeSet,
   TeacherDifficultySettings,
+  TeacherExamDefaults,
+  TeacherExamDefaultSettings,
 } from "@/types/assessment";
 
 export const academicDataService = {
@@ -49,8 +54,13 @@ export const academicDataService = {
     const query = params.toString();
     return authenticatedRequest<Term[]>(`/terms${query ? `?${query}` : ""}`);
   },
-  getSubjects(includeInactive = false): Promise<Subject[]> {
-    return authenticatedRequest<Subject[]>(`/subjects${includeInactive ? "?includeInactive=true" : ""}`);
+  getSubjects(includeInactive = false, search?: string, limit?: number): Promise<Subject[]> {
+    const params = new URLSearchParams();
+    if (includeInactive) params.set("includeInactive", "true");
+    if (search?.trim()) params.set("search", search.trim());
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return authenticatedRequest<Subject[]>(`/subjects${query ? `?${query}` : ""}`);
   },
   downloadSubjectImportTemplate(): Promise<Blob> {
     return authenticatedBlobRequest("/subjects/import-template");
@@ -67,10 +77,12 @@ export const academicDataService = {
       onProgress,
     );
   },
-  getClasses(academicYearId?: string, includeInactive = false): Promise<SchoolClass[]> {
+  getClasses(academicYearId?: string, includeInactive = false, search?: string, limit?: number): Promise<SchoolClass[]> {
     const params = new URLSearchParams();
     if (academicYearId) params.set("academicYearId", academicYearId);
     if (includeInactive) params.set("includeInactive", "true");
+    if (search?.trim()) params.set("search", search.trim());
+    if (limit) params.set("limit", String(limit));
     const query = params.toString();
     return authenticatedRequest<SchoolClass[]>(`/classes${query ? `?${query}` : ""}`);
   },
@@ -135,14 +147,16 @@ export const academicDataService = {
   getClassRoster(classId: string): Promise<ClassRoster> {
     return authenticatedRequest<ClassRoster>(`/classes/${encodeURIComponent(classId)}/roster`);
   },
-  getAvailableStudents(classId: string): Promise<ClassRoster["students"]> {
-    return authenticatedRequest<ClassRoster["students"]>(`/classes/${encodeURIComponent(classId)}/available-students`);
-  },
-  assignClassTeacher(classId: string, userId: string): Promise<Record<string, unknown>> {
-    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers`, { method: "POST", body: JSON.stringify({ userId }) });
-  },
-  removeClassTeacher(classId: string, teacherId: string): Promise<Record<string, unknown>> {
-    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers/${encodeURIComponent(teacherId)}`, { method: "DELETE" });
+  getAvailableStudents(
+    classId: string,
+    filters: { offset?: number; limit?: number; search?: string } = {},
+  ): Promise<AvailableStudentsPage> {
+    const params = new URLSearchParams({
+      offset: String(filters.offset ?? 0),
+      limit: String(filters.limit ?? 20),
+    });
+    if (filters.search?.trim()) params.set("search", filters.search.trim());
+    return authenticatedRequest<AvailableStudentsPage>(`/classes/${encodeURIComponent(classId)}/available-students?${params.toString()}`);
   },
   assignClassStudent(classId: string, userId: string): Promise<Record<string, unknown>> {
     return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/students`, { method: "POST", body: JSON.stringify({ userId }) });
@@ -150,7 +164,7 @@ export const academicDataService = {
   removeClassStudent(classId: string, studentId: string): Promise<Record<string, unknown>> {
     return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/students/${encodeURIComponent(studentId)}`, { method: "DELETE" });
   },
-  getSubjectTeacherAssignments(filters: { classId?: string; subjectId?: string; teacherId?: string } = {}): Promise<SubjectTeacherAssignment[]> {
+  getSubjectTeacherAssignments(filters: { classId?: string; subjectId?: string; teacherId?: string; search?: string } = {}): Promise<SubjectTeacherAssignment[]> {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
     const query = params.toString();
@@ -159,8 +173,26 @@ export const academicDataService = {
   getTeacherAssignedClasses(): Promise<TeacherAssignedClass[]> {
     return authenticatedRequest<TeacherAssignedClass[]>("/teacher/assigned-classes");
   },
+  getTeacherManagedStudents(): Promise<TeacherManagedStudent[]> {
+    return authenticatedRequest<TeacherManagedStudent[]>("/teacher/students");
+  },
   getStudentCourses(): Promise<StudentCourse[]> {
     return authenticatedRequest<StudentCourse[]>("/student/courses");
+  },
+  getStudentCourse(classId: string, subjectId: string): Promise<StudentCourseDetail> {
+    return authenticatedRequest<StudentCourseDetail>(
+      `/student/courses/${encodeURIComponent(classId)}/${encodeURIComponent(subjectId)}`,
+    );
+  },
+  getStudentMaterialDownloadUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
+    return authenticatedRequest<{ url: string; expiresIn: number }>(
+      `/student/materials/${encodeURIComponent(materialId)}/download-url`,
+    );
+  },
+  getStudentMaterialPreviewUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
+    return authenticatedRequest<{ url: string; expiresIn: number }>(
+      `/student/materials/${encodeURIComponent(materialId)}/preview-url`,
+    );
   },
   getTeacherAssignedClass(classId: string): Promise<TeacherAssignedClass> {
     return authenticatedRequest<TeacherAssignedClass>(`/teacher/assigned-classes/${encodeURIComponent(classId)}`);
@@ -235,6 +267,9 @@ export const academicDataService = {
   },
   getMaterialDownloadUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
     return authenticatedRequest<{ url: string; expiresIn: number }>(`/teacher/materials/${encodeURIComponent(materialId)}/download-url`);
+  },
+  getMaterialPreviewUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
+    return authenticatedRequest<{ url: string; expiresIn: number }>(`/teacher/materials/${encodeURIComponent(materialId)}/preview-url`);
   },
   deleteLearningMaterial(materialId: string): Promise<LearningMaterial> {
     return authenticatedRequest<LearningMaterial>(`/teacher/materials/${encodeURIComponent(materialId)}`, { method: "DELETE" });
@@ -328,6 +363,25 @@ export const aiQuestionSettingsService = {
       method: "PUT",
       body: JSON.stringify({ levels }),
     });
+  },
+};
+
+export const teacherSettingsService = {
+  getExamDefaults(): Promise<TeacherExamDefaultSettings> {
+    return authenticatedRequest<TeacherExamDefaultSettings>(
+      "/teacher-settings/exam-defaults",
+    );
+  },
+  updateExamDefaults(
+    examDefaults: TeacherExamDefaults,
+  ): Promise<TeacherExamDefaultSettings> {
+    return authenticatedRequest<TeacherExamDefaultSettings>(
+      "/teacher-settings/exam-defaults",
+      {
+        method: "PUT",
+        body: JSON.stringify(examDefaults),
+      },
+    );
   },
 };
 

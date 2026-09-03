@@ -10,8 +10,9 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { Check, ChevronDown, Eye, EyeOff, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, Eye, EyeOff, LoaderCircle, Search, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { normalizeSearchKeyword } from "@/lib/search-keyword";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   icon?: LucideIcon;
@@ -211,6 +212,11 @@ export interface CustomSelectProps {
   disabled?: boolean;
   ariaLabel?: string;
   showSelectedIndicator?: boolean;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  onSearchChange?: (search: string) => void;
+  isSearching?: boolean;
 }
 
 export function CustomSelect({
@@ -227,19 +233,53 @@ export function CustomSelect({
   disabled = false,
   ariaLabel,
   showSelectedIndicator = true,
+  searchable = false,
+  searchPlaceholder = "Tìm kiếm...",
+  emptyMessage = "Không tìm thấy kết quả",
+  onSearchChange,
+  isSearching = false,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const labelId = useId();
   const selectedOption = options.find((option) => option.value === value);
+  const normalizedSearch = normalizeSearchKeyword(search);
+  const usesApiSearch = searchable && Boolean(onSearchChange);
+  const filteredOptions = searchable && !usesApiSearch && normalizedSearch
+    ? options.filter((option) =>
+        normalizeSearchKeyword(option.label, option.value).includes(normalizedSearch),
+      )
+    : options;
+
+  function clearPendingSearch() {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = null;
+  }
+
+  function handleSearchChange(nextSearch: string) {
+    setSearch(nextSearch);
+    if (!onSearchChange) return;
+    clearPendingSearch();
+    searchTimerRef.current = setTimeout(() => onSearchChange(nextSearch), 300);
+  }
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setSearch("");
+        clearPendingSearch();
+      }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setSearch("");
+        clearPendingSearch();
+      }
     }
 
     document.addEventListener("mousedown", handlePointerDown);
@@ -247,6 +287,7 @@ export function CustomSelect({
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      clearPendingSearch();
     };
   }, []);
 
@@ -267,7 +308,13 @@ export function CustomSelect({
         aria-expanded={open}
         aria-label={ariaLabel}
         aria-labelledby={label ? labelId : undefined}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          setSearch("");
+          clearPendingSearch();
+          if (nextOpen) onSearchChange?.("");
+        }}
         className={cn(
           "flex h-10 w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
           open && "border-brand-400 ring-4 ring-blue-100",
@@ -296,7 +343,36 @@ export function CustomSelect({
             menuClassName,
           )}
         >
-          {options.map((option) => {
+          {searchable ? (
+            <div className="sticky top-0 z-10 bg-white p-1 pb-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={search}
+                  autoFocus
+                  onChange={(event) => handleSearchChange(event.target.value)}
+                  placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {isSearching ? (
+            <p className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-slate-400">
+              <LoaderCircle className="size-4 animate-spin" /> Đang tìm kiếm...
+            </p>
+          ) : null}
+
+          {!isSearching && filteredOptions.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-slate-400">
+              {emptyMessage}
+            </p>
+          ) : null}
+
+          {!isSearching ? filteredOptions.map((option) => {
             const selected = option.value === value;
             return (
               <button
@@ -307,6 +383,8 @@ export function CustomSelect({
                 onClick={() => {
                   onValueChange(option.value);
                   setOpen(false);
+                  setSearch("");
+                  clearPendingSearch();
                 }}
                 className={cn(
                   "flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left text-sm transition",
@@ -322,7 +400,7 @@ export function CustomSelect({
                 ) : null}
               </button>
             );
-          })}
+          }) : null}
         </div>
       ) : null}
     </div>

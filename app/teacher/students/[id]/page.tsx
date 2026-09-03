@@ -3,13 +3,13 @@ import { RoleGate } from "@/components/auth/role-gate";
 import { StaffDashboardView } from "@/components/dashboard/staff-dashboard-view";
 
 export const metadata: Metadata = {
-  title: "Phân công giáo viên môn học",
-  description: "Phân công giáo viên giảng dạy theo môn học và lớp học.",
+  title: "Chi tiết học sinh",
+  description: "Thông tin học tập của học sinh thuộc lớp được phân công.",
 };
 
-export default function SubjectAssignmentsPage() {
+export default function TeacherStudentDetailPage() {
   return (
-    <RoleGate allowedRole="ADMIN">
+    <RoleGate allowedRole="TEACHER">
       <StaffDashboardView />
     </RoleGate>
   );

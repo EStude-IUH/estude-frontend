@@ -3,22 +3,31 @@
 import Link from "next/link";
 import {
   FileQuestion,
-  ListFilter,
   Pencil,
   Plus,
-  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AssessmentShell,
   ErrorPanel,
-  LoadingPanel,
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/form-control";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmptyRow,
+  TableHead,
+  TableHeader,
+  TableLoadingBarRow,
+} from "@/components/ui/data-table";
+import { DataTableFooter } from "@/components/ui/data-table-footer";
+import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
+import { Select } from "@/components/ui/form-control";
 import { questionBankService } from "@/lib/assessment-api";
 import {
   DIFFICULTY_LABELS,
@@ -36,20 +45,24 @@ const difficultyTone: Record<Difficulty, string> = {
 };
 
 export function QuestionBankPage() {
+  const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
   const [type, setType] = useState<QuestionType | "">("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       setQuestions(
         await questionBankService.getQuestions({
-          search: search || undefined,
+          search: submittedSearch || undefined,
           difficulty: difficulty || undefined,
           type: type || undefined,
         }),
@@ -63,13 +76,18 @@ export function QuestionBankPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [difficulty, submittedSearch, type]);
 
   useEffect(() => {
     void load();
-    // Filter changes intentionally trigger a server refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficulty, type]);
+  }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(questions.length / pageSize));
+  const pagedQuestions = questions.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   async function remove(question: Question) {
     if (
@@ -92,24 +110,27 @@ export function QuestionBankPage() {
     <AssessmentShell>
       <PageHeading title="Ngân hàng câu hỏi" />
 
-      <section className="mb-4 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
-        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center">
-          <div className="grid min-w-0 flex-1 gap-2.5 md:grid-cols-[minmax(260px,1fr)_170px_190px_auto]">
-            <Input
-              icon={Search}
+      <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+        <section className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[360px_170px_190px]">
+            <DebouncedSearchInput
+              className="!h-[42px] !rounded-lg focus:!ring-0"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void load();
+              onValueChange={setSearch}
+              onSearch={(value) => {
+                setPage(1);
+                setSubmittedSearch(value);
               }}
               placeholder="Tìm theo nội dung câu hỏi..."
-              aria-label="Tìm câu hỏi"
             />
             <Select
+              className="!h-[42px] !rounded-lg focus:!ring-0"
               value={difficulty}
-              onChange={(event) =>
-                setDifficulty(event.target.value as Difficulty | "")
-              }
+              onChange={(event) => {
+                setPage(1);
+                setDifficulty(event.target.value as Difficulty | "");
+              }}
               aria-label="Lọc theo độ khó"
             >
               <option value="">Mọi độ khó</option>
@@ -120,10 +141,12 @@ export function QuestionBankPage() {
               ))}
             </Select>
             <Select
+              className="!h-[42px] !rounded-lg focus:!ring-0"
               value={type}
-              onChange={(event) =>
-                setType(event.target.value as QuestionType | "")
-              }
+              onChange={(event) => {
+                setPage(1);
+                setType(event.target.value as QuestionType | "");
+              }}
               aria-label="Lọc theo loại câu hỏi"
             >
               <option value="">Mọi loại câu hỏi</option>
@@ -133,110 +156,139 @@ export function QuestionBankPage() {
                 </option>
               ))}
             </Select>
-            <Button variant="secondary" onClick={() => void load()}>
-              <ListFilter className="size-4" />
-              Lọc
-            </Button>
-          </div>
+            </div>
 
-          <div className="flex shrink-0 flex-wrap justify-end gap-2 xl:border-l xl:border-slate-200 xl:pl-2.5">
-            <Link href="/teacher/question-bank/generate">
-              <Button variant="secondary">
-                <Sparkles className="size-4" />
-                Tạo bằng AI
-              </Button>
-            </Link>
-            <Link href="/teacher/question-bank/new">
-              <Button>
-                <Plus className="size-4" />
-                Tạo câu hỏi
-              </Button>
-            </Link>
+            <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+              <Link href="/teacher/question-bank/generate">
+                <Button variant="secondary" className="!h-[42px] !rounded-lg">
+                  <Sparkles className="size-4" />
+                  Tạo bằng AI
+                </Button>
+              </Link>
+              <Link href="/teacher/question-bank/new">
+                <Button className="!h-[42px] !rounded-lg">
+                  <Plus className="size-4" />
+                  Tạo câu hỏi
+                </Button>
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {error ? (
-        <div className="mb-4">
-          <ErrorPanel message={error} />
-        </div>
-      ) : null}
-      {loading ? (
-        <LoadingPanel />
-      ) : questions.length === 0 ? (
-        <div className="grid min-h-52 place-items-center rounded-xl border border-dashed border-slate-300 bg-white px-6 text-center">
-          <div>
-            <span className="mx-auto grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
-              <FileQuestion className="size-5" />
-            </span>
-            <p className="mt-3 font-bold text-slate-700">
-              Chưa có câu hỏi phù hợp
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              Thử đổi bộ lọc hoặc tạo câu hỏi mới.
-            </p>
+        <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+          {error ? (
+            <div className="m-4">
+              <ErrorPanel message={error} />
+            </div>
+          ) : null}
+          <div className="min-h-0 shrink overflow-auto">
+            <Table className="min-w-[1100px]">
+              <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
+                <tr>
+                  <TableHead className="w-14 text-center">#</TableHead>
+                  <TableHead>Nội dung</TableHead>
+                  <TableHead className="w-56">Môn / Chủ đề</TableHead>
+                  <TableHead className="w-40">Loại</TableHead>
+                  <TableHead className="w-36">Độ khó</TableHead>
+                  <TableHead className="w-32 text-right">Thao tác</TableHead>
+                </tr>
+              </TableHeader>
+              <TableBody>
+                {loading ? <TableLoadingBarRow colSpan={6} /> : null}
+                {!loading && questions.length === 0 ? (
+                  <TableEmptyRow
+                    colSpan={6}
+                    icon={<FileQuestion className="size-5 text-slate-400" />}
+                    message="Chưa có câu hỏi phù hợp"
+                  />
+                ) : null}
+                {!loading
+                  ? pagedQuestions.map((question, index) => (
+                      <tr
+                        key={question.id}
+                        className="cursor-pointer transition hover:bg-slate-50/70"
+                        onClick={() =>
+                          router.push(`/teacher/question-bank/${question.id}/edit`)
+                        }
+                      >
+                        <TableCell className="text-center text-xs text-slate-400">
+                          {(page - 1) * pageSize + index + 1}
+                        </TableCell>
+                        <TableCell>
+                          <p className="max-w-4xl font-bold leading-6 text-slate-900">
+                            {question.content}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {question.options.length} lựa chọn · {question.defaultPoints} điểm
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-semibold text-slate-700">
+                            {question.subjectName || "Chưa phân loại"}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {question.topicName || "Tạo từ tài liệu"}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                            {QUESTION_TYPE_LABELS[question.type]}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${difficultyTone[question.difficulty]}`}
+                          >
+                            {DIFFICULTY_LABELS[question.difficulty]}
+                          </span>
+                        </TableCell>
+                        <TableCell onClick={(event) => event.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Chỉnh sửa"
+                              aria-label={`Chỉnh sửa câu hỏi ${question.content}`}
+                              onClick={() =>
+                                router.push(`/teacher/question-bank/${question.id}/edit`)
+                              }
+                            >
+                              <Pencil size={18} strokeWidth={2.5} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                              title="Xóa"
+                              aria-label={`Xóa câu hỏi ${question.content}`}
+                              onClick={() => void remove(question)}
+                            >
+                              <Trash2 size={18} strokeWidth={2.5} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </tr>
+                    ))
+                  : null}
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="hidden grid-cols-[minmax(0,1fr)_170px_130px_130px_88px] gap-4 border-b border-slate-200 bg-slate-50/80 px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:grid">
-            <span>Nội dung</span>
-            <span>Môn / chủ đề</span>
-            <span>Loại</span>
-            <span>Độ khó</span>
-            <span />
-          </div>
-          {questions.map((question) => (
-            <article
-              key={question.id}
-              className="grid gap-3 border-b border-slate-100 px-5 py-4 last:border-0 hover:bg-slate-50/50 md:grid-cols-[minmax(0,1fr)_170px_130px_130px_88px] md:items-center md:gap-4"
-            >
-              <div>
-                <p className="font-bold leading-6 text-slate-900">
-                  {question.content}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {question.options.length} lựa chọn · {question.defaultPoints}{" "}
-                  điểm
-                </p>
-              </div>
-              <div className="text-sm">
-                <p className="font-semibold text-slate-700">
-                  {question.subjectName || "Chưa phân loại"}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {question.topicName || "Tạo từ tài liệu"}
-                </p>
-              </div>
-              <span className="w-fit rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                {QUESTION_TYPE_LABELS[question.type]}
-              </span>
-              <span
-                className={`w-fit rounded-md px-2.5 py-1 text-xs font-bold ${difficultyTone[question.difficulty]}`}
-              >
-                {DIFFICULTY_LABELS[question.difficulty]}
-              </span>
-              <div className="flex gap-1 md:justify-end">
-                <Link
-                  href={`/teacher/question-bank/${question.id}/edit`}
-                  className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-brand-700"
-                  aria-label="Sửa câu hỏi"
-                >
-                  <Pencil className="size-4" />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => void remove(question)}
-                  className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                  aria-label="Xóa câu hỏi"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+          <DataTableFooter
+            className="shrink-0 bg-white"
+            rowCount={pagedQuestions.length}
+            totalItems={questions.length}
+            itemLabel="câu hỏi"
+            page={page}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        </section>
+      </div>
     </AssessmentShell>
   );
 }

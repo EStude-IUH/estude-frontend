@@ -17,6 +17,7 @@ import {
   Menu,
   School,
   Settings,
+  UsersRound,
   X,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -69,6 +70,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       icon: School,
     },
     {
+      href: "/teacher/students",
+      label: "Học sinh",
+      icon: UsersRound,
+    },
+    {
       href: "/teacher/materials",
       label: "Thư viện tài liệu",
       icon: Library,
@@ -79,6 +85,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       icon: FilePlus2,
     },
     { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
+    {
+      href: "/teacher/settings/exam-defaults",
+      label: "Cấu hình",
+      icon: Settings,
+    },
   ];
 
   const initials =
@@ -251,7 +262,17 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       <main
         className={`min-h-screen px-3.5 pb-8 pt-[74px] transition-[margin] ${isSidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[266px]"}`}
       >
-        <div className="mx-auto max-w-[1280px]">{children}</div>
+        <div
+          className={
+            pathname.startsWith("/teacher/question-bank")
+              || pathname === "/teacher/exams"
+              || pathname === "/teacher/settings/exam-defaults"
+              ? "w-full"
+              : "mx-auto max-w-[1280px]"
+          }
+        >
+          {children}
+        </div>
       </main>
     </div>
   );

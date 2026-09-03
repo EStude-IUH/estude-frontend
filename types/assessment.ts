@@ -195,6 +195,14 @@ export interface ClassRoster {
   students: ClassRosterMember[];
 }
 
+export interface AvailableStudentsPage {
+  items: ClassRosterMember[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export interface SubjectTeacherAssignment {
   id: string;
   classId: string;
@@ -209,10 +217,11 @@ export interface SubjectTeacherAssignment {
     id: string;
     fullName: string;
     accountName: string;
+    email?: string | null;
     avatarUrl: string | null;
     status: string;
   };
-  subject: Pick<Subject, "id" | "code" | "name">;
+  subject: Pick<Subject, "id" | "code" | "name"> & { description?: string };
   schoolClass: Pick<SchoolClass, "id" | "code" | "name" | "academicYearId">;
 }
 
@@ -226,7 +235,52 @@ export interface TeacherAssignedClass {
   subjects: Array<Pick<Subject, "id" | "code" | "name">>;
 }
 
+export interface TeacherManagedStudent {
+  id: string;
+  fullName: string;
+  accountName: string;
+  email: string | null;
+  avatarUrl: string | null;
+  status: "PENDING" | "ACTIVE" | "INACTIVE" | "LOCKED";
+  keyword?: string | null;
+  classes: Array<Pick<SchoolClass, "id" | "code" | "name">>;
+}
+
 export type StudentCourse = SubjectTeacherAssignment;
+
+export type StudentCourseMaterial = Omit<
+  LearningMaterial,
+  "s3Key" | "keyword" | "deletedAt"
+>;
+
+export interface StudentCourseTopic {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  materials: StudentCourseMaterial[];
+}
+
+export interface StudentCourseDetail extends StudentCourse {
+  enrollment: { joinedAt: string };
+  academicYear: Pick<
+    AcademicYear,
+    "id" | "name" | "startsAt" | "endsAt" | "status"
+  > | null;
+  terms: Array<
+    Pick<
+      Term,
+      "id" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status" | "isActive"
+    >
+  >;
+  studentCount: number;
+  topics: StudentCourseTopic[];
+}
 
 export interface LearningMaterial {
   id: string;
@@ -332,6 +386,22 @@ export interface ExamSettings {
   shuffleAnswers: boolean;
   showScoreImmediately: boolean;
   showCorrectAnswers: boolean;
+}
+
+export interface TeacherExamDefaults {
+  durationMinutes: number;
+  attemptsAllowed: number;
+  availabilityDays: number;
+  shuffleQuestions: boolean;
+  shuffleAnswers: boolean;
+  showScoreImmediately: boolean;
+  showCorrectAnswers: boolean;
+}
+
+export interface TeacherExamDefaultSettings {
+  examDefaults: TeacherExamDefaults;
+  configured: boolean;
+  updatedAt: string | null;
 }
 
 export interface Exam {

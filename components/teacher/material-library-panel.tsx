@@ -2,20 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BookCopy,
-  CheckSquare2,
   Download,
+  Eye,
   FileText,
   FolderInput,
-  Library,
   LoaderCircle,
-  Search,
   Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmptyRow,
+  TableHead,
+  TableHeader,
+  TableLoadingBarRow,
+} from "@/components/ui/data-table";
+import { DataTableFooter } from "@/components/ui/data-table-footer";
+import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
@@ -45,6 +53,64 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
+type MaterialPreviewKind = "native" | "office" | "unsupported";
+
+function getMaterialPreviewKind(material: LearningMaterial): MaterialPreviewKind {
+  const mimeType = material.mimeType.toLowerCase();
+  const extension = material.originalName.split(".").pop()?.toLowerCase() ?? "";
+  if (
+    mimeType === "application/pdf"
+    || mimeType.startsWith("image/")
+    || mimeType.startsWith("text/")
+    || ["pdf", "txt", "csv", "jpg", "jpeg", "png", "gif", "webp", "svg"].includes(extension)
+  ) {
+    return "native";
+  }
+  if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension)) {
+    return "office";
+  }
+  return "unsupported";
+}
+
+function MaterialPreview({
+  material,
+  url,
+}: {
+  material: LearningMaterial;
+  url: string;
+}) {
+  const previewKind = getMaterialPreviewKind(material);
+  if (previewKind === "unsupported") {
+    return (
+      <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+        <div>
+          <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-blue-50 text-brand-600">
+            <FileText size={26} strokeWidth={2.25} />
+          </span>
+          <h3 className="mt-4 font-extrabold text-slate-900">
+            Định dạng này chưa hỗ trợ xem trực tiếp
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">
+            Bạn vẫn có thể mở trong tab mới hoặc tải tài liệu xuống thiết bị.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const source = previewKind === "office"
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
+    : url;
+  return (
+    <iframe
+      src={source}
+      title={`Xem trước ${material.originalName}`}
+      className="h-[calc(100dvh-7rem)] min-h-[520px] w-full rounded-lg border border-slate-200 bg-slate-50"
+      allowFullScreen
+    />
+  );
+}
+
 export function TeacherMaterialLibraryPanel() {
   const { notify } = useActionNotification();
   const [materials, setMaterials] = useState<LearningMaterial[]>([]);
@@ -53,10 +119,17 @@ export function TeacherMaterialLibraryPanel() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [targets, setTargets] = useState<Record<string, TargetDraft>>({});
   const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [previewMaterial, setPreviewMaterial] = useState<LearningMaterial | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const [deletingMaterial, setDeletingMaterial] = useState<LearningMaterial | null>(null);
   const [error, setError] = useState("");
 
@@ -88,22 +161,31 @@ export function TeacherMaterialLibraryPanel() {
 
   const filteredMaterials = useMemo(() => {
     return materials.filter((material) =>
-      matchesSearchKeyword(material.keyword, search),
+      matchesSearchKeyword(material.keyword, submittedSearch),
     );
-  }, [materials, search]);
+  }, [materials, submittedSearch]);
 
-  const assignedMaterialCount = materials.filter((item) => (item.assignments?.length ?? 0) > 0).length;
-  const allFilteredSelected = filteredMaterials.length > 0 && filteredMaterials.every((item) => selectedIds.includes(item.id));
+  const totalPages = Math.max(1, Math.ceil(filteredMaterials.length / pageSize));
+  const pagedMaterials = filteredMaterials.slice(
+    (page - 1) * pageSize,
+    page * pageSize,
+  );
+  const allPageSelected = pagedMaterials.length > 0
+    && pagedMaterials.every((item) => selectedIds.includes(item.id));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   function toggleMaterial(id: string) {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
-  function toggleAllFiltered() {
-    const filteredIds = filteredMaterials.map((item) => item.id);
-    setSelectedIds((current) => allFilteredSelected
-      ? current.filter((id) => !filteredIds.includes(id))
-      : [...new Set([...current, ...filteredIds])]);
+  function toggleAllPage() {
+    const pageIds = pagedMaterials.map((item) => item.id);
+    setSelectedIds((current) => allPageSelected
+      ? current.filter((id) => !pageIds.includes(id))
+      : [...new Set([...current, ...pageIds])]);
   }
 
   async function uploadMaterials(files: FileList | null) {
@@ -201,6 +283,27 @@ export function TeacherMaterialLibraryPanel() {
     }
   }
 
+  async function openPreview(material: LearningMaterial) {
+    setPreviewMaterial(material);
+    setPreviewUrl("");
+    setPreviewError("");
+    setIsPreviewLoading(true);
+    try {
+      const result = await academicDataService.getMaterialPreviewUrl(material.id);
+      setPreviewUrl(result.url);
+    } catch (cause) {
+      setPreviewError(errorMessage(cause, "Không thể mở bản xem trước tài liệu"));
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }
+
+  function closePreview() {
+    setPreviewMaterial(null);
+    setPreviewUrl("");
+    setPreviewError("");
+  }
+
   async function deleteMaterial() {
     if (!deletingMaterial) return;
     setIsAssigning(true);
@@ -218,73 +321,189 @@ export function TeacherMaterialLibraryPanel() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">Teacher library</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Thư viện tài liệu</h2>
-            <p className="mt-1 text-sm text-slate-500">Tải lên một lần, chọn nhiều tệp và phân phối đến nhiều lớp học.</p>
+    <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+      <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)]">
+            <DebouncedSearchInput
+              className="!h-[42px] !rounded-lg focus:!ring-0"
+              value={search}
+              onValueChange={setSearch}
+              onSearch={(value) => {
+                setPage(1);
+                setSubmittedSearch(value);
+              }}
+              placeholder="Tìm theo tên, lớp hoặc chủ đề"
+            />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!selectedIds.length || isLoading} onClick={openAssignModal}>
-              <FolderInput className="size-4" /> Gán {selectedIds.length ? `${selectedIds.length} tài liệu` : "vào lớp"}
+          <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+            <Button
+              variant="outline"
+              className="!h-[42px] !rounded-lg"
+              disabled={!selectedIds.length || isLoading}
+              onClick={openAssignModal}
+            >
+              <FolderInput className="size-4" />
+              Gán {selectedIds.length ? `${selectedIds.length} tài liệu` : "vào lớp"}
             </Button>
-            <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 ${isUploading ? "pointer-events-none opacity-60" : ""}`}>
+            <label className={`inline-flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 ${isUploading ? "pointer-events-none opacity-60" : ""}`}>
               {isUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
               {isUploading ? "Đang tải lên..." : "Tải tài liệu"}
               <input type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(event.target.files); event.currentTarget.value = ""; }} />
             </label>
           </div>
         </div>
-      </section>
-
-      {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard icon={<Library className="size-5" />} label="Tổng tài liệu" value={materials.length} tone="bg-blue-50 text-brand-700" />
-        <StatCard icon={<BookCopy className="size-5" />} label="Đã phân phối" value={assignedMaterialCount} tone="bg-emerald-50 text-emerald-700" />
-        <StatCard icon={<CheckSquare2 className="size-5" />} label="Đang chọn" value={selectedIds.length} tone="bg-violet-50 text-violet-700" />
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
-        <header className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex items-center gap-3 text-sm font-bold text-slate-700">
-            <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} className="size-4 rounded border-slate-300 accent-brand-600" />
-            Chọn tất cả ({filteredMaterials.length})
-          </label>
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo tên, lớp hoặc chủ đề" className="h-10 w-full rounded-xl border border-slate-200 pl-10 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-blue-50" />
-          </div>
-        </header>
-
-        {isLoading ? (
-          <div className="flex min-h-64 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><LoaderCircle className="size-5 animate-spin text-brand-600" />Đang tải thư viện...</div>
-        ) : filteredMaterials.length === 0 ? (
-          <div className="grid min-h-64 place-items-center p-8 text-center"><div><Library className="mx-auto size-10 text-slate-300" /><h3 className="mt-3 font-black text-slate-800">Chưa có tài liệu</h3><p className="mt-1 text-sm text-slate-500">Tải các tệp dùng chung lên để bắt đầu phân phối cho lớp.</p></div></div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredMaterials.map((material) => (
-              <article key={material.id} className={`flex items-start gap-3 px-4 py-4 transition hover:bg-slate-50/70 ${selectedIds.includes(material.id) ? "bg-blue-50/50" : ""}`}>
-                <input type="checkbox" checked={selectedIds.includes(material.id)} onChange={() => toggleMaterial(material.id)} aria-label={`Chọn ${material.originalName}`} className="mt-3 size-4 shrink-0 rounded border-slate-300 accent-brand-600" />
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-600"><FileText className="size-5" /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black text-slate-900">{material.originalName}</p>
-                  <p className="mt-1 text-xs text-slate-400">{formatFileSize(material.size)} · {new Date(material.createdAt).toLocaleString("vi-VN")}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(material.assignments ?? []).length ? (material.assignments ?? []).map((assignment) => (
-                      <span key={assignment.id} className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">{assignment.schoolClass.code} · {assignment.name}</span>
-                    )) : <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500">Chưa gán vào lớp</span>}
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" aria-label={`Tải ${material.originalName}`} onClick={() => void downloadMaterial(material)}><Download className="size-4" /></Button>
-                <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${material.originalName}`} onClick={() => setDeletingMaterial(material)}><Trash2 className="size-4" /></Button>
-              </article>
-            ))}
-          </div>
-        )}
+      <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+        {error ? <p className="m-4 flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700"><XCircle className="size-4" />{error}</p> : null}
+        <div className="min-h-0 shrink overflow-auto">
+          <Table className="min-w-[1050px]">
+            <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
+              <tr>
+                <TableHead className="w-14 text-center">
+                  <span className="flex h-5 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleAllPage}
+                      disabled={pagedMaterials.length === 0 || isLoading}
+                      className="block size-4 rounded border-white/70 accent-brand-800"
+                      aria-label="Chọn tất cả tài liệu trên trang"
+                    />
+                  </span>
+                </TableHead>
+                <TableHead className="leading-5">Tài liệu</TableHead>
+                <TableHead>Dung lượng</TableHead>
+                <TableHead>Ngày tải lên</TableHead>
+                <TableHead>Lớp / Chủ đề đã phân phối</TableHead>
+                <TableHead className="w-40 text-right">Thao tác</TableHead>
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? <TableLoadingBarRow colSpan={6} /> : null}
+              {!isLoading && filteredMaterials.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={6}
+                  icon={<FileText className="size-5 text-slate-400" />}
+                  message={materials.length === 0 ? "Chưa có tài liệu" : "Không tìm thấy tài liệu phù hợp"}
+                />
+              ) : null}
+              {!isLoading ? pagedMaterials.map((material) => (
+                <tr key={material.id} className={`transition hover:bg-slate-50/70 ${selectedIds.includes(material.id) ? "bg-blue-50/50" : ""}`}>
+                  <TableCell className="text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(material.id)}
+                      onChange={() => toggleMaterial(material.id)}
+                      aria-label={`Chọn ${material.originalName}`}
+                      className="size-4 rounded border-slate-300 accent-brand-600"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-50 text-brand-600">
+                        <FileText className="size-4" />
+                      </span>
+                      <span className="max-w-md truncate font-bold text-slate-900" title={material.originalName}>
+                        {material.originalName}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                    {formatFileSize(material.size)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                    {new Date(material.createdAt).toLocaleString("vi-VN")}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex max-w-xl flex-wrap gap-1.5">
+                      {(material.assignments ?? []).length ? (material.assignments ?? []).map((assignment) => (
+                        <span key={assignment.id} className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
+                          {assignment.schoolClass.code} · {assignment.name}
+                        </span>
+                      )) : <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-500">Chưa gán vào lớp</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Xem trước tài liệu"
+                        aria-label={`Xem trước ${material.originalName}`}
+                        onClick={() => void openPreview(material)}
+                      >
+                        <Eye size={18} strokeWidth={2.5} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Tải tài liệu"
+                        aria-label={`Tải ${material.originalName}`}
+                        onClick={() => void downloadMaterial(material)}
+                      >
+                        <Download size={18} strokeWidth={2.5} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 hover:bg-rose-50"
+                        title="Xóa tài liệu"
+                        aria-label={`Xóa ${material.originalName}`}
+                        onClick={() => setDeletingMaterial(material)}
+                      >
+                        <Trash2 size={18} strokeWidth={2.5} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </tr>
+              )) : null}
+            </TableBody>
+          </Table>
+        </div>
+        <DataTableFooter
+          className="shrink-0 bg-white"
+          rowCount={pagedMaterials.length}
+          totalItems={filteredMaterials.length}
+          itemLabel="tài liệu"
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+        />
       </section>
+
+      <Modal
+        open={previewMaterial !== null}
+        title={previewMaterial?.originalName ?? "Xem trước tài liệu"}
+        width="max-w-[1600px]"
+        bodyClassName="max-h-[calc(100dvh-5rem)] overflow-y-auto !p-2"
+        compact
+        onClose={closePreview}
+      >
+        {isPreviewLoading ? (
+          <div className="grid min-h-[480px] place-items-center rounded-xl bg-slate-50 text-sm font-semibold text-slate-500">
+            <span className="flex items-center gap-2">
+              <LoaderCircle className="size-5 animate-spin text-brand-600" />
+              Đang tải bản xem trước...
+            </span>
+          </div>
+        ) : previewError ? (
+          <div className="grid min-h-[420px] place-items-center rounded-xl border border-rose-100 bg-rose-50 px-6 text-center">
+            <div>
+              <XCircle className="mx-auto size-9 text-rose-500" />
+              <p className="mt-3 text-sm font-semibold text-rose-700">{previewError}</p>
+            </div>
+          </div>
+        ) : previewMaterial && previewUrl ? (
+          <MaterialPreview material={previewMaterial} url={previewUrl} />
+        ) : null}
+      </Modal>
 
       <Modal open={isAssignModalOpen} title={`Gán ${selectedIds.length} tài liệu vào lớp`} description="Chọn nhiều lớp; mỗi lớp có thể dùng chủ đề sẵn có hoặc tạo chủ đề mới." width="max-w-4xl" bodyClassName="max-h-[68vh] overflow-y-auto" onClose={() => !isAssigning && setIsAssignModalOpen(false)} footer={<><Button variant="outline" disabled={isAssigning} onClick={() => setIsAssignModalOpen(false)}>Hủy</Button><Button disabled={isAssigning || !Object.values(targets).some((target) => target.selected)} onClick={() => void assignMaterials()}>{isAssigning ? <LoaderCircle className="size-4 animate-spin" /> : <FolderInput className="size-4" />}Gán tài liệu</Button></>}>
         {error ? <p className="mb-3 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
@@ -310,8 +529,4 @@ export function TeacherMaterialLibraryPanel() {
       </ConfirmationDialog>
     </div>
   );
-}
-
-function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: string }) {
-  return <section className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-card"><span className={`grid size-10 place-items-center rounded-xl ${tone}`}>{icon}</span><div><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-0.5 text-xl font-black text-slate-900">{value}</p></div></section>;
 }

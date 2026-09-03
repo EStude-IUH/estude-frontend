@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+
+const openModalStack: symbol[] = [];
+let bodyScrollLockCount = 0;
+let bodyOverflowBeforeModal = "";
 
 export function Modal({
   open,
@@ -16,6 +21,8 @@ export function Modal({
   titleClassName,
   bodyClassName,
   footerClassName,
+  layerClassName,
+  compact = false,
 }: {
   open: boolean;
   title: string;
@@ -27,23 +34,54 @@ export function Modal({
   titleClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  layerClassName?: string;
+  compact?: boolean;
 }) {
+  const [mounted, setMounted] = useState(false);
+  const titleId = useId();
+  const modalIdRef = useRef(Symbol("modal"));
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
+    const modalId = modalIdRef.current;
+    openModalStack.push(modalId);
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && openModalStack.at(-1) === modalId) {
+        onCloseRef.current();
+      }
     };
+
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
+    if (bodyScrollLockCount === 0) {
+      bodyOverflowBeforeModal = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    bodyScrollLockCount += 1;
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      const stackIndex = openModalStack.lastIndexOf(modalId);
+      if (stackIndex >= 0) openModalStack.splice(stackIndex, 1);
+      bodyScrollLockCount = Math.max(0, bodyScrollLockCount - 1);
+      if (bodyScrollLockCount === 0) {
+        document.body.style.overflow = bodyOverflowBeforeModal;
+      }
     };
-  }, [onClose, open]);
+  }, [open]);
 
-  if (!open) return null;
-  return (
-    <div className="modal-backdrop-enter fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-slate-950/10 p-4 backdrop-blur-[1px]">
+  if (!open || !mounted) return null;
+  return createPortal(
+    <div className={cn("modal-backdrop-enter fixed inset-0 grid place-items-center overflow-y-auto bg-slate-950/10 p-4 backdrop-blur-[1px]", layerClassName ?? "z-[100]")}>
       <button
         className="absolute inset-0"
         type="button"
@@ -53,18 +91,23 @@ export function Modal({
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
         className={cn(
           "modal-panel-enter relative my-auto w-full rounded-2xl border border-slate-200 bg-white shadow-2xl",
           width,
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <header
+          className={cn(
+            "flex items-start justify-between gap-4 border-b border-slate-100",
+            compact ? "px-4 py-2.5" : "px-5 py-4",
+          )}
+        >
           <div>
             <h2
-              id="modal-title"
+              id={titleId}
               className={cn(
-                "text-lg font-extrabold text-slate-950",
+                compact ? "text-base font-extrabold text-slate-950" : "text-lg font-extrabold text-slate-950",
                 titleClassName,
               )}
             >
@@ -77,14 +120,18 @@ export function Modal({
           <Button
             variant="ghost"
             size="sm"
-            className="size-10 !rounded-full px-0"
+            className={cn(
+              "shrink-0 !rounded-full !px-0 text-slate-500",
+              compact ? "!size-9" : "!size-10",
+            )}
             onClick={onClose}
             aria-label="Đóng"
+            title="Đóng"
           >
-            <X className="size-7" strokeWidth={2.5} />
+            <X size={compact ? 22 : 28} strokeWidth={2.5} />
           </Button>
         </header>
-        <div className={cn("p-5", bodyClassName)}>{children}</div>
+        <div className={cn(compact ? "p-3" : "p-5", bodyClassName)}>{children}</div>
         {footer ? (
           <footer
             className={cn(
@@ -96,6 +143,7 @@ export function Modal({
           </footer>
         ) : null}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

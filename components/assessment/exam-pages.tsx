@@ -17,13 +17,13 @@ import {
   FileQuestion,
   GripVertical,
   ListChecks,
+  Plus,
   Search,
   Settings2,
   Send,
   Trash2,
-  UsersRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AssessmentShell,
@@ -32,11 +32,29 @@ import {
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/form-control";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmptyRow,
+  TableHead,
+  TableHeader,
+  TableLoadingBarRow,
+} from "@/components/ui/data-table";
+import { DataTableFooter } from "@/components/ui/data-table-footer";
+import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
+import {
+  CustomSelect,
+  Input,
+  Select,
+  Textarea,
+} from "@/components/ui/form-control";
+import { Modal } from "@/components/ui/modal";
 import {
   academicDataService,
   examService,
   questionBankService,
+  teacherSettingsService,
 } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
 import {
@@ -48,6 +66,7 @@ import {
   type Question,
   type Subject,
   type TeacherAssignedClass,
+  type TeacherExamDefaults,
   type Topic,
 } from "@/types/assessment";
 
@@ -58,22 +77,32 @@ const wizardSteps = [
   { label: "Kiểm tra", description: "Xác nhận và lưu", icon: FileCheck2 },
 ];
 
-function createBlankSettings(): ExamSettings {
+function ExamWizardFrame({
+  embedded,
+  children,
+}: {
+  embedded: boolean;
+  children: ReactNode;
+}) {
+  return embedded ? <>{children}</> : <AssessmentShell>{children}</AssessmentShell>;
+}
+
+function createBlankSettings(defaults?: TeacherExamDefaults): ExamSettings {
   const startsAt = new Date();
   startsAt.setMinutes(0, 0, 0);
   startsAt.setHours(startsAt.getHours() + 1);
   const endsAt = new Date(startsAt);
-  endsAt.setDate(endsAt.getDate() + 7);
+  endsAt.setDate(endsAt.getDate() + (defaults?.availabilityDays ?? 7));
 
   return {
     startsAt: toDateTimeLocal(startsAt.toISOString()),
     endsAt: toDateTimeLocal(endsAt.toISOString()),
-    durationMinutes: 45,
-    attemptsAllowed: 1,
-    shuffleQuestions: false,
-    shuffleAnswers: false,
-    showScoreImmediately: true,
-    showCorrectAnswers: true,
+    durationMinutes: defaults?.durationMinutes ?? 45,
+    attemptsAllowed: defaults?.attemptsAllowed ?? 1,
+    shuffleQuestions: defaults?.shuffleQuestions ?? false,
+    shuffleAnswers: defaults?.shuffleAnswers ?? false,
+    showScoreImmediately: defaults?.showScoreImmediately ?? true,
+    showCorrectAnswers: defaults?.showCorrectAnswers ?? true,
   };
 }
 
@@ -123,10 +152,25 @@ export function TeacherExamsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | Exam["status"]>(
     "ALL",
   );
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [publishingId, setPublishingId] = useState("");
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
+
+  function openEditor(examId: string) {
+    setEditingExamId(examId);
+    setIsEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setIsEditorOpen(false);
+    setEditingExamId(null);
+  }
 
   async function load() {
     setLoading(true);
@@ -190,286 +234,277 @@ export function TeacherExamsPage() {
   const visibleExams = exams.filter((exam) => {
     const matchesStatus =
       statusFilter === "ALL" || exam.status === statusFilter;
-    const matchesQuery = matchesSearchKeyword(exam.keyword, query);
+    const matchesQuery = matchesSearchKeyword(exam.keyword, submittedQuery);
     return matchesStatus && matchesQuery;
   });
-  const draftCount = exams.filter((exam) => !exam.published).length;
-  const activeCount = exams.filter(
-    (exam) => exam.status === "SCHEDULED" || exam.status === "ONGOING",
-  ).length;
-  const totalQuestionCount = exams.reduce(
-    (total, exam) => total + exam.questions.length,
-    0,
+  const totalPages = Math.max(1, Math.ceil(visibleExams.length / pageSize));
+  const pagedExams = visibleExams.slice(
+    (page - 1) * pageSize,
+    page * pageSize,
   );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <AssessmentShell>
       <PageHeading title="Bài kiểm tra" />
-      <section className="mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 via-brand-600 to-cyan-500 p-6 text-white shadow-lg shadow-brand-700/15 sm:p-7">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-bold text-blue-100">
-              <FileQuestion className="size-4" /> Không gian đánh giá
+      <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+        <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)_180px]">
+              <DebouncedSearchInput
+                className="!h-[42px] !rounded-lg focus:!ring-0"
+                value={query}
+                onValueChange={setQuery}
+                onSearch={(value) => {
+                  setPage(1);
+                  setSubmittedQuery(value);
+                }}
+                placeholder="Tìm theo tên bài, môn học hoặc lớp"
+              />
+              <CustomSelect
+                value={statusFilter}
+                options={[
+                  { value: "ALL", label: "Tất cả trạng thái" },
+                  { value: "DRAFT", label: "Bản nháp" },
+                  { value: "SCHEDULED", label: "Sắp diễn ra" },
+                  { value: "ONGOING", label: "Đang diễn ra" },
+                  { value: "ENDED", label: "Đã kết thúc" },
+                ]}
+                buttonClassName="!h-[42px] !rounded-lg !ring-0"
+                ariaLabel="Lọc theo trạng thái"
+                onValueChange={(value) => {
+                  setStatusFilter(value as "ALL" | Exam["status"]);
+                  setPage(1);
+                }}
+              />
             </div>
-            <h1 className="mt-2 text-2xl font-black sm:text-3xl">
-              Quản lý bài kiểm tra
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-50/90">
-              Tạo đề theo môn học được phân công, hoàn thiện bản nháp và công bố
-              đúng lịch cho sinh viên.
-            </p>
-          </div>
-          <Link href="/teacher/exams/new" className="shrink-0">
-            <Button className="w-full bg-white text-brand-700 hover:bg-blue-50 md:w-auto">
-              <CirclePlus className="size-4" /> Tạo bài kiểm tra
-            </Button>
-          </Link>
-        </div>
-      </section>
-
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: "Tổng bài kiểm tra",
-            value: exams.length,
-            icon: FileQuestion,
-            tone: "bg-blue-50 text-brand-700",
-          },
-          {
-            label: "Bản nháp cần hoàn thiện",
-            value: draftCount,
-            icon: Edit3,
-            tone: "bg-amber-50 text-amber-700",
-          },
-          {
-            label: "Đang/sắp diễn ra",
-            value: activeCount,
-            icon: CalendarClock,
-            tone: "bg-emerald-50 text-emerald-700",
-          },
-          {
-            label: "Tổng số câu đã dùng",
-            value: totalQuestionCount,
-            icon: ListChecks,
-            tone: "bg-violet-50 text-violet-700",
-          },
-        ].map(({ label, value, icon: Icon, tone }) => (
-          <div
-            key={label}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <span
-              className={`grid size-11 place-items-center rounded-xl ${tone}`}
-            >
-              <Icon className="size-5" />
-            </span>
-            <div>
-              <p className="text-2xl font-black text-slate-950">{value}</p>
-              <p className="text-xs font-semibold text-slate-500">{label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <section className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
-        <Input
-          icon={Search}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Tìm theo tên bài, môn học hoặc lớp..."
-          className="sm:min-w-80"
-        />
-        <Select
-          value={statusFilter}
-          onChange={(event) =>
-            setStatusFilter(event.target.value as "ALL" | Exam["status"])
-          }
-          className="sm:w-52"
-          aria-label="Lọc trạng thái"
-        >
-          <option value="ALL">Tất cả trạng thái</option>
-          <option value="DRAFT">Bản nháp</option>
-          <option value="SCHEDULED">Sắp diễn ra</option>
-          <option value="ONGOING">Đang diễn ra</option>
-          <option value="ENDED">Đã kết thúc</option>
-        </Select>
-        <span className="text-xs font-semibold text-slate-400 sm:ml-auto sm:pr-2">
-          Hiển thị {visibleExams.length}/{exams.length} bài
-        </span>
-      </section>
-
-      {error ? (
-        <div className="mb-5">
-          <ErrorPanel message={error} />
-        </div>
-      ) : null}
-      {loading ? (
-        <LoadingPanel />
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {visibleExams.length === 0 ? (
-            <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-14 text-center text-sm text-slate-500">
-              <FileQuestion className="mx-auto size-9 text-slate-300" />
-              <p className="mt-3 font-bold text-slate-700">
-                {exams.length === 0
-                  ? "Chưa có bài kiểm tra"
-                  : "Không tìm thấy bài kiểm tra phù hợp"}
-              </p>
-              <p className="mt-1">
-                {exams.length === 0
-                  ? "Hãy tạo bản nháp đầu tiên cho lớp của bạn."
-                  : "Thử thay đổi từ khóa hoặc bộ lọc trạng thái."}
-              </p>
-            </div>
-          ) : (
-            visibleExams.map((exam) => (
-              <article
-                key={exam.id}
-                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg"
+            <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+              <Button
+                className="!h-[42px] !rounded-lg"
+                onClick={() => router.push("/teacher/exams/new")}
               >
-                <div className="border-b border-slate-100 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}
-                        >
-                          {EXAM_STATUS_LABELS[exam.status]}
-                        </span>
-                        {!exam.published ? (
-                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                            Có thể chỉnh sửa
-                          </span>
-                        ) : null}
-                      </div>
-                      <h2 className="mt-3 truncate text-lg font-black text-slate-950">
-                        {exam.title}
-                      </h2>
-                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                        <BookOpen className="size-3.5" /> {exam.subjectName}
-                        <span className="text-slate-300">·</span>
-                        <UsersRound className="size-3.5" />
-                        {formatClassLabel(
-                          assignedClasses,
-                          exam.classId,
-                          exam.className,
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void remove(exam)}
-                      className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-300 opacity-70 hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
-                      aria-label={`Xóa ${exam.title}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-4">
-                  <div className="bg-white p-4">
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      Câu hỏi
-                    </p>
-                    <p className="mt-1 font-extrabold">
-                      {exam.questions.length} câu
-                    </p>
-                  </div>
-                  <div className="bg-white p-4">
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      Tổng điểm
-                    </p>
-                    <p className="mt-1 font-extrabold">
-                      {exam.totalPoints} điểm
-                    </p>
-                  </div>
-                  <div className="bg-white p-4">
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      Thời lượng
-                    </p>
-                    <p className="mt-1 font-extrabold">
-                      {exam.settings.durationMinutes} phút
-                    </p>
-                  </div>
-                  <div className="bg-white p-4">
-                    <p className="text-[11px] font-semibold text-slate-400">
-                      Số lượt làm
-                    </p>
-                    <p className="mt-1 font-extrabold">
-                      {exam.settings.attemptsAllowed} lần
-                    </p>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 bg-slate-50/60 p-4">
-                  <div className="mb-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                    <p className="flex items-center gap-2">
-                      <CalendarClock className="size-4 text-brand-500" />
-                      Mở:{" "}
-                      <strong className="text-slate-700">
-                        {formatExamDate(exam.settings.startsAt)}
-                      </strong>
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Clock3 className="size-4 text-rose-400" />
-                      Đóng:{" "}
-                      <strong className="text-slate-700">
-                        {formatExamDate(exam.settings.endsAt)}
-                      </strong>
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
+                <Plus className="size-4" /> Tạo mới
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+          {error ? (
+            <div className="m-4">
+              <ErrorPanel message={error} />
+            </div>
+          ) : null}
+          <div className="min-h-0 shrink overflow-auto">
+          <Table className="min-w-[1280px]">
+            <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
+              <tr>
+                <TableHead className="w-14 text-center">#</TableHead>
+                <TableHead>Bài kiểm tra</TableHead>
+                <TableHead>Môn học / Lớp</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead className="text-center">Câu hỏi</TableHead>
+                <TableHead className="text-center">Tổng điểm</TableHead>
+                <TableHead>Thời lượng</TableHead>
+                <TableHead>Lịch mở / đóng</TableHead>
+                <TableHead className="w-44 text-right">Thao tác</TableHead>
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {loading ? <TableLoadingBarRow colSpan={9} /> : null}
+              {!loading && visibleExams.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={9}
+                  icon={<FileQuestion className="size-5 text-slate-400" />}
+                  message={
+                    exams.length === 0
+                      ? "Chưa có bài kiểm tra"
+                      : "Không tìm thấy bài kiểm tra phù hợp"
+                  }
+                />
+              ) : null}
+              {!loading
+                ? pagedExams.map((exam, index) => (
+                    <tr
+                      key={exam.id}
+                      className="cursor-pointer transition hover:bg-slate-50/70"
                       onClick={() => router.push(`/teacher/exams/${exam.id}`)}
                     >
-                      <Eye className="size-3.5" /> Chi tiết
-                    </Button>
-                    {!exam.published ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() =>
-                            router.push(`/teacher/exams/${exam.id}/edit`)
-                          }
+                      <TableCell className="text-center text-xs text-slate-400">
+                        {(page - 1) * pageSize + index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            router.push(`/teacher/exams/${exam.id}`);
+                          }}
+                          className="max-w-80 text-left font-bold text-slate-900 hover:text-brand-700 hover:underline"
                         >
-                          <Edit3 className="size-3.5" /> Chỉnh sửa
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => void publish(exam)}
-                          disabled={publishingId === exam.id}
-                        >
-                          <Send className="size-3.5" />
-                          {publishingId === exam.id
-                            ? "Đang công bố..."
-                            : "Công bố"}
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() =>
-                          router.push(`/teacher/exams/${exam.id}/submissions`)
-                        }
-                      >
-                        <FileCheck2 className="size-3.5" /> Bài nộp
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))
-          )}
-        </div>
-      )}
+                          {exam.title}
+                        </button>
+                        {!exam.published ? (
+                          <p className="mt-1 text-[11px] font-semibold text-amber-600">
+                            Có thể chỉnh sửa
+                          </p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-semibold text-slate-800">{exam.subjectName}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {formatClassLabel(
+                            assignedClasses,
+                            exam.classId,
+                            exam.className,
+                          )}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}>
+                          {EXAM_STATUS_LABELS[exam.status]}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center font-bold">
+                        {exam.questions.length}
+                      </TableCell>
+                      <TableCell className="text-center font-bold">
+                        {exam.totalPoints}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <p className="font-semibold">{exam.settings.durationMinutes} phút</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {exam.settings.attemptsAllowed} lượt làm
+                        </p>
+                      </TableCell>
+                      <TableCell className="min-w-52 whitespace-nowrap text-xs">
+                        <p className="flex items-center gap-1.5 text-slate-600">
+                          <CalendarClock className="size-3.5 text-brand-500" />
+                          {formatExamDate(exam.settings.startsAt)}
+                        </p>
+                        <p className="mt-1.5 flex items-center gap-1.5 text-slate-600">
+                          <Clock3 className="size-3.5 text-rose-400" />
+                          {formatExamDate(exam.settings.endsAt)}
+                        </p>
+                      </TableCell>
+                      <TableCell onClick={(event) => event.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => router.push(`/teacher/exams/${exam.id}`)}
+                            aria-label={`Xem chi tiết ${exam.title}`}
+                            title="Xem chi tiết"
+                          >
+                            <Eye size={18} strokeWidth={2.5} />
+                          </Button>
+                          {!exam.published ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditor(exam.id)}
+                                aria-label={`Chỉnh sửa ${exam.title}`}
+                                title="Chỉnh sửa"
+                              >
+                                <Edit3 size={18} strokeWidth={2.5} />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-brand-700"
+                                onClick={() => void publish(exam)}
+                                disabled={publishingId === exam.id}
+                                aria-label={`Công bố ${exam.title}`}
+                                title="Công bố"
+                              >
+                                <Send size={18} strokeWidth={2.5} />
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-brand-700"
+                              onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}
+                              aria-label={`Xem bài nộp của ${exam.title}`}
+                              title="Bài nộp"
+                            >
+                              <FileCheck2 size={18} strokeWidth={2.5} />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                            onClick={() => void remove(exam)}
+                            aria-label={`Xóa ${exam.title}`}
+                            title="Xóa"
+                          >
+                            <Trash2 size={18} strokeWidth={2.5} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </tr>
+                  ))
+                : null}
+            </TableBody>
+          </Table>
+          </div>
+          <DataTableFooter
+            className="shrink-0 bg-white"
+            rowCount={pagedExams.length}
+            totalItems={visibleExams.length}
+            itemLabel="bài kiểm tra"
+            page={page}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
+        </section>
+
+      <Modal
+        open={isEditorOpen}
+        title="Chỉnh sửa bài kiểm tra"
+        description="Cập nhật các bước thiết lập và lưu thay đổi ngay tại đây."
+        onClose={closeEditor}
+        width="max-w-[1500px]"
+        bodyClassName="max-h-[calc(100dvh-9rem)] overflow-y-auto !p-4 sm:!p-5"
+      >
+        <ExamWizardPage
+          key={editingExamId ?? "edit-exam"}
+          examId={editingExamId ?? undefined}
+          embedded
+          onClose={closeEditor}
+          onSaved={async () => {
+            closeEditor();
+            await load();
+          }}
+        />
+      </Modal>
+      </div>
     </AssessmentShell>
   );
 }
 
-export function ExamWizardPage({ examId }: { examId?: string }) {
+export function ExamWizardPage({
+  examId,
+  embedded = false,
+  onClose,
+  onSaved,
+}: {
+  examId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+  onSaved?: (exam: Exam) => void | Promise<void>;
+}) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -498,12 +533,16 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
     const examRequest = examId
       ? examService.getExamById(examId)
       : Promise.resolve(null);
+    const settingsRequest = examId
+      ? Promise.resolve(null)
+      : teacherSettingsService.getExamDefaults();
     void Promise.all([
       academicDataService.getSubjects(),
       academicDataService.getTeacherAssignedClasses(),
       examRequest,
+      settingsRequest,
     ])
-      .then(([loadedSubjects, loadedClasses, exam]) => {
+      .then(([loadedSubjects, loadedClasses, exam, teacherSettings]) => {
         const assignedSubjectIds = new Set(
           loadedClasses.flatMap((schoolClass) =>
             schoolClass.subjects.map((subject) => subject.id),
@@ -534,6 +573,9 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
             [...exam.questions].sort((left, right) => left.order - right.order),
           );
           return;
+        }
+        if (teacherSettings) {
+          setSettings(createBlankSettings(teacherSettings.examDefaults));
         }
         const firstClass = loadedClasses[0];
         const firstSubject = assignedSubjects.find(
@@ -758,8 +800,11 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
       } else {
         savedExam = await examService.createExam(payload);
       }
-      if (publishAfterSave) await examService.publishExam(savedExam.id);
-      router.push("/teacher/exams");
+      if (publishAfterSave) {
+        savedExam = await examService.publishExam(savedExam.id);
+      }
+      if (onSaved) await onSaved(savedExam);
+      else router.push("/teacher/exams");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Không thể lưu bài kiểm tra",
@@ -771,14 +816,14 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
 
   if (initializing)
     return (
-      <AssessmentShell>
+      <ExamWizardFrame embedded={embedded}>
         <LoadingPanel />
-      </AssessmentShell>
+      </ExamWizardFrame>
     );
 
   if (publishedExam)
     return (
-      <AssessmentShell>
+      <ExamWizardFrame embedded={embedded}>
         <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
           <FileCheck2 className="mx-auto size-10 text-amber-600" />
           <h1 className="mt-3 text-xl font-black text-slate-950">
@@ -789,44 +834,50 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
           </p>
           <Button
             className="mt-5"
-            onClick={() => router.push("/teacher/exams")}
+            onClick={() =>
+              onClose ? onClose() : router.push("/teacher/exams")
+            }
           >
             <ArrowLeft className="size-4" /> Quay lại danh sách
           </Button>
         </div>
-      </AssessmentShell>
+      </ExamWizardFrame>
     );
 
   return (
-    <AssessmentShell>
-      <PageHeading
-        title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
-      />
-      <div className="mb-5 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
-        <div className="flex items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
-            {examId ? (
-              <Edit3 className="size-5" />
-            ) : (
-              <CirclePlus className="size-5" />
-            )}
-          </span>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
-              {examId ? "Bản nháp" : "Thiết lập đề mới"}
-            </p>
-            <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
-              {examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Hoàn thành 4 bước, kiểm tra lại đề rồi lưu nháp hoặc công bố.
-            </p>
+    <ExamWizardFrame embedded={embedded}>
+      {!embedded ? (
+        <>
+          <PageHeading
+            title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
+          />
+          <div className="mb-5 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+                {examId ? (
+                  <Edit3 className="size-5" />
+                ) : (
+                  <CirclePlus className="size-5" />
+                )}
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
+                  {examId ? "Bản nháp" : "Thiết lập đề mới"}
+                </p>
+                <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
+                  {examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Hoàn thành 4 bước, kiểm tra lại đề rồi lưu nháp hoặc công bố.
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
+              <ArrowLeft className="size-4" /> Thoát
+            </Button>
           </div>
-        </div>
-        <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
-          <ArrowLeft className="size-4" /> Thoát
-        </Button>
-      </div>
+        </>
+      ) : null}
 
       <div className="mb-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {wizardSteps.map(({ label, description, icon: Icon }, index) => {
@@ -1305,7 +1356,10 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
               disabled={saving}
               onClick={() => {
                 setError("");
-                if (step === 1) router.push("/teacher/exams");
+                if (step === 1) {
+                  if (onClose) onClose();
+                  else router.push("/teacher/exams");
+                }
                 else setStep((value) => value - 1);
               }}
             >
@@ -1404,7 +1458,7 @@ export function ExamWizardPage({ examId }: { examId?: string }) {
           </div>
         </aside>
       </div>
-    </AssessmentShell>
+    </ExamWizardFrame>
   );
 }
 

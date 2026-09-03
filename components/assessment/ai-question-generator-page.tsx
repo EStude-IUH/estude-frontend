@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   BrainCircuit,
   Check,
-  FileSearch,
   Info,
   LoaderCircle,
   Pencil,
@@ -268,7 +267,7 @@ export function AiQuestionGeneratorPage() {
         description="Chọn PDF từ thư viện của bạn. AI chỉ dùng nội dung trong tài liệu và mọi câu đều cần được duyệt trước khi vào ngân hàng."
         action={
           <Link href="/teacher/question-bank">
-            <Button variant="ghost">
+            <Button variant="ghost" size="sm">
               <ArrowLeft className="size-4" />
               Ngân hàng câu hỏi
             </Button>
@@ -276,18 +275,18 @@ export function AiQuestionGeneratorPage() {
         }
       />
       {error ? (
-        <div className="mb-5">
+        <div className="mb-3">
           <ErrorPanel message={error} />
         </div>
       ) : null}
-      <div className="grid items-start gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
+      <div className="grid items-start gap-3 xl:grid-cols-[480px_minmax(0,1fr)]">
         <form
           onSubmit={(event) => void generate(event)}
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card xl:sticky xl:top-20"
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-card xl:sticky xl:top-20 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto"
         >
-          <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-5">
-            <span className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600">
-              <Sparkles className="size-5" />
+          <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3">
+            <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600">
+              <Sparkles className="size-[18px]" />
             </span>
             <div>
               <h2 className="font-black text-slate-900">Cấu hình bộ câu hỏi</h2>
@@ -296,7 +295,7 @@ export function AiQuestionGeneratorPage() {
               </p>
             </div>
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             <Field label="Tài liệu nguồn">
               <Select
                 required
@@ -331,37 +330,39 @@ export function AiQuestionGeneratorPage() {
                 nội dung trọng tâm.
               </span>
             </Field>
-            <Field label="Môn học (không bắt buộc)">
-              <Select
-                value={form.subjectId ?? ""}
-                onChange={(event) =>
-                  update("subjectId", event.target.value || undefined)
-                }
-              >
-                <option value="">Không phân loại môn học</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Chủ đề gợi ý (không bắt buộc)">
-              <Select
-                disabled={!form.subjectId}
-                value={form.topicId ?? ""}
-                onChange={(event) =>
-                  update("topicId", event.target.value || undefined)
-                }
-              >
-                <option value="">Tự xác định từ tài liệu</option>
-                {topics.map((topic) => (
-                  <option key={topic.id} value={topic.id}>
-                    {topic.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Môn học (không bắt buộc)">
+                <Select
+                  value={form.subjectId ?? ""}
+                  onChange={(event) =>
+                    update("subjectId", event.target.value || undefined)
+                  }
+                >
+                  <option value="">Không phân loại môn học</option>
+                  {subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Chủ đề gợi ý (không bắt buộc)">
+                <Select
+                  disabled={!form.subjectId}
+                  value={form.topicId ?? ""}
+                  onChange={(event) =>
+                    update("topicId", event.target.value || undefined)
+                  }
+                >
+                  <option value="">Tự xác định từ tài liệu</option>
+                  {topics.map((topic) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
             <Field label="Loại câu hỏi">
               <div className="grid grid-cols-2 gap-2">
                 {(
@@ -419,38 +420,40 @@ export function AiQuestionGeneratorPage() {
                 onCancel={() => setCustomizingDifficulty(false)}
               />
             ) : null}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="text-sm font-bold text-slate-700">
-                  Số lượng
-                </label>
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black text-slate-700">
-                  {form.quantity}
-                </span>
+            <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-bold text-slate-700">
+                    Số lượng
+                  </label>
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-black text-slate-700">
+                    {form.quantity}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={20}
+                  value={form.quantity}
+                  onChange={(event) =>
+                    update("quantity", Number(event.target.value))
+                  }
+                  className="w-full accent-brand-600"
+                />
               </div>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                value={form.quantity}
-                onChange={(event) =>
-                  update("quantity", Number(event.target.value))
-                }
-                className="w-full accent-brand-600"
-              />
+              <Field label="Điểm mặc định">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  value={form.defaultPoints}
+                  onChange={(event) =>
+                    update("defaultPoints", Number(event.target.value))
+                  }
+                />
+              </Field>
             </div>
-            <Field label="Điểm mặc định">
-              <Input
-                type="number"
-                min={0}
-                step={0.25}
-                value={form.defaultPoints}
-                onChange={(event) =>
-                  update("defaultPoints", Number(event.target.value))
-                }
-              />
-            </Field>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3.5">
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3">
               <input
                 type="checkbox"
                 checked={form.includeExplanation}
@@ -481,7 +484,7 @@ export function AiQuestionGeneratorPage() {
               {generating ? "Gemini đang tạo..." : "Tạo câu hỏi"}
             </Button>
           </div>
-          <div className="mt-5 flex gap-2 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">
+          <div className="mt-3 flex gap-2 rounded-lg bg-slate-50 p-2.5 text-xs leading-5 text-slate-500">
             <Info className="mt-0.5 size-4 shrink-0" />
             <span>
               Lần đầu dùng một PDF sẽ lâu hơn vì hệ thống cần trích xuất, chia
@@ -492,7 +495,7 @@ export function AiQuestionGeneratorPage() {
 
         <section className="min-w-0">
           {generating ? (
-            <div className="grid min-h-[570px] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-card">
+            <div className="grid min-h-[260px] place-items-center rounded-lg border border-slate-200 bg-white p-5 text-center shadow-card">
               <div>
                 <LoaderCircle className="mx-auto size-9 animate-spin text-violet-600" />
                 <p className="mt-4 font-black text-slate-800">
@@ -505,7 +508,7 @@ export function AiQuestionGeneratorPage() {
             </div>
           ) : questions.length ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-card">
                 <div>
                   <p className="font-black text-slate-900">
                     Kết quả kiểm duyệt
@@ -535,31 +538,16 @@ export function AiQuestionGeneratorPage() {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-[570px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-center shadow-card">
-              <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-blue-50 to-violet-50 text-violet-600">
-                <BrainCircuit className="size-9" />
+            <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center">
+              <span className="grid size-12 place-items-center rounded-xl bg-violet-50 text-violet-600">
+                <BrainCircuit className="size-6" />
               </span>
-              <h2 className="mt-6 text-xl font-black text-slate-900">
-                Sẵn sàng tạo câu hỏi
+              <h2 className="mt-3 font-black text-slate-900">
+                Chưa có kết quả
               </h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                Chọn tài liệu và cấu hình bên trái. Hệ thống sẽ tìm các đoạn
-                liên quan rồi sinh câu hỏi có dẫn nguồn theo trang.
+              <p className="mt-1 max-w-md text-sm leading-5 text-slate-500">
+                Chọn tài liệu, thiết lập thông số rồi nhấn “Tạo câu hỏi”.
               </p>
-              <div className="mt-7 grid w-full max-w-md grid-cols-3 gap-2 text-xs font-bold text-slate-500">
-                <span className="rounded-xl bg-slate-50 p-3">
-                  <FileSearch className="mx-auto mb-2 size-5 text-sky-500" />
-                  Vector Search
-                </span>
-                <span className="rounded-xl bg-slate-50 p-3">
-                  <BrainCircuit className="mx-auto mb-2 size-5 text-violet-500" />
-                  Gemini AI
-                </span>
-                <span className="rounded-xl bg-slate-50 p-3">
-                  <Check className="mx-auto mb-2 size-5 text-emerald-500" />
-                  Giáo viên duyệt
-                </span>
-              </div>
             </div>
           )}
         </section>
@@ -576,7 +564,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-2 text-sm font-bold text-slate-700">
+    <label className="grid gap-1.5 text-sm font-bold text-slate-700">
       {label}
       {children}
     </label>
@@ -596,7 +584,7 @@ function ChoiceButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-2 py-2.5 text-xs font-bold transition ${active ? "border-brand-500 bg-blue-50 text-brand-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+      className={`rounded-lg border px-2 py-2 text-xs font-bold transition ${active ? "border-brand-500 bg-blue-50 text-brand-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
     >
       {children}
     </button>
@@ -631,7 +619,7 @@ function TeacherDifficultyEditor({
   }
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
+    <div className="grid gap-2.5 rounded-lg border border-violet-100 bg-violet-50/40 p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-black text-slate-800">
@@ -659,7 +647,7 @@ function TeacherDifficultyEditor({
         return (
           <div
             key={level.code}
-            className="grid gap-2 rounded-xl border border-violet-100 bg-white p-3"
+            className="grid gap-2 rounded-lg border border-violet-100 bg-white p-2.5"
           >
             <p className="text-xs font-black uppercase tracking-wide text-violet-600">
               Mức {index + 1} · {fallback.label}
@@ -789,8 +777,8 @@ function GeneratedQuestionCard({
         : "Chờ duyệt";
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-brand-600">
             Câu {index + 1}
@@ -806,7 +794,7 @@ function GeneratedQuestionCard({
         </span>
       </header>
       {editing ? (
-        <div className="mt-4 grid gap-4">
+        <div className="mt-3 grid gap-3">
           <Textarea
             rows={3}
             value={draft.content}
@@ -883,15 +871,15 @@ function GeneratedQuestionCard({
           </div>
         </div>
       ) : (
-        <div className="mt-4">
+        <div className="mt-3">
           <h3 className="font-bold leading-6 text-slate-900">
             {question.content}
           </h3>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {question.options.map((option) => (
               <div
                 key={option.id}
-                className={`rounded-xl border p-3 text-sm ${question.correctOptionIds.includes(option.id) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"}`}
+                className={`rounded-lg border p-2.5 text-sm ${question.correctOptionIds.includes(option.id) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"}`}
               >
                 <b className="mr-2">{option.label}.</b>
                 {option.text}
@@ -899,11 +887,11 @@ function GeneratedQuestionCard({
             ))}
           </div>
           {question.explanation ? (
-            <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 rounded-lg bg-blue-50 p-2.5 text-sm leading-6 text-slate-600">
               <b className="text-brand-700">Lời giải:</b> {question.explanation}
             </p>
           ) : null}
-          <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+          <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
             {pending ? (
               <Button
                 variant="ghost"

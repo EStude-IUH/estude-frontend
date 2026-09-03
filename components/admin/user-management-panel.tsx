@@ -92,6 +92,34 @@ function getStatusClass(status: UserStatus): string {
   return "bg-slate-100 text-slate-600";
 }
 
+function getAssignedClassLabel(schoolClass: NonNullable<User["assignedClass"]>): string {
+  return schoolClass.name && schoolClass.name !== schoolClass.code
+    ? `${schoolClass.code} · ${schoolClass.name}`
+    : schoolClass.code || schoolClass.name;
+}
+
+function AssignedClassesCell({ user }: { user: User }) {
+  if (user.role === "STUDENT") {
+    return user.assignedClass ? (
+      <span className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">
+        {getAssignedClassLabel(user.assignedClass)}
+      </span>
+    ) : <span className="text-slate-400">--</span>;
+  }
+
+  const assignedClasses = user.assignedClasses ?? [];
+  if (assignedClasses.length === 0) return <span className="text-slate-400">--</span>;
+  return (
+    <div className="flex max-h-24 min-w-64 flex-wrap gap-1.5 overflow-y-auto py-1">
+      {assignedClasses.map((schoolClass) => (
+        <span key={schoolClass.id} className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-brand-700">
+          {getAssignedClassLabel(schoolClass)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function UserManagementPanel({ role }: { role: ManagedRole }) {
   const router = useRouter();
   const { notify } = useActionNotification();
@@ -266,7 +294,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
         <div className="min-h-0 shrink overflow-auto">
           <Table
             className={`${
-              role === "STUDENT" ? "min-w-[2120px]" : "min-w-[2060px]"
+              role === "STUDENT" ? "min-w-[2390px]" : "min-w-[2330px]"
             } [&_td]:whitespace-nowrap`}
           >
             <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
@@ -287,6 +315,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                     <TableHead className="min-w-[150px]">Lớp</TableHead>
                   </>
                 ) : null}
+                <TableHead className="min-w-[270px]">Lớp học phân công</TableHead>
                 <TableHead className="min-w-[170px]">Trạng thái</TableHead>
                 <TableHead className="min-w-[190px]">
                   Lần đăng nhập cuối
@@ -299,11 +328,11 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableLoadingBarRow colSpan={role === "STUDENT" ? 13 : 12} />
+                <TableLoadingBarRow colSpan={role === "STUDENT" ? 14 : 13} />
               ) : null}
               {!isLoading && users.length === 0 ? (
                 <TableEmptyRow
-                  colSpan={role === "STUDENT" ? 13 : 12}
+                  colSpan={role === "STUDENT" ? 14 : 13}
                   message={`Không có ${roleLabels[role].toLowerCase()} phù hợp.`}
                 />
               ) : (
@@ -363,6 +392,9 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                         </TableCell>
                       </>
                     ) : null}
+                    <TableCell className="!whitespace-normal align-top">
+                      <AssignedClassesCell user={user} />
+                    </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${getStatusClass(user.status)}`}

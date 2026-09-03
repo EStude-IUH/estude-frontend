@@ -201,7 +201,18 @@ export function TeacherAssignedClassesPanel() {
                   <TableEmptyRow colSpan={4} message="Không tìm thấy học viên phù hợp" />
                 ) : null}
                 {!isRosterLoading ? filteredStudents.map((student, index) => (
-                  <tr key={student.id} className="transition hover:bg-slate-50/70">
+                  <tr
+                    key={student.id}
+                    tabIndex={0}
+                    onClick={() => router.push(`/teacher/students/${encodeURIComponent(student.id)}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`/teacher/students/${encodeURIComponent(student.id)}`);
+                      }
+                    }}
+                    className="cursor-pointer transition hover:bg-blue-50/70 focus-visible:bg-blue-50 focus-visible:outline-none"
+                  >
                     <TableCell className="text-center text-xs text-slate-400">{index + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">

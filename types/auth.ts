@@ -1,6 +1,12 @@
 export type UserRole = "ADMIN" | "TEACHER" | "STUDENT";
 export type UserStatus = "PENDING" | "ACTIVE" | "INACTIVE" | "LOCKED";
 
+export interface AssignedClassSummary {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   fullName: string;
@@ -21,6 +27,8 @@ export interface User {
   joinDate?: string | null;
   course?: string | null;
   grade?: string | null;
+  assignedClass?: AssignedClassSummary | null;
+  assignedClasses?: AssignedClassSummary[];
   createdAt: string;
   updatedAt: string;
   updatedById?: string | null;

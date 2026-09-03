@@ -47,12 +47,14 @@ import { SubjectTeacherAssignmentPanel } from "@/components/admin/subject-teache
 import { TeacherAssignedClassesPanel } from "@/components/teacher/assigned-classes-panel";
 import { TeacherClassLearningSpace } from "@/components/teacher/class-learning-space";
 import { TeacherMaterialLibraryPanel } from "@/components/teacher/material-library-panel";
+import { TeacherStudentsPanel } from "@/components/teacher/students-panel";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
 const staffNavItems = [
   { icon: School, label: "Lớp học được phân công", href: "/teacher/classes" },
+  { icon: UsersRound, label: "Học sinh", href: "/teacher/students" },
   { icon: Library, label: "Thư viện tài liệu", href: "/teacher/materials" },
   {
     icon: FilePlus2,
@@ -60,6 +62,11 @@ const staffNavItems = [
     href: "/teacher/question-bank",
   },
   { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
+  {
+    icon: Settings,
+    label: "Cấu hình",
+    href: "/teacher/settings/exam-defaults",
+  },
 ];
 
 const settingsSubItems = [
@@ -279,7 +286,7 @@ export function StaffDashboardView() {
           },
           {
             icon: ClipboardCheck,
-            label: "Phân công bộ môn",
+            label: "Phân công giáo viên môn học",
             href: "/admin/subject-assignments",
           },
         ]
@@ -288,8 +295,15 @@ export function StaffDashboardView() {
   ];
   const isAccountsPage = pathname === "/admin/accounts";
   const isUsersPage = pathname.startsWith("/admin/users");
-  const studentDetailId =
+  const adminStudentDetailId =
     pathname.match(/^\/admin\/users\/students\/([^/]+)$/)?.[1] ?? "";
+  const teacherStudentDetailId =
+    pathname.match(/^\/teacher\/students\/([^/]+)$/)?.[1] ?? "";
+  const studentDetailId = adminStudentDetailId || teacherStudentDetailId;
+  const isTeacherStudentDetailPage = Boolean(teacherStudentDetailId);
+  const studentDetailBackHref = isTeacherStudentDetailPage
+    ? "/teacher/students"
+    : "/admin/users/students";
   const usersRole = pathname.startsWith("/admin/users/students")
     ? "STUDENT"
     : "TEACHER";
@@ -300,6 +314,7 @@ export function StaffDashboardView() {
   const isTeacherDashboard =
     user.role === "TEACHER" && pathname === "/teacher/dashboard";
   const isTeacherClassesPage = pathname === "/teacher/classes";
+  const isTeacherStudentsPage = pathname === "/teacher/students";
   const isTeacherMaterialsPage = pathname === "/teacher/materials";
   const teacherClassId =
     pathname.match(/^\/teacher\/classes\/([^/]+)$/)?.[1] ?? "";
@@ -311,7 +326,9 @@ export function StaffDashboardView() {
   const activeMenuLabel = pathname.startsWith("/admin/settings")
     ? (settingsSubItems.find((item) => item.href === pathname)?.label ??
       "Cấu hình hệ thống")
-    : pathname.startsWith("/admin/users")
+    : isTeacherStudentDetailPage
+      ? "Chi tiết học sinh"
+      : pathname.startsWith("/admin/users")
       ? studentDetailId
         ? "Chi tiết học sinh"
         : (userSubItems.find((item) => item.href === pathname)?.label ??
@@ -352,7 +369,7 @@ export function StaffDashboardView() {
             >
               <button
                 type="button"
-                onClick={() => router.push("/admin/users/students")}
+                onClick={() => router.push(studentDetailBackHref)}
                 className="shrink-0 text-slate-500 transition hover:text-brand-700"
               >
                 Học sinh
@@ -572,7 +589,8 @@ export function StaffDashboardView() {
 
               const active =
                 href === pathname ||
-                (href === "/teacher/classes" && isTeacherClassDetailPage);
+                (href === "/teacher/classes" && isTeacherClassDetailPage) ||
+                (href === "/teacher/students" && isTeacherStudentDetailPage);
               const Icon = href === "/admin/classes" ? School : NavIcon;
               return (
                 <button
@@ -665,13 +683,24 @@ export function StaffDashboardView() {
               isSettingsPage ||
               isTeacherDashboard ||
               isTeacherClassesPage ||
+              isTeacherStudentsPage ||
               isTeacherMaterialsPage ||
-              isTeacherClassDetailPage
+              isTeacherClassDetailPage ||
+              isTeacherStudentDetailPage
                 ? `w-full ${studentDetailId ? "bg-[#F5F9FF]" : ""}`
                 : "mx-auto max-w-[1280px]"
             }
           >
-            {isTeacherClassDetailPage ? (
+            {isTeacherStudentDetailPage ? (
+              <StudentDetailPanel
+                studentId={teacherStudentDetailId}
+                viewerRole="TEACHER"
+                backHref="/teacher/students"
+                onStudentNameChange={setStudentDetailName}
+              />
+            ) : isTeacherStudentsPage ? (
+              <TeacherStudentsPanel />
+            ) : isTeacherClassDetailPage ? (
               <TeacherClassLearningSpace classId={teacherClassId} />
             ) : isTeacherClassesPage ? (
               <TeacherAssignedClassesPanel />
@@ -695,6 +724,8 @@ export function StaffDashboardView() {
               studentDetailId ? (
                 <StudentDetailPanel
                   studentId={studentDetailId}
+                  viewerRole="ADMIN"
+                  backHref="/admin/users/students"
                   onStudentNameChange={setStudentDetailName}
                 />
               ) : (

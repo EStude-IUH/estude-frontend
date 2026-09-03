@@ -1,23 +1,86 @@
-import { BookOpenCheck, MapPin, Video } from "lucide-react";
+"use client";
 
-const weekDays = [
-  { short: "T2", date: "17", highlighted: true },
-  { short: "T3", date: "18", highlighted: false },
-  { short: "T4", date: "19", highlighted: false },
-  { short: "T5", date: "20", highlighted: false },
-  { short: "T6", date: "21", highlighted: false },
-];
+import { useMemo, useState } from "react";
+import {
+  BookOpenCheck,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Video,
+} from "lucide-react";
+
+const dayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
 const timeSlots = ["07:00", "09:30", "13:00", "15:30"];
 
-const timetable = [
-  { day: 0, time: "07:00", subject: "Lập trình hướng đối tượng", room: "H5.02", mode: "Trực tiếp", tone: "border-blue-200 bg-blue-50 text-blue-800" },
-  { day: 0, time: "13:00", subject: "Phát triển ứng dụng Web", room: "H3.01", mode: "Trực tiếp", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-  { day: 1, time: "09:30", subject: "Cơ sở dữ liệu", room: "A2.04", mode: "Trực tiếp", tone: "border-violet-200 bg-violet-50 text-violet-800" },
-  { day: 2, time: "07:00", subject: "Kiến trúc máy tính", room: "Online", mode: "Trực tuyến", tone: "border-amber-200 bg-amber-50 text-amber-800" },
-  { day: 3, time: "13:00", subject: "Cơ sở dữ liệu", room: "A2.04", mode: "Thực hành", tone: "border-violet-200 bg-violet-50 text-violet-800" },
-  { day: 4, time: "09:30", subject: "Phát triển ứng dụng Web", room: "H3.01", mode: "Thực hành", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-];
+type TimetableSession = {
+  date: string;
+  time: string;
+  subject: string;
+  room: string;
+  mode: string;
+  tone: string;
+};
+
+type WeeklyTimetableProps = {
+  sessions?: readonly TimetableSession[];
+};
+
+function createDate(year: number, month: number, day: number): Date {
+  return new Date(year, month, day, 12);
+}
+
+function normalizeDate(date: Date): Date {
+  return createDate(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date: Date, amount: number): Date {
+  return createDate(date.getFullYear(), date.getMonth(), date.getDate() + amount);
+}
+
+function startOfWeek(date: Date): Date {
+  const dayOfWeek = date.getDay();
+  return addDays(date, dayOfWeek === 0 ? -6 : 1 - dayOfWeek);
+}
+
+function toDateValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateValue(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const date = createDate(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3])
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatWeekRange(start: Date, end: Date): string {
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+
+  if (sameMonth) {
+    return `${start.getDate()} – ${end.getDate()} tháng ${end.getMonth() + 1}, ${end.getFullYear()}`;
+  }
+
+  if (sameYear) {
+    return `${start.getDate()} tháng ${start.getMonth() + 1} – ${end.getDate()} tháng ${end.getMonth() + 1}, ${end.getFullYear()}`;
+  }
+
+  return `${start.getDate()} tháng ${start.getMonth() + 1}, ${start.getFullYear()} – ${end.getDate()} tháng ${end.getMonth() + 1}, ${end.getFullYear()}`;
+}
 
 const assignedCourses = [
   { name: "Lập trình hướng đối tượng", code: "DHHTTT18C · OOP", students: 0, tone: "bg-blue-600" },
@@ -25,39 +88,105 @@ const assignedCourses = [
   { name: "Phát triển ứng dụng Web", code: "DHKTPM18A · WEB", students: 46, tone: "bg-emerald-500" },
 ];
 
-export function WeeklyTimetable() {
+export function WeeklyTimetable({ sessions = [] }: WeeklyTimetableProps) {
+  const [selectedDate, setSelectedDate] = useState(() => normalizeDate(new Date()));
+  const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
+  const weekDays = useMemo(
+    () =>
+      dayLabels.map((short, index) => {
+        const date = addDays(weekStart, index);
+        return {
+          short,
+          date,
+          value: toDateValue(date),
+          highlighted: toDateValue(date) === toDateValue(selectedDate),
+        };
+      }),
+    [selectedDate, weekStart],
+  );
+  const weekEnd = weekDays[6].date;
+
+  function selectDate(value: string) {
+    const date = parseDateValue(value);
+    if (date) setSelectedDate(date);
+  }
+
   return (
     <div className="space-y-5">
       <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
-        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <header className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="font-extrabold text-slate-950">Thời khóa biểu tuần</h2>
-            <p className="mt-1 text-xs text-slate-500">17 – 21 tháng 8, 2026</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {formatWeekRange(weekStart, weekEnd)}
+            </p>
           </div>
-          <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">
-            Học kỳ 1 · 2026–2027
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                aria-label="Tuần trước"
+                title="Tuần trước"
+                onClick={() => setSelectedDate((date) => addDays(date, -7))}
+                className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(normalizeDate(new Date()))}
+                className="h-8 rounded-lg px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                Tuần hiện tại
+              </button>
+              <button
+                type="button"
+                aria-label="Tuần sau"
+                title="Tuần sau"
+                onClick={() => setSelectedDate((date) => addDays(date, 7))}
+                className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+
+            <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500 transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100">
+              <CalendarDays className="size-4 shrink-0" />
+              <span className="sr-only">Chọn ngày thuộc tuần cần xem</span>
+              <input
+                type="date"
+                value={toDateValue(selectedDate)}
+                onChange={(event) => selectDate(event.target.value)}
+                aria-label="Chọn ngày thuộc tuần cần xem"
+                className="bg-transparent text-xs font-bold text-slate-700 outline-none"
+              />
+            </label>
+
+            <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">
+              Học kỳ 1 · 2026–2027
+            </span>
+          </div>
         </header>
 
         <div className="overflow-x-auto">
-          <div className="min-w-[920px]">
-            <div className="grid grid-cols-[74px_repeat(5,minmax(0,1fr))] border-b border-slate-100 bg-slate-50/70">
+          <div className="min-w-[1180px]">
+            <div className="grid grid-cols-[74px_repeat(7,minmax(0,1fr))] border-b border-slate-100 bg-slate-50/70">
               <div />
               {weekDays.map((day) => (
-                <div key={day.short} className={`border-l border-slate-100 px-3 py-3 text-center ${day.highlighted ? "bg-blue-50" : ""}`}>
+                <div key={day.value} className={`border-l border-slate-100 px-3 py-3 text-center ${day.highlighted ? "bg-blue-50" : ""}`}>
                   <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{day.short}</p>
-                  <p className={`mt-0.5 text-lg font-extrabold ${day.highlighted ? "text-brand-700" : "text-slate-800"}`}>{day.date}</p>
+                  <p className={`mt-0.5 text-lg font-extrabold ${day.highlighted ? "text-brand-700" : "text-slate-800"}`}>{day.date.getDate()}</p>
                 </div>
               ))}
             </div>
 
             {timeSlots.map((time) => (
-              <div key={time} className="grid grid-cols-[74px_repeat(5,minmax(0,1fr))] border-b border-slate-100 last:border-b-0">
+              <div key={time} className="grid grid-cols-[74px_repeat(7,minmax(0,1fr))] border-b border-slate-100 last:border-b-0">
                 <div className="px-3 py-4 text-center text-xs font-bold text-slate-400">{time}</div>
-                {weekDays.map((day, dayIndex) => {
-                  const session = timetable.find((item) => item.day === dayIndex && item.time === time);
+                {weekDays.map((day) => {
+                  const session = sessions.find((item) => item.date === day.value && item.time === time);
                   return (
-                    <div key={`${day.short}-${time}`} className={`min-h-[106px] border-l border-slate-100 p-2 ${day.highlighted ? "bg-blue-50/30" : ""}`}>
+                    <div key={`${day.value}-${time}`} className={`min-h-[106px] border-l border-slate-100 p-2 ${day.highlighted ? "bg-blue-50/30" : ""}`}>
                       {session ? (
                         <article className={`h-full rounded-xl border p-3 ${session.tone}`}>
                           <p className="line-clamp-2 text-xs font-extrabold leading-4">{session.subject}</p>
