@@ -21,7 +21,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AssessmentShell,
@@ -30,6 +30,7 @@ import {
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
+import { useActionNotification } from "@/components/ui/action-notification";
 import {
   Table,
   TableBody,
@@ -123,7 +124,9 @@ function statusClass(status: Exam["status"]) {
 }
 
 function formatExamDate(value: string): string {
-  return new Date(value).toLocaleString("vi-VN", {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
@@ -507,14 +510,17 @@ export function ExamWizardPage({
   onSaved?: (exam: Exam) => void | Promise<void>;
 }) {
   const router = useRouter();
+  const { notify } = useActionNotification();
   const [step, setStep] = useState(1);
+  const [hasVisitedConfigurationStep, setHasVisitedConfigurationStep] =
+    useState(Boolean(examId));
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<ExamQuestion[]>([]);
   const [initializing, setInitializing] = useState(true);
+  const [loadingTopics, setLoadingTopics] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [publishedExam, setPublishedExam] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
@@ -529,6 +535,18 @@ export function ExamWizardPage({
     description: "",
   });
   const [settings, setSettings] = useState<ExamSettings>(createBlankSettings);
+  const reportError = useCallback(
+    (message: string) =>
+      notify(message, {
+        key: `exam-wizard-error:${message}`,
+        variant: "error",
+      }),
+    [notify],
+  );
+
+  useEffect(() => {
+    if (step >= 3) setHasVisitedConfigurationStep(true);
+  }, [step]);
 
   useEffect(() => {
     const examRequest = examId
@@ -595,23 +613,28 @@ export function ExamWizardPage({
             className: firstClass.name,
           }));
         if (!firstClass || !firstSubject) {
-          setError(
+          reportError(
             "Bạn chưa được phân công môn học và lớp để tạo bài kiểm tra.",
           );
         }
       })
       .catch((cause) =>
-        setError(
+        reportError(
           cause instanceof Error
             ? cause.message
             : "Không thể tải dữ liệu học vụ",
         ),
       )
       .finally(() => setInitializing(false));
-  }, [examId]);
+  }, [examId, reportError]);
 
   useEffect(() => {
-    if (!info.subjectId) return;
+    if (!info.subjectId) {
+      setTopics([]);
+      return;
+    }
+    setTopics([]);
+    setLoadingTopics(true);
     void academicDataService
       .getTopics(info.subjectId)
       .then((loadedTopics) => {
@@ -626,11 +649,12 @@ export function ExamWizardPage({
         }));
       })
       .catch((cause) =>
-        setError(
+        reportError(
           cause instanceof Error ? cause.message : "Không thể tải chủ đề",
         ),
-      );
-  }, [info.subjectId]);
+      )
+      .finally(() => setLoadingTopics(false));
+  }, [info.subjectId, reportError]);
 
   useEffect(() => {
     if (!info.subjectId) {
@@ -642,12 +666,12 @@ export function ExamWizardPage({
       .getQuestions({ subjectId: info.subjectId })
       .then(setQuestions)
       .catch((cause) =>
-        setError(
+        reportError(
           cause instanceof Error ? cause.message : "Không thể tải câu hỏi",
         ),
       )
       .finally(() => setLoadingQuestions(false));
-  }, [info.subjectId]);
+  }, [info.subjectId, reportError]);
 
   const availableClasses = classes.filter((schoolClass) =>
     schoolClass.subjects.some((subject) => subject.id === info.subjectId),
@@ -741,11 +765,11 @@ export function ExamWizardPage({
     .filter((item) => item.question);
   function canNext() {
     if (step === 1 && !info.title.trim()) {
-      setError("Vui lòng nhập tên bài kiểm tra");
+      reportError("Vui lòng nhập tên bài kiểm tra");
       return false;
     }
     if (step === 1 && (!info.subjectId || !info.classId)) {
-      setError("Vui lòng chọn môn học và lớp được phân công");
+      reportError("Vui lòng chọn môn học và lớp được phân công");
       return false;
     }
     if (
@@ -753,30 +777,30 @@ export function ExamWizardPage({
       topics.length > 0 &&
       !topics.some((topic) => topic.name === info.topicName)
     ) {
-      setError("Vui lòng chọn chủ đề từ dữ liệu học vụ");
+      reportError("Vui lòng chọn chủ đề từ dữ liệu học vụ");
       return false;
     }
     if (step === 2 && selected.length === 0) {
-      setError("Hãy chọn ít nhất một câu hỏi");
+      reportError("Hãy chọn ít nhất một câu hỏi");
       return false;
     }
     if (step === 2 && selected.some((item) => item.points <= 0)) {
-      setError("Điểm của mỗi câu hỏi phải lớn hơn 0");
+      reportError("Điểm của mỗi câu hỏi phải lớn hơn 0");
       return false;
     }
     if (step === 3) {
       const startsAt = new Date(settings.startsAt).getTime();
       const endsAt = new Date(settings.endsAt).getTime();
       if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) {
-        setError("Vui lòng nhập đầy đủ thời gian mở và đóng bài");
+        reportError("Vui lòng nhập đầy đủ thời gian mở và đóng bài");
         return false;
       }
       if (startsAt >= endsAt) {
-        setError("Thời gian kết thúc phải sau thời gian bắt đầu");
+        reportError("Thời gian kết thúc phải sau thời gian bắt đầu");
         return false;
       }
       if (settings.durationMinutes <= 0 || settings.attemptsAllowed <= 0) {
-        setError("Thời lượng và số lần làm bài phải lớn hơn 0");
+        reportError("Thời lượng và số lần làm bài phải lớn hơn 0");
         return false;
       }
     }
@@ -785,7 +809,6 @@ export function ExamWizardPage({
 
   async function save(publishAfterSave = false) {
     setSaving(true);
-    setError("");
     const payload: ExamInput = {
       ...info,
       questions: normalizeOrder(selected),
@@ -808,7 +831,7 @@ export function ExamWizardPage({
       if (onSaved) await onSaved(savedExam);
       else router.push("/teacher/exams");
     } catch (cause) {
-      setError(
+      reportError(
         cause instanceof Error ? cause.message : "Không thể lưu bài kiểm tra",
       );
     } finally {
@@ -854,7 +877,7 @@ export function ExamWizardPage({
         />
       ) : null}
 
-      <div className="mb-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-4 pt-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
         {wizardSteps.map(({ label, description, icon: Icon }, index) => {
           const stepNumber = index + 1;
           const active = step === stepNumber;
@@ -864,23 +887,23 @@ export function ExamWizardPage({
               type="button"
               key={label}
               onClick={() => completed && setStep(stepNumber)}
-              className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${active ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-600/15" : completed ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-400"}`}
+              className={`flex min-h-[92px] items-center gap-4 rounded-xl border p-5 text-left transition ${active ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-600/15" : completed ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-400"}`}
             >
               <span
-                className={`grid size-9 shrink-0 place-items-center rounded-lg ${active ? "bg-white/15" : completed ? "bg-white" : "bg-slate-50"}`}
+                className={`grid size-11 shrink-0 place-items-center rounded-xl ${active ? "bg-white/15" : completed ? "bg-white" : "bg-slate-50"}`}
               >
                 {completed ? (
-                  <Check className="size-4" />
+                  <Check className="size-[18px]" />
                 ) : (
-                  <Icon className="size-4" />
+                  <Icon className="size-[18px]" />
                 )}
               </span>
               <span>
-                <span className="block text-xs font-black">
+                <span className="block text-sm font-black">
                   {stepNumber}. {label}
                 </span>
                 <span
-                  className={`mt-0.5 block text-[11px] ${active ? "text-blue-100" : "opacity-70"}`}
+                  className={`mt-1 block text-[13px] ${active ? "text-blue-100" : "opacity-70"}`}
                 >
                   {description}
                 </span>
@@ -889,17 +912,12 @@ export function ExamWizardPage({
           );
         })}
       </div>
-      {error ? (
-        <div className="mb-5">
-          <ErrorPanel message={error} />
-        </div>
-      ) : null}
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_290px]">
+      <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
           {step === 1 ? (
             <div>
               <div className="mb-6">
-                <h2 className="text-lg font-black text-slate-950">
+                <h2 className="text-lg font-black text-brand-700">
                   Thông tin chung
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -956,20 +974,24 @@ export function ExamWizardPage({
                     </option>
                   ))}
                 </Select>
-                <Select
+                <CustomSelect
                   label="Chủ đề"
                   value={info.topicName}
-                  onChange={(event) =>
-                    updateInfo("topicName", event.target.value)
+                  options={topics.map((topic) => ({
+                    value: topic.name,
+                    label: topic.name,
+                  }))}
+                  placeholder={
+                    loadingTopics
+                      ? "Đang tải chủ đề..."
+                      : topics.length === 0
+                        ? "Không có chủ đề"
+                        : "Chọn chủ đề"
                   }
-                >
-                  <option value="">Chọn chủ đề</option>
-                  {topics.map((topic) => (
-                    <option key={topic.id} value={topic.name}>
-                      {topic.name}
-                    </option>
-                  ))}
-                </Select>
+                  disabled={loadingTopics || topics.length === 0}
+                  ariaLabel="Chọn chủ đề bài kiểm tra"
+                  onValueChange={(value) => updateInfo("topicName", value)}
+                />
                 <div className="md:col-span-2">
                   <Textarea
                     label="Mô tả"
@@ -1330,7 +1352,6 @@ export function ExamWizardPage({
               variant="outline"
               disabled={saving}
               onClick={() => {
-                setError("");
                 if (step === 1) {
                   if (onClose) onClose();
                   else router.push("/teacher/exams");
@@ -1344,7 +1365,6 @@ export function ExamWizardPage({
               <Button
                 onClick={() => {
                   if (canNext()) {
-                    setError("");
                     setStep((value) => value + 1);
                   }
                 }}
@@ -1373,49 +1393,61 @@ export function ExamWizardPage({
             )}
           </div>
         </section>
-        <aside className="sticky top-20 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card xl:block">
-          <div className="border-b border-slate-100 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-900">
+        <aside className="sticky top-20 hidden h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card xl:flex xl:flex-col">
+          <div className="border-b border-slate-100 bg-slate-50 p-5">
+            <p className="text-base font-black text-brand-700">
               Tóm tắt bài kiểm tra
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-sm text-slate-500">
               Cập nhật theo nội dung đang nhập
             </p>
           </div>
-          <div className="space-y-4 p-4 text-sm">
+          <div className="flex flex-1 flex-col gap-5 p-5 text-sm">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Tên bài
               </p>
-              <p className="mt-1 line-clamp-2 font-bold text-slate-800">
+              <p className="mt-1.5 line-clamp-2 text-base font-bold text-slate-800">
                 {info.title || "Chưa đặt tên"}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-brand-50 p-3">
-                <p className="text-[11px] text-brand-600">Câu hỏi</p>
-                <p className="mt-1 text-lg font-black text-brand-800">
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="rounded-xl bg-brand-50 p-4">
+                <p className="text-xs font-semibold text-brand-600">Câu hỏi</p>
+                <p className="mt-1.5 text-2xl font-black text-brand-800">
                   {selected.length}
                 </p>
               </div>
-              <div className="rounded-xl bg-violet-50 p-3">
-                <p className="text-[11px] text-violet-600">Tổng điểm</p>
-                <p className="mt-1 text-lg font-black text-violet-800">
+              <div className="rounded-xl bg-violet-50 p-4">
+                <p className="text-xs font-semibold text-violet-600">Tổng điểm</p>
+                <p className="mt-1.5 text-2xl font-black text-violet-800">
                   {selected.reduce((sum, item) => sum + item.points, 0)}
                 </p>
               </div>
             </div>
-            <dl className="space-y-3 border-t border-slate-100 pt-4">
+            <dl className="space-y-4 border-t border-slate-100 pt-5">
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-400">Môn học</dt>
-                <dd className="max-w-36 truncate font-bold">
+                <dd className="max-w-44 truncate font-bold">
                   {info.subjectName || "—"}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-400">Lớp</dt>
-                <dd className="max-w-36 truncate font-bold">
+                <dd className="max-w-44 truncate font-bold">
                   {currentClassLabel || "—"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Thời gian bắt đầu</dt>
+                <dd className="whitespace-nowrap text-[13px] font-bold">
+                  {formatExamDate(settings.startsAt)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-400">Thời gian kết thúc</dt>
+                <dd className="whitespace-nowrap text-[13px] font-bold">
+                  {formatExamDate(settings.endsAt)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -1424,10 +1456,14 @@ export function ExamWizardPage({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-400">Số lượt làm</dt>
-                <dd className="font-bold">{settings.attemptsAllowed}</dd>
+                <dd className="font-bold">
+                  {hasVisitedConfigurationStep
+                    ? settings.attemptsAllowed
+                    : "-/-"}
+                </dd>
               </div>
             </dl>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+            <div className="mt-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-[13px] leading-5 text-amber-800">
               Bạn có thể tiếp tục chỉnh sửa khi bài vẫn ở trạng thái bản nháp.
             </div>
           </div>

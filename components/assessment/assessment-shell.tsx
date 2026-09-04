@@ -294,6 +294,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           className={
             pathname.startsWith("/teacher/question-bank")
               || pathname === "/teacher/exams"
+              || pathname === "/teacher/exams/new"
               || pathname === "/teacher/settings/exam-defaults"
               ? "w-full"
               : "mx-auto max-w-[1280px]"

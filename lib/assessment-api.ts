@@ -17,6 +17,8 @@ import type {
   Question,
   QuestionFilters,
   QuestionInput,
+  BulkMoveQuestionsInput,
+  BulkMoveQuestionsResult,
   Subject,
   SubjectImportResult,
   SubjectTeacherAssignment,
@@ -311,6 +313,12 @@ export const questionBankService = {
   },
   deleteQuestion(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/question-bank/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  moveQuestionsToTopic(payload: BulkMoveQuestionsInput): Promise<BulkMoveQuestionsResult> {
+    return authenticatedRequest<BulkMoveQuestionsResult>("/question-bank/move-topic", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };
 

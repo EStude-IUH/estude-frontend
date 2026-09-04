@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/auth-context";
+import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className={inter.variable} suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ActionNotificationProvider>{children}</ActionNotificationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

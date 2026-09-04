@@ -113,6 +113,18 @@ export interface QuestionInput {
   disabled: boolean;
 }
 
+export interface BulkMoveQuestionsInput {
+  questionIds: string[];
+  subjectId: string;
+  topicId?: string;
+  newTopicName?: string;
+}
+
+export interface BulkMoveQuestionsResult {
+  topic: Pick<Topic, "id" | "name">;
+  questions: Question[];
+}
+
 export interface AcademicYear {
   id: string;
   name: string;
@@ -373,8 +385,16 @@ export interface ExamQuestion {
   questionId: string;
   points: number;
   order: number;
+  subjectId?: string;
+  subjectName?: string;
+  topicId?: string;
+  topicName?: string;
   question?: {
     id: string;
+    subjectId?: string;
+    subjectName?: string;
+    topicId?: string;
+    topicName?: string;
     content: string;
     type: QuestionType;
     options: QuestionOption[];

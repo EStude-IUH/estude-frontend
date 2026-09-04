@@ -3,6 +3,8 @@
 import Link from "next/link";
 import {
   FileQuestion,
+  FolderInput,
+  LoaderCircle,
   Pencil,
   Plus,
   Sparkles,
@@ -27,16 +29,19 @@ import {
 } from "@/components/ui/data-table";
 import { DataTableFooter } from "@/components/ui/data-table-footer";
 import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
-import { Select } from "@/components/ui/form-control";
+import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { questionBankService } from "@/lib/assessment-api";
+import { academicDataService, questionBankService } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import {
   DIFFICULTY_LABELS,
   QUESTION_TYPE_LABELS,
   type Difficulty,
   type Question,
   type QuestionType,
+  type Subject,
+  type Topic,
 } from "@/types/assessment";
 
 const difficultyTone: Record<Difficulty, string> = {
@@ -48,7 +53,18 @@ const difficultyTone: Record<Difficulty, string> = {
 
 export function QuestionBankPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [moveSubjects, setMoveSubjects] = useState<Subject[]>([]);
+  const [moveTopics, setMoveTopics] = useState<Topic[]>([]);
+  const [targetSubjectId, setTargetSubjectId] = useState("");
+  const [moveMode, setMoveMode] = useState<"existing" | "new">("existing");
+  const [targetTopicId, setTargetTopicId] = useState("");
+  const [newTopicName, setNewTopicName] = useState("");
+  const [loadingMoveTopics, setLoadingMoveTopics] = useState(false);
+  const [movingQuestions, setMovingQuestions] = useState(false);
+  const [moveError, setMoveError] = useState("");
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
@@ -63,12 +79,16 @@ export function QuestionBankPage() {
     setLoading(true);
     setError("");
     try {
-      setQuestions(
-        await questionBankService.getQuestions({
-          search: submittedSearch || undefined,
-          difficulty: difficulty || undefined,
-          type: type || undefined,
-        }),
+      const loadedQuestions = await questionBankService.getQuestions({
+        search: submittedSearch || undefined,
+        difficulty: difficulty || undefined,
+        type: type || undefined,
+      });
+      setQuestions(loadedQuestions);
+      setSelectedIds((ids) =>
+        ids.filter((id) =>
+          loadedQuestions.some((question) => question.id === id),
+        ),
       );
     } catch (cause) {
       setError(
@@ -86,7 +106,20 @@ export function QuestionBankPage() {
   }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(questions.length / pageSize));
-  const pagedQuestions = questions.slice((page - 1) * pageSize, page * pageSize);
+  const sortedQuestions = [...questions].sort(
+    (left, right) =>
+      Number(Boolean(left.disabled)) - Number(Boolean(right.disabled)),
+  );
+  const pagedQuestions = sortedQuestions.slice(
+    (page - 1) * pageSize,
+    page * pageSize,
+  );
+  const selectedQuestions = questions.filter((question) =>
+    selectedIds.includes(question.id),
+  );
+  const allPageQuestionsSelected =
+    pagedQuestions.length > 0 &&
+    pagedQuestions.every((question) => selectedIds.includes(question.id));
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -102,10 +135,120 @@ export function QuestionBankPage() {
     try {
       await questionBankService.deleteQuestion(question.id);
       setQuestions((items) => items.filter((item) => item.id !== question.id));
+      setSelectedIds((ids) => ids.filter((id) => id !== question.id));
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Không thể xóa câu hỏi",
       );
+    }
+  }
+
+  function toggleQuestionSelection(questionId: string) {
+    setSelectedIds((ids) =>
+      ids.includes(questionId)
+        ? ids.filter((id) => id !== questionId)
+        : [...ids, questionId],
+    );
+  }
+
+  function toggleCurrentPageSelection() {
+    const pageIds = pagedQuestions.map((question) => question.id);
+    setSelectedIds((ids) =>
+      allPageQuestionsSelected
+        ? ids.filter((id) => !pageIds.includes(id))
+        : [...new Set([...ids, ...pageIds])],
+    );
+  }
+
+  async function openMoveModal() {
+    setError("");
+    setMoveError("");
+    setNewTopicName("");
+    setMoveSubjects([]);
+    setMoveTopics([]);
+    setTargetSubjectId("");
+    setTargetTopicId("");
+    setMoveModalOpen(true);
+    setLoadingMoveTopics(true);
+    try {
+      const subjects = await academicDataService.getSubjects();
+      if (!subjects.length) {
+        throw new Error("Hệ thống chưa có môn học đang hoạt động.");
+      }
+      const selectedSubjectIds = new Set(
+        selectedQuestions.map((question) => question.subjectId),
+      );
+      const currentSubjectId =
+        selectedSubjectIds.size === 1 &&
+        subjects.some(
+          (subject) => subject.id === selectedQuestions[0]?.subjectId,
+        )
+          ? selectedQuestions[0].subjectId
+          : subjects[0].id;
+      setMoveSubjects(subjects);
+      setTargetSubjectId(currentSubjectId);
+      const topics = await academicDataService.getTopics(currentSubjectId);
+      setMoveTopics(topics);
+      setTargetTopicId(topics[0]?.id ?? "");
+      setMoveMode(topics.length ? "existing" : "new");
+    } catch (cause) {
+      setMoveError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tải danh sách chủ đề",
+      );
+    } finally {
+      setLoadingMoveTopics(false);
+    }
+  }
+
+  async function changeTargetSubject(subjectId: string) {
+    setTargetSubjectId(subjectId);
+    setMoveTopics([]);
+    setTargetTopicId("");
+    setMoveError("");
+    setLoadingMoveTopics(true);
+    try {
+      const topics = await academicDataService.getTopics(subjectId);
+      setMoveTopics(topics);
+      setTargetTopicId(topics[0]?.id ?? "");
+      setMoveMode(topics.length ? "existing" : "new");
+    } catch (cause) {
+      setMoveError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tải danh sách chủ đề",
+      );
+    } finally {
+      setLoadingMoveTopics(false);
+    }
+  }
+
+  async function moveSelectedQuestions() {
+    setMovingQuestions(true);
+    setMoveError("");
+    try {
+      const result = await questionBankService.moveQuestionsToTopic({
+        questionIds: selectedIds,
+        subjectId: targetSubjectId,
+        ...(moveMode === "existing"
+          ? { topicId: targetTopicId }
+          : { newTopicName: newTopicName.trim() }),
+      });
+      const updatedById = new Map(
+        result.questions.map((question) => [question.id, question]),
+      );
+      setQuestions((items) =>
+        items.map((question) => updatedById.get(question.id) ?? question),
+      );
+      setSelectedIds([]);
+      setMoveModalOpen(false);
+    } catch (cause) {
+      setMoveError(
+        cause instanceof Error ? cause.message : "Không thể di chuyển câu hỏi",
+      );
+    } finally {
+      setMovingQuestions(false);
     }
   }
 
@@ -141,51 +284,59 @@ export function QuestionBankPage() {
         <section className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[360px_170px_190px]">
-            <DebouncedSearchInput
-              className="!h-[42px] !rounded-lg focus:!ring-0"
-              value={search}
-              onValueChange={setSearch}
-              onSearch={(value) => {
-                setPage(1);
-                setSubmittedSearch(value);
-              }}
-              placeholder="Tìm theo nội dung câu hỏi..."
-            />
-            <Select
-              className="!h-[42px] !rounded-lg focus:!ring-0"
-              value={difficulty}
-              onChange={(event) => {
-                setPage(1);
-                setDifficulty(event.target.value as Difficulty | "");
-              }}
-              aria-label="Lọc theo độ khó"
-            >
-              <option value="">Mọi độ khó</option>
-              {Object.entries(DIFFICULTY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              className="!h-[42px] !rounded-lg focus:!ring-0"
-              value={type}
-              onChange={(event) => {
-                setPage(1);
-                setType(event.target.value as QuestionType | "");
-              }}
-              aria-label="Lọc theo loại câu hỏi"
-            >
-              <option value="">Mọi loại câu hỏi</option>
-              {Object.entries(QUESTION_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
+              <DebouncedSearchInput
+                className="!h-[42px] !rounded-lg focus:!ring-0"
+                value={search}
+                onValueChange={setSearch}
+                onSearch={(value) => {
+                  setPage(1);
+                  setSubmittedSearch(value);
+                }}
+                placeholder="Tìm theo nội dung câu hỏi..."
+              />
+              <CustomSelect
+                value={difficulty}
+                options={[
+                  { value: "", label: "Mọi độ khó" },
+                  ...Object.entries(DIFFICULTY_LABELS).map(
+                    ([value, label]) => ({ value, label }),
+                  ),
+                ]}
+                buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
+                ariaLabel="Lọc theo độ khó"
+                onValueChange={(value) => {
+                  setPage(1);
+                  setDifficulty(value as Difficulty | "");
+                }}
+              />
+              <CustomSelect
+                value={type}
+                options={[
+                  { value: "", label: "Mọi loại câu hỏi" },
+                  ...Object.entries(QUESTION_TYPE_LABELS).map(
+                    ([value, label]) => ({ value, label }),
+                  ),
+                ]}
+                buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
+                ariaLabel="Lọc theo loại câu hỏi"
+                onValueChange={(value) => {
+                  setPage(1);
+                  setType(value as QuestionType | "");
+                }}
+              />
             </div>
 
             <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+              {selectedIds.length ? (
+                <Button
+                  variant="outline"
+                  className="!h-[42px] !rounded-lg"
+                  onClick={() => void openMoveModal()}
+                >
+                  <FolderInput className="size-4" />
+                  Di chuyển môn ({selectedIds.length})
+                </Button>
+              ) : null}
               <Link href="/teacher/question-bank/generate">
                 <Button variant="secondary" className="!h-[42px] !rounded-lg">
                   <Sparkles className="size-4" />
@@ -212,7 +363,15 @@ export function QuestionBankPage() {
             <Table className="min-w-[1220px]">
               <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
                 <tr>
-                  <TableHead className="w-14 text-center">#</TableHead>
+                  <TableHead className="w-14 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allPageQuestionsSelected}
+                      onChange={toggleCurrentPageSelection}
+                      className="size-4 cursor-pointer rounded border-white/70 accent-brand-700"
+                      aria-label="Chọn tất cả câu hỏi trên trang này"
+                    />
+                  </TableHead>
                   <TableHead>Nội dung</TableHead>
                   <TableHead className="w-56">Môn / Chủ đề</TableHead>
                   <TableHead className="w-40 text-center">Loại</TableHead>
@@ -231,21 +390,38 @@ export function QuestionBankPage() {
                   />
                 ) : null}
                 {!loading
-                  ? pagedQuestions.map((question, index) => (
+                  ? pagedQuestions.map((question) => (
                       <tr
                         key={question.id}
-                        className="cursor-pointer transition hover:bg-slate-50/70"
+                        aria-selected={selectedIds.includes(question.id)}
+                        className={`cursor-pointer transition hover:bg-slate-50/70 ${
+                          selectedIds.includes(question.id)
+                            ? "bg-blue-50/60"
+                            : ""
+                        }`}
                         onClick={() => setEditingQuestion(question)}
                       >
-                        <TableCell className="text-center text-xs text-slate-400">
-                          {(page - 1) * pageSize + index + 1}
+                        <TableCell
+                          className="text-center"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(question.id)}
+                            onChange={() =>
+                              toggleQuestionSelection(question.id)
+                            }
+                            className="size-4 cursor-pointer rounded border-slate-300 accent-brand-600"
+                            aria-label={`Chọn câu hỏi ${question.content}`}
+                          />
                         </TableCell>
                         <TableCell>
                           <p className="max-w-4xl text-[14px] font-bold leading-6 text-slate-700">
                             {question.content}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {question.options.length} lựa chọn · {question.defaultPoints} điểm
+                            {question.options.length} lựa chọn ·{" "}
+                            {question.defaultPoints} điểm
                           </p>
                         </TableCell>
                         <TableCell>
@@ -268,9 +444,7 @@ export function QuestionBankPage() {
                             {DIFFICULTY_LABELS[question.difficulty]}
                           </span>
                         </TableCell>
-                        <TableCell
-                          onClick={(event) => event.stopPropagation()}
-                        >
+                        <TableCell onClick={(event) => event.stopPropagation()}>
                           <ToggleSwitch
                             checked={!question.disabled}
                             loading={updatingStatusId === question.id}
@@ -361,6 +535,105 @@ export function QuestionBankPage() {
           />
         </Modal>
       ) : null}
+      <Modal
+        open={moveModalOpen}
+        title={`Di chuyển môn cho ${selectedIds.length} câu hỏi`}
+        description="Chọn môn và chủ đề đích. Các bài kiểm tra đã tạo vẫn giữ nguyên môn, chủ đề cũ của câu hỏi."
+        onClose={() => !movingQuestions && setMoveModalOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              disabled={movingQuestions}
+              onClick={() => setMoveModalOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              disabled={
+                movingQuestions ||
+                loadingMoveTopics ||
+                !targetSubjectId ||
+                (moveMode === "existing"
+                  ? !targetTopicId
+                  : newTopicName.trim().length < 2)
+              }
+              onClick={() => void moveSelectedQuestions()}
+            >
+              {movingQuestions ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <FolderInput className="size-4" />
+              )}
+              Di chuyển môn
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {moveError ? <ErrorPanel message={moveError} /> : null}
+          <CustomSelect
+            label="Môn học đích"
+            value={targetSubjectId}
+            options={moveSubjects.map((subject) => ({
+              value: subject.id,
+              label: getVietnameseSubjectName(subject),
+            }))}
+            disabled={loadingMoveTopics && !moveSubjects.length}
+            onValueChange={(value) => void changeTargetSubject(value)}
+          />
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              disabled={!moveTopics.length || loadingMoveTopics}
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                moveMode === "existing"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-slate-500"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+              onClick={() => setMoveMode("existing")}
+            >
+              Chủ đề có sẵn
+            </button>
+            <button
+              type="button"
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                moveMode === "new"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-slate-500"
+              }`}
+              onClick={() => setMoveMode("new")}
+            >
+              Tạo chủ đề mới
+            </button>
+          </div>
+          {loadingMoveTopics ? (
+            <p className="flex items-center gap-2 py-3 text-sm text-slate-500">
+              <LoaderCircle className="size-4 animate-spin" />
+              Đang tải chủ đề...
+            </p>
+          ) : moveMode === "existing" ? (
+            <CustomSelect
+              label="Chủ đề đích"
+              value={targetTopicId}
+              options={moveTopics.map((topic) => ({
+                value: topic.id,
+                label: topic.name,
+              }))}
+              onValueChange={setTargetTopicId}
+            />
+          ) : (
+            <Input
+              label="Tên chủ đề mới"
+              value={newTopicName}
+              maxLength={120}
+              autoFocus
+              placeholder="Ví dụ: Chương 2 - Đạo hàm"
+              onChange={(event) => setNewTopicName(event.target.value)}
+            />
+          )}
+        </div>
+      </Modal>
     </AssessmentShell>
   );
 }

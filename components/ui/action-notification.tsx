@@ -9,17 +9,21 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, X } from "lucide-react";
+import { CircleAlert, CheckCircle2, X } from "lucide-react";
+
+type NotificationVariant = "success" | "error";
 
 interface NotificationItem {
   id: string;
   key: string;
   message: string;
   count: number;
+  variant: NotificationVariant;
 }
 
 interface NotifyOptions {
   key?: string;
+  variant?: NotificationVariant;
 }
 
 interface ActionNotificationContextValue {
@@ -39,6 +43,7 @@ export function ActionNotificationProvider({ children }: { children: ReactNode }
 
   const notify = useCallback((message: string, options: NotifyOptions = {}) => {
     const key = options.key ?? message;
+    const variant = options.variant ?? "success";
     const existingTimer = timersRef.current.get(key);
     if (existingTimer) window.clearTimeout(existingTimer);
 
@@ -46,7 +51,9 @@ export function ActionNotificationProvider({ children }: { children: ReactNode }
       const existing = current.find((item) => item.key === key);
       if (existing) {
         return current.map((item) =>
-          item.key === key ? { ...item, count: item.count + 1 } : item,
+          item.key === key
+            ? { ...item, count: item.count + 1, variant }
+            : item,
         );
       }
 
@@ -57,6 +64,7 @@ export function ActionNotificationProvider({ children }: { children: ReactNode }
           key,
           message,
           count: 1,
+          variant,
         },
       ];
     });
@@ -90,17 +98,21 @@ export function ActionNotificationProvider({ children }: { children: ReactNode }
           {notifications.map((notification) => (
             <div
               key={`${notification.id}-${notification.count}`}
-              role="status"
-              className="action-notification pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 shadow-lg shadow-emerald-950/10"
+              role={notification.variant === "error" ? "alert" : "status"}
+              className={`action-notification pointer-events-auto flex w-fit max-w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg ${notification.variant === "error" ? "border-rose-200 bg-rose-50 text-rose-700 shadow-rose-950/10" : "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-emerald-950/10"}`}
             >
-              <CheckCircle2 className="size-4 shrink-0" />
+              {notification.variant === "error" ? (
+                <CircleAlert className="size-4 shrink-0" />
+              ) : (
+                <CheckCircle2 className="size-4 shrink-0" />
+              )}
               <span className="min-w-0 flex-1">
                 {notification.message}
                 {notification.count > 1 ? ` (${notification.count})` : ""}
               </span>
               <button
                 type="button"
-                className="shrink-0 text-emerald-600 transition hover:text-emerald-900"
+                className={`shrink-0 transition ${notification.variant === "error" ? "text-rose-600 hover:text-rose-900" : "text-emerald-600 hover:text-emerald-900"}`}
                 aria-label="Đóng thông báo"
                 onClick={() => {
                   const timer = timersRef.current.get(notification.key);
