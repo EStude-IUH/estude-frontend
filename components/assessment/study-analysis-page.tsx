@@ -152,13 +152,11 @@ export function StudentStudyAnalysisPage() {
   if (!analysis) return null;
 
   const { report } = analysis;
-  const courseHref = `/student/courses/${encodeURIComponent(report.exam.classId)}/${encodeURIComponent(report.exam.subjectId)}`;
-
   return (
     <StudentShell>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <Button variant="ghost" onClick={() => router.push(courseHref)}>
-          <ArrowLeft className="size-4" /> Quay lại môn học
+        <Button variant="ghost" onClick={() => router.push("/student/review")}>
+          <ArrowLeft className="size-4" /> Quay lại ôn tập
         </Button>
         <span className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
           <Sparkles className="size-3.5" /> Trợ giảng AI

@@ -44,6 +44,7 @@ import type {
   TeacherExamDefaults,
   TeacherExamDefaultSettings,
 } from "@/types/assessment";
+import type { StudentOverview } from "@/types/student-overview";
 
 export const academicDataService = {
   getAcademicYears(includeInactive = false): Promise<AcademicYear[]> {
@@ -377,6 +378,12 @@ export const aiQuestionSettingsService = {
       method: "PUT",
       body: JSON.stringify(settings),
     });
+  },
+};
+
+export const studentOverviewService = {
+  getMyOverview(): Promise<StudentOverview> {
+    return authenticatedRequest<StudentOverview>("/users/me/student-overview");
   },
 };
 

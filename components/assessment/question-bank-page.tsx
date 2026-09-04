@@ -59,7 +59,7 @@ export function QuestionBankPage() {
   const [moveSubjects, setMoveSubjects] = useState<Subject[]>([]);
   const [moveTopics, setMoveTopics] = useState<Topic[]>([]);
   const [targetSubjectId, setTargetSubjectId] = useState("");
-  const [moveMode, setMoveMode] = useState<"existing" | "new">("existing");
+  const [moveMode, setMoveMode] = useState<"none" | "existing" | "new">("none");
   const [targetTopicId, setTargetTopicId] = useState("");
   const [newTopicName, setNewTopicName] = useState("");
   const [loadingMoveTopics, setLoadingMoveTopics] = useState(false);
@@ -168,6 +168,7 @@ export function QuestionBankPage() {
     setMoveTopics([]);
     setTargetSubjectId("");
     setTargetTopicId("");
+    setMoveMode("none");
     setMoveModalOpen(true);
     setLoadingMoveTopics(true);
     try {
@@ -190,7 +191,7 @@ export function QuestionBankPage() {
       const topics = await academicDataService.getTopics(currentSubjectId);
       setMoveTopics(topics);
       setTargetTopicId(topics[0]?.id ?? "");
-      setMoveMode(topics.length ? "existing" : "new");
+      setMoveMode("none");
     } catch (cause) {
       setMoveError(
         cause instanceof Error
@@ -212,7 +213,7 @@ export function QuestionBankPage() {
       const topics = await academicDataService.getTopics(subjectId);
       setMoveTopics(topics);
       setTargetTopicId(topics[0]?.id ?? "");
-      setMoveMode(topics.length ? "existing" : "new");
+      setMoveMode("none");
     } catch (cause) {
       setMoveError(
         cause instanceof Error
@@ -231,9 +232,11 @@ export function QuestionBankPage() {
       const result = await questionBankService.moveQuestionsToTopic({
         questionIds: selectedIds,
         subjectId: targetSubjectId,
-        ...(moveMode === "existing"
+        ...(moveMode === "existing" && targetTopicId
           ? { topicId: targetTopicId }
-          : { newTopicName: newTopicName.trim() }),
+          : moveMode === "new"
+            ? { newTopicName: newTopicName.trim() }
+            : {}),
       });
       const updatedById = new Map(
         result.questions.map((question) => [question.id, question]),
@@ -373,7 +376,7 @@ export function QuestionBankPage() {
                     />
                   </TableHead>
                   <TableHead>Nội dung</TableHead>
-                  <TableHead className="w-56">Môn / Chủ đề</TableHead>
+                  <TableHead className="w-56">Môn</TableHead>
                   <TableHead className="w-40 text-center">Loại</TableHead>
                   <TableHead className="w-36 text-center">Độ khó</TableHead>
                   <TableHead className="w-40">Trạng thái</TableHead>
@@ -538,7 +541,7 @@ export function QuestionBankPage() {
       <Modal
         open={moveModalOpen}
         title={`Di chuyển môn cho ${selectedIds.length} câu hỏi`}
-        description="Chọn môn và chủ đề đích. Các bài kiểm tra đã tạo vẫn giữ nguyên môn, chủ đề cũ của câu hỏi."
+        description="Chọn môn đích; chủ đề là tùy chọn. Các bài kiểm tra đã tạo vẫn giữ nguyên môn, chủ đề cũ của câu hỏi."
         onClose={() => !movingQuestions && setMoveModalOpen(false)}
         footer={
           <>
@@ -556,7 +559,9 @@ export function QuestionBankPage() {
                 !targetSubjectId ||
                 (moveMode === "existing"
                   ? !targetTopicId
-                  : newTopicName.trim().length < 2)
+                  : moveMode === "new"
+                    ? newTopicName.trim().length < 2
+                    : false)
               }
               onClick={() => void moveSelectedQuestions()}
             >
@@ -582,7 +587,18 @@ export function QuestionBankPage() {
             disabled={loadingMoveTopics && !moveSubjects.length}
             onValueChange={(value) => void changeTargetSubject(value)}
           />
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+          <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                moveMode === "none"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-slate-500"
+              }`}
+              onClick={() => setMoveMode("none")}
+            >
+              Không chủ đề
+            </button>
             <button
               type="button"
               disabled={!moveTopics.length || loadingMoveTopics}
@@ -611,6 +627,10 @@ export function QuestionBankPage() {
             <p className="flex items-center gap-2 py-3 text-sm text-slate-500">
               <LoaderCircle className="size-4 animate-spin" />
               Đang tải chủ đề...
+            </p>
+          ) : moveMode === "none" ? (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Câu hỏi sẽ được chuyển sang môn đã chọn và để ở trạng thái chưa phân loại.
             </p>
           ) : moveMode === "existing" ? (
             <CustomSelect

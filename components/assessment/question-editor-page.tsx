@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { Check, Save } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -44,7 +44,7 @@ export function QuestionEditorForm({
   const [form, setForm] = useState<QuestionInput>({
     subjectId: "",
     subjectName: "",
-    topicId: "",
+    topicId: null,
     topicName: "",
     content: "",
     type: "SINGLE_CHOICE",
@@ -138,16 +138,24 @@ export function QuestionEditorForm({
       ...current,
       subjectId: subject.id,
       subjectName: getVietnameseSubjectName(subject),
-      topicId: "",
+      topicId: null,
       topicName: "",
     }));
   }
 
   function chooseTopic(topicId: string) {
+    if (!topicId) {
+      setForm((current) => ({
+        ...current,
+        topicId: null,
+        topicName: "",
+      }));
+      return;
+    }
     const topic = topics.find((item) => item.id === topicId);
     setForm((current) => ({
       ...current,
-      topicId: topic?.id ?? "",
+      topicId: topic?.id ?? null,
       topicName: topic?.name ?? "",
     }));
   }
@@ -194,6 +202,8 @@ export function QuestionEditorForm({
     try {
       const payload = {
         ...form,
+        topicId: form.topicId || null,
+        topicName: form.topicName || "",
         options: form.type === "ESSAY" ? [] : form.options,
         correctOptionIds: form.type === "ESSAY" ? [] : form.correctOptionIds,
       };
@@ -274,7 +284,7 @@ export function QuestionEditorForm({
                 />
                 <CustomSelect
                   label="Chủ đề"
-                  value={form.topicId}
+                  value={form.topicId ?? ""}
                   options={[
                     {
                       value: "",
@@ -363,14 +373,19 @@ export function QuestionEditorForm({
                 <div className={embedded ? "space-y-1.5" : "space-y-2"}>
                   {form.options.map((option, index) => (
                     <div key={option.id} className="flex items-center gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => toggleCorrect(option.id)}
-                        className={`grid size-9 shrink-0 place-items-center rounded-lg border text-xs font-black transition ${form.correctOptionIds.includes(option.id) ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white text-slate-500 hover:border-brand-300"}`}
+                        className={`!size-9 shrink-0 !p-0 text-xs font-black ${form.correctOptionIds.includes(option.id) ? "border-brand-600 !bg-brand-600 text-white" : "border-slate-300 text-slate-500 hover:border-brand-300"}`}
                         aria-label={`Đánh dấu đáp án ${option.label} là đúng`}
                       >
-                        {option.label}
-                      </button>
+                        {form.correctOptionIds.includes(option.id) ? (
+                          <Check className="size-4" />
+                        ) : (
+                          option.label
+                        )}
+                      </Button>
                       <div className="min-w-0 flex-1">
                         <Input
                           className={embedded ? "h-9" : undefined}

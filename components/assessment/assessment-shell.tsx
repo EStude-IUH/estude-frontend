@@ -104,14 +104,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   const roleLabel = "Giáo viên";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ${isSidebarCollapsed ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0" : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"}`;
   const workspaceTitle = getWorkspaceTitle(pathname, links);
-  const hasQuestionBankBreadcrumb =
-    pathname === "/teacher/question-bank/generate" ||
-    /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname);
-  const breadcrumbParent = hasQuestionBankBreadcrumb
-    ? { href: "/teacher/question-bank", label: "Ngân hàng câu hỏi" }
-    : pathname === "/teacher/exams/new"
-      ? { href: "/teacher/exams", label: "Bài kiểm tra" }
-      : null;
+  const breadcrumbs = getWorkspaceBreadcrumbs(pathname);
 
   async function handleSignOut() {
     setIsAccountMenuOpen(false);
@@ -132,22 +125,33 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
         >
           <Menu className="size-5" />
         </button>
-        {breadcrumbParent ? (
+        {breadcrumbs.length > 1 ? (
           <nav
-            aria-label="Breadcrumb"
             className="flex min-w-0 items-center gap-2 text-base font-bold tracking-tight sm:text-lg"
+            aria-label="Vị trí hiện tại"
           >
-            <Link
-              href={breadcrumbParent.href}
-              className="shrink-0 text-slate-500 transition-colors hover:text-brand-700"
-            >
-              {breadcrumbParent.label}
-            </Link>
-            <ChevronRight
-              aria-hidden="true"
-              className="size-4 shrink-0 text-slate-400"
-            />
-            <h1 className="truncate text-brand-700">{workspaceTitle}</h1>
+            {breadcrumbs.map((item, index) => (
+              <div key={item.label} className="flex min-w-0 items-center gap-2 sm:gap-3">
+                {index > 0 ? (
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-slate-400"
+                  />
+                ) : null}
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    className="shrink-0 text-slate-500 transition-colors hover:text-brand-700"
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className="truncate font-bold text-brand-700">
+                    {item.label}
+                  </span>
+                )}
+              </div>
+            ))}
           </nav>
         ) : (
           <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
@@ -364,4 +368,30 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
     links.find((item) => item.href && pathname.startsWith(item.href))?.label ??
     "Tổng quan"
   );
+}
+
+function getWorkspaceBreadcrumbs(
+  pathname: string,
+): Array<{ label: string; href?: string }> {
+  if (pathname === "/teacher/exams/new") {
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      { label: "Tạo mới bài kiểm tra" },
+    ];
+  }
+
+  if (!pathname.startsWith("/teacher/question-bank/")) return [];
+
+  const currentLabel = pathname === "/teacher/question-bank/generate"
+    ? "Tạo câu hỏi bằng AI"
+    : pathname === "/teacher/question-bank/new"
+      ? "Tạo câu hỏi mới"
+      : /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname)
+        ? "Chỉnh sửa câu hỏi"
+        : "Ngân hàng câu hỏi";
+
+  return [
+    { label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },
+    { label: currentLabel },
+  ];
 }

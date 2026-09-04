@@ -22,6 +22,7 @@ import {
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
 import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   academicDataService,
   aiQuestionService,
@@ -464,15 +465,7 @@ export function AiQuestionGeneratorPage() {
                 />
               </Field>
             </div>
-            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3">
-              <input
-                type="checkbox"
-                checked={form.includeExplanation}
-                onChange={(event) =>
-                  update("includeExplanation", event.target.checked)
-                }
-                className="size-4 accent-brand-600"
-              />
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
               <span>
                 <b className="block text-sm text-slate-700">
                   Sinh lời giải chi tiết
@@ -481,7 +474,12 @@ export function AiQuestionGeneratorPage() {
                   Giúp kiểm tra đáp án trước khi duyệt
                 </small>
               </span>
-            </label>
+              <ToggleSwitch
+                checked={form.includeExplanation}
+                onCheckedChange={(checked) => update("includeExplanation", checked)}
+                aria-label="Sinh lời giải chi tiết"
+              />
+            </div>
             <Button
               type="submit"
               disabled={generating || !materials.length}
@@ -592,13 +590,14 @@ function ChoiceButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="outline"
+      size="sm"
       onClick={onClick}
-      className={`rounded-lg border px-2 py-2 text-xs font-bold transition ${active ? "border-brand-500 bg-blue-50 text-brand-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+      className={`w-full ${active ? "border-brand-500 !bg-blue-50 text-brand-700" : "border-slate-200 text-slate-500"}`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -642,14 +641,15 @@ function TeacherDifficultyEditor({
         </div>
         <div className="flex gap-1">
           {([3, 4] as const).map((count) => (
-            <button
+            <Button
               key={count}
-              type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => onCountChange(count)}
-              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-black ${levels.length === count ? "bg-violet-600 text-white" : "bg-white text-slate-500"}`}
+              className={`!h-7 !px-2.5 text-[11px] font-black ${levels.length === count ? "!bg-violet-600 text-white" : "!bg-white text-slate-500"}`}
             >
               {count} mức
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -835,18 +835,19 @@ function GeneratedQuestionCard({
           <div className="grid gap-2">
             {draft.options.map((option, optionIndex) => (
               <div key={option.id} className="flex items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() =>
                     setDraft((current) => ({
                       ...current,
                       correctOptionIds: [option.id],
                     }))
                   }
-                  className={`grid size-9 shrink-0 place-items-center rounded-lg border text-xs font-black ${draft.correctOptionIds.includes(option.id) ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-slate-500"}`}
+                  className={`!size-9 shrink-0 !p-0 text-xs font-black ${draft.correctOptionIds.includes(option.id) ? "border-brand-600 !bg-brand-600 text-white" : "border-slate-300 text-slate-500"}`}
                 >
                   {option.label}
-                </button>
+                </Button>
                 <div className="min-w-0 flex-1">
                   <Input
                     value={option.text}

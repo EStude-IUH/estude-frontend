@@ -31,6 +31,7 @@ import {
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
 import { useActionNotification } from "@/components/ui/action-notification";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   Table,
   TableBody,
@@ -56,7 +57,10 @@ import {
   teacherSettingsService,
 } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
-import { getVietnameseSubjectName } from "@/lib/subject-localization";
+import {
+  getVietnameseSubjectName,
+  toVietnameseSubjectName,
+} from "@/lib/subject-localization";
 import {
   DIFFICULTY_LABELS,
   EXAM_STATUS_LABELS,
@@ -341,16 +345,17 @@ export function TeacherExamsPage() {
                         {(page - 1) * pageSize + index + 1}
                       </TableCell>
                       <TableCell>
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(event) => {
                             event.stopPropagation();
                             router.push(`/teacher/exams/${exam.id}`);
                           }}
-                          className="max-w-80 text-left font-bold text-slate-900 hover:text-brand-700 hover:underline"
+                          className="!h-auto max-w-80 !justify-start !p-0 text-left font-bold text-slate-900 hover:!bg-transparent hover:text-brand-700 hover:underline"
                         >
                           {exam.title}
-                        </button>
+                        </Button>
                         {!exam.published ? (
                           <p className="mt-1 text-[13px] font-semibold text-amber-600">
                             Có thể chỉnh sửa
@@ -358,7 +363,9 @@ export function TeacherExamsPage() {
                         ) : null}
                       </TableCell>
                       <TableCell>
-                        <p className="font-semibold text-slate-800">{exam.subjectName}</p>
+                        <p className="font-semibold text-slate-800">
+                          {toVietnameseSubjectName(exam.subjectName)}
+                        </p>
                         <p className="mt-1 text-[13px] text-slate-400">
                           {formatClassLabel(
                             assignedClasses,
@@ -405,17 +412,20 @@ export function TeacherExamsPage() {
                           >
                             <Eye size={18} strokeWidth={2.5} />
                           </Button>
+                          {(!exam.published ||
+                            (exam.status === "SCHEDULED" &&
+                              (exam.attemptedCount ?? 0) === 0)) ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openEditor(exam.id)}
+                              aria-label={`Chỉnh sửa ${exam.title}`}
+                              title="Chỉnh sửa"
+                            >
+                              <Edit3 size={18} strokeWidth={2.5} />
+                            </Button>
+                          ) : null}
                           {!exam.published ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => openEditor(exam.id)}
-                                aria-label={`Chỉnh sửa ${exam.title}`}
-                                title="Chỉnh sửa"
-                              >
-                                <Edit3 size={18} strokeWidth={2.5} />
-                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -427,7 +437,6 @@ export function TeacherExamsPage() {
                               >
                                 <Send size={18} strokeWidth={2.5} />
                               </Button>
-                            </>
                           ) : (
                             <Button
                               size="sm"
@@ -520,8 +529,13 @@ export function ExamWizardPage({
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [publishedExam, setPublishedExam] = useState(false);
+  const [lockedExam, setLockedExam] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [questionPickerOpen, setQuestionPickerOpen] = useState(false);
+  const [draftQuestionIds, setDraftQuestionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -574,6 +588,10 @@ export function ExamWizardPage({
         setClasses(loadedClasses);
         if (exam) {
           setPublishedExam(exam.published);
+          setLockedExam(
+            exam.published &&
+              (exam.status !== "SCHEDULED" || (exam.attemptedCount ?? 0) > 0),
+          );
           setInfo({
             title: exam.title,
             subjectId: exam.subjectId,
@@ -701,6 +719,7 @@ export function ExamWizardPage({
     }));
     setSelected([]);
     setSearch("");
+    setQuestionPickerOpen(false);
   }
 
   function normalizeOrder(items: ExamQuestion[]): ExamQuestion[] {
@@ -722,6 +741,44 @@ export function ExamWizardPage({
             },
           ],
     );
+  }
+
+  function openQuestionPicker() {
+    setDraftQuestionIds(
+      new Set(selected.map((question) => question.questionId)),
+    );
+    setSearch("");
+    setQuestionPickerOpen(true);
+  }
+
+  function toggleDraftQuestion(questionId: string) {
+    setDraftQuestionIds((current) => {
+      const next = new Set(current);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
+  }
+
+  function applyQuestionPicker() {
+    const retained = selected.filter((question) =>
+      draftQuestionIds.has(question.questionId),
+    );
+    const retainedIds = new Set(
+      retained.map((question) => question.questionId),
+    );
+    const added = questions
+      .filter(
+        (question) =>
+          draftQuestionIds.has(question.id) && !retainedIds.has(question.id),
+      )
+      .map((question) => ({
+        questionId: question.id,
+        points: question.defaultPoints,
+        order: 0,
+      }));
+    setSelected(normalizeOrder([...retained, ...added]));
+    setQuestionPickerOpen(false);
   }
 
   function updateQuestionPoints(questionId: string, points: number) {
@@ -757,6 +814,21 @@ export function ExamWizardPage({
       question.subjectId === info.subjectId &&
       matchesSearchKeyword(question.keyword, search),
   );
+  const allFilteredQuestionsSelected =
+    filteredQuestions.length > 0 &&
+    filteredQuestions.every((question) => draftQuestionIds.has(question.id));
+
+  function toggleAllFilteredQuestions() {
+    setDraftQuestionIds((current) => {
+      const next = new Set(current);
+      if (allFilteredQuestionsSelected) {
+        filteredQuestions.forEach((question) => next.delete(question.id));
+      } else {
+        filteredQuestions.forEach((question) => next.add(question.id));
+      }
+      return next;
+    });
+  }
   const selectedQuestionObjects = selected
     .map((item) => ({
       ...item,
@@ -846,16 +918,16 @@ export function ExamWizardPage({
       </ExamWizardFrame>
     );
 
-  if (publishedExam)
+  if (lockedExam)
     return (
       <ExamWizardFrame embedded={embedded}>
         <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center">
           <FileCheck2 className="mx-auto size-10 text-amber-600" />
           <h1 className="mt-3 text-xl font-black text-slate-950">
-            Bài kiểm tra đã được công bố
+            Bài kiểm tra không thể chỉnh sửa
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Chỉ bản nháp chưa công bố mới có thể chỉnh sửa nội dung và câu hỏi.
+            Chỉ có thể chỉnh sửa bản nháp hoặc bài sắp diễn ra chưa có học sinh làm bài.
           </p>
           <Button
             className="mt-5"
@@ -883,11 +955,11 @@ export function ExamWizardPage({
           const active = step === stepNumber;
           const completed = step > stepNumber;
           return (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               key={label}
               onClick={() => completed && setStep(stepNumber)}
-              className={`flex min-h-[92px] items-center gap-4 rounded-xl border p-5 text-left transition ${active ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-600/15" : completed ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" : "border-slate-200 bg-white text-slate-400"}`}
+              className={`!h-auto min-h-[92px] !justify-start gap-4 rounded-xl border !p-5 text-left ${active ? "border-brand-500 !bg-brand-600 text-white shadow-md shadow-brand-600/15" : completed ? "border-emerald-200 !bg-emerald-50 text-emerald-800 hover:!bg-emerald-100" : "border-slate-200 !bg-white text-slate-400"}`}
             >
               <span
                 className={`grid size-11 shrink-0 place-items-center rounded-xl ${active ? "bg-white/15" : completed ? "bg-white" : "bg-slate-50"}`}
@@ -908,7 +980,7 @@ export function ExamWizardPage({
                   {description}
                 </span>
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -1014,162 +1086,121 @@ export function ExamWizardPage({
                     Xây dựng danh sách câu hỏi
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Chỉ hiển thị câu hỏi thuộc môn{" "}
-                    {info.subjectName || "đã chọn"}.
+                    Chọn câu hỏi thuộc môn{" "}
+                    {info.subjectName
+                      ? toVietnameseSubjectName(info.subjectName)
+                      : "đã chọn"}{" "}
+                    từ ngân hàng câu hỏi.
                   </p>
                 </div>
-                <Input
-                  icon={Search}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Tìm nội dung hoặc chủ đề..."
-                  className="sm:w-72"
-                />
+                <Button onClick={openQuestionPicker}>
+                  <ListChecks className="size-4" />
+                  Chọn từ ngân hàng
+                </Button>
               </div>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="overflow-hidden rounded-xl border border-slate-200">
-                  <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
-                    <p className="text-sm font-black text-slate-800">
-                      Ngân hàng câu hỏi
-                    </p>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500">
-                      {filteredQuestions.length} câu
-                    </span>
-                  </div>
-                  <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
-                    {loadingQuestions ? (
-                      <div className="py-12 text-center text-sm text-slate-400">
-                        Đang tải câu hỏi...
-                      </div>
-                    ) : filteredQuestions.length === 0 ? (
-                      <div className="py-12 text-center">
-                        <FileQuestion className="mx-auto size-8 text-slate-300" />
-                        <p className="mt-2 text-sm font-bold text-slate-600">
-                          Chưa có câu hỏi phù hợp
-                        </p>
-                        <Link
-                          href="/teacher/question-bank/new"
-                          className="mt-2 inline-block text-xs font-bold text-brand-600 hover:text-brand-800"
-                        >
-                          Tạo câu hỏi cho môn này
-                        </Link>
-                      </div>
-                    ) : (
-                      filteredQuestions.map((question) => {
-                        const chosen = selected.some(
-                          (item) => item.questionId === question.id,
-                        );
-                        return (
-                          <button
-                            key={question.id}
-                            type="button"
-                            onClick={() => toggleQuestion(question)}
-                            className={`flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition ${chosen ? "border-brand-300 bg-brand-50 ring-1 ring-brand-100" : "border-slate-100 hover:border-brand-200 hover:bg-slate-50"}`}
-                          >
-                            <span
-                              className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}
-                            >
-                              {chosen ? <Check className="size-4" /> : null}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="line-clamp-2 block text-sm font-bold leading-5 text-slate-800">
-                                {question.content}
-                              </span>
-                              <span className="mt-1.5 block text-[11px] font-medium text-slate-500">
-                                {question.topicName || "Chưa phân chủ đề"} ·{" "}
-                                {question.defaultPoints} điểm
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
+              <div className="mt-5 overflow-hidden rounded-xl border border-brand-100 bg-brand-50/30">
+                <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-3">
+                  <p className="text-sm font-black text-brand-900">
+                    Đề đã chọn
+                  </p>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                    {selected.length} câu ·{" "}
+                    {selected.reduce((sum, item) => sum + item.points, 0)} điểm
+                  </span>
                 </div>
-
-                <div className="overflow-hidden rounded-xl border border-brand-100 bg-brand-50/30">
-                  <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-3">
-                    <p className="text-sm font-black text-brand-900">
-                      Đề đã chọn
-                    </p>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
-                      {selected.length} câu ·{" "}
-                      {selected.reduce((sum, item) => sum + item.points, 0)}{" "}
-                      điểm
-                    </span>
-                  </div>
-                  <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
-                    {selectedQuestionObjects.length === 0 ? (
-                      <div className="py-12 text-center text-sm text-slate-400">
-                        Chọn câu hỏi từ danh sách bên trái để xây dựng đề.
-                      </div>
-                    ) : (
-                      selectedQuestionObjects.map(
-                        ({ question, points }, index) => (
-                          <div
-                            key={question!.id}
-                            className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
-                          >
-                            <div className="flex items-start gap-2">
-                              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-600 text-xs font-black text-white">
-                                {index + 1}
-                              </span>
-                              <p className="line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-5 text-slate-800">
+                <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
+                  {selectedQuestionObjects.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <FileQuestion className="mx-auto size-9 text-slate-300" />
+                      <p className="mt-2 text-sm font-bold text-slate-600">
+                        Chưa chọn câu hỏi
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Mở ngân hàng để tìm kiếm và chọn câu hỏi cho đề.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="mt-4"
+                        onClick={openQuestionPicker}
+                      >
+                        <Plus className="size-4" /> Chọn câu hỏi
+                      </Button>
+                    </div>
+                  ) : (
+                    selectedQuestionObjects.map(
+                      ({ question, points }, index) => (
+                        <div
+                          key={question!.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-600 text-xs font-black text-white">
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="line-clamp-2 text-sm font-bold leading-5 text-slate-800">
                                 {question!.content}
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => toggleQuestion(question!)}
-                                className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                                aria-label="Bỏ câu hỏi"
-                              >
-                                <Trash2 className="size-3.5" />
-                              </button>
+                              <p className="mt-1 text-[11px] font-medium text-slate-400">
+                                {question!.topicName || "Chưa phân chủ đề"}
+                              </p>
                             </div>
-                            <div className="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 pt-3">
-                              <Input
-                                type="number"
-                                min="0.25"
-                                step="0.25"
-                                value={points}
-                                onChange={(event) =>
-                                  updateQuestionPoints(
-                                    question!.id,
-                                    Number(event.target.value),
-                                  )
-                                }
-                                className="h-8 w-24"
-                                aria-label={`Điểm câu ${index + 1}`}
-                              />
-                              <span className="mr-auto text-[11px] font-semibold text-slate-400">
-                                điểm
-                              </span>
-                              <button
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() => moveQuestion(question!.id, -1)}
-                                className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30"
-                                aria-label="Đưa câu hỏi lên"
-                              >
-                                <ArrowUp className="size-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={
-                                  index === selectedQuestionObjects.length - 1
-                                }
-                                onClick={() => moveQuestion(question!.id, 1)}
-                                className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30"
-                                aria-label="Đưa câu hỏi xuống"
-                              >
-                                <ArrowDown className="size-3.5" />
-                              </button>
-                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleQuestion(question!)}
+                              className="!size-7 shrink-0 !p-0 text-slate-300 hover:!bg-rose-50 hover:text-rose-600"
+                              aria-label="Bỏ câu hỏi"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
                           </div>
-                        ),
-                      )
-                    )}
-                  </div>
+                          <div className="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 pt-3">
+                            <Input
+                              type="number"
+                              min="0.25"
+                              step="0.25"
+                              value={points}
+                              onChange={(event) =>
+                                updateQuestionPoints(
+                                  question!.id,
+                                  Number(event.target.value),
+                                )
+                              }
+                              className="h-8 w-24"
+                              aria-label={`Điểm câu ${index + 1}`}
+                            />
+                            <span className="mr-auto text-[11px] font-semibold text-slate-400">
+                              điểm
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={index === 0}
+                              onClick={() => moveQuestion(question!.id, -1)}
+                              className="!size-8 !p-0 text-slate-500 disabled:opacity-30"
+                              aria-label="Đưa câu hỏi lên"
+                            >
+                              <ArrowUp className="size-3.5" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                index === selectedQuestionObjects.length - 1
+                              }
+                              onClick={() => moveQuestion(question!.id, 1)}
+                              className="!size-8 !p-0 text-slate-500 disabled:opacity-30"
+                              aria-label="Đưa câu hỏi xuống"
+                            >
+                              <ArrowDown className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ),
+                    )
+                  )}
                 </div>
               </div>
             </div>
@@ -1243,23 +1274,22 @@ export function ExamWizardPage({
                       ["showCorrectAnswers", "Cho xem đáp án đúng"],
                     ] as const
                   ).map(([key, label]) => (
-                    <label
+                    <div
                       key={key}
-                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/40"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/40"
                     >
-                      <input
-                        type="checkbox"
+                      <span>{label}</span>
+                      <ToggleSwitch
                         checked={settings[key]}
-                        onChange={(event) =>
+                        onCheckedChange={(checked) =>
                           setSettings((current) => ({
                             ...current,
-                            [key]: event.target.checked,
+                            [key]: checked,
                           }))
                         }
-                        className="size-4 accent-brand-600"
+                        aria-label={label}
                       />
-                      {label}
-                    </label>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1275,75 +1305,122 @@ export function ExamWizardPage({
                   Rà soát nội dung, điểm số và lịch làm bài trước khi công bố.
                 </p>
               </div>
-              <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-brand-900 p-5 text-white">
-                <div className="flex items-start justify-between gap-4">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-start justify-between gap-4 bg-brand-600 px-5 py-4 text-white">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-cyan-300">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-100">
                       Bản xem trước
                     </p>
-                    <h2 className="mt-2 text-2xl font-black">{info.title}</h2>
-                    <p className="mt-1 text-sm text-slate-300">
-                      {info.subjectName} · {currentClassLabel}
+                    <h2 className="mt-1.5 text-xl font-black">{info.title}</h2>
+                    <p className="mt-1 text-sm text-blue-100">
+                      {toVietnameseSubjectName(info.subjectName)} ·{" "}
+                      {currentClassLabel}
                     </p>
                   </div>
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
-                    Chưa công bố
+                  <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 shadow-sm">
+                    {publishedExam ? "Đã công bố" : "Bản nháp"}
                   </span>
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-4">
-                  <div>
-                    <p className="text-[11px] text-slate-400">Số câu</p>
-                    <p className="mt-1 font-black">{selected.length}</p>
+                <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
+                  <div className="px-4 py-3.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Số câu
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
+                      {selected.length}
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Tổng điểm</p>
-                    <p className="mt-1 font-black">
+                  <div className="px-4 py-3.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Tổng điểm
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
                       {selected.reduce((sum, item) => sum + item.points, 0)}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Thời lượng</p>
-                    <p className="mt-1 font-black">
+                  <div className="px-4 py-3.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Thời lượng
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
                       {settings.durationMinutes} phút
                     </p>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Lượt làm</p>
-                    <p className="mt-1 font-black">
+                  <div className="px-4 py-3.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Lượt làm
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
                       {settings.attemptsAllowed} lần
                     </p>
                   </div>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2">
-                <p className="flex items-center gap-2 text-slate-600">
-                  <CalendarClock className="size-4 text-brand-600" /> Mở:{" "}
-                  <strong>{formatExamDate(settings.startsAt)}</strong>
-                </p>
-                <p className="flex items-center gap-2 text-slate-600">
-                  <Clock3 className="size-4 text-rose-500" /> Đóng:{" "}
-                  <strong>{formatExamDate(settings.endsAt)}</strong>
-                </p>
+              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                    <CalendarClock className="size-4" />
+                  </span>
+                  <p className="min-w-0 text-slate-500">
+                    <span className="block text-xs">Thời gian mở</span>
+                    <strong className="mt-0.5 block truncate text-slate-800">
+                      {formatExamDate(settings.startsAt)}
+                    </strong>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-500">
+                    <Clock3 className="size-4" />
+                  </span>
+                  <p className="min-w-0 text-slate-500">
+                    <span className="block text-xs">Thời gian đóng</span>
+                    <strong className="mt-0.5 block truncate text-slate-800">
+                      {formatExamDate(settings.endsAt)}
+                    </strong>
+                  </p>
+                </div>
               </div>
-              <div className="mt-5 space-y-3">
-                {selectedQuestionObjects.map(({ question, points }, index) => (
-                  <div
-                    key={question!.id}
-                    className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
-                  >
-                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <p className="font-bold text-slate-800">
-                        {question!.content}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {points} điểm · {question!.options.length} đáp án
-                      </p>
+              <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-800">
+                    Danh sách câu hỏi
+                  </p>
+                  <span className="rounded-md bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
+                    {selected.length} câu
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {selectedQuestionObjects.map(
+                    ({ question, points }, index) => (
+                      <div
+                        key={question!.id}
+                        className="flex items-start gap-3 px-4 py-3.5"
+                      >
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm font-black text-brand-700">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold leading-6 text-slate-800">
+                            {question!.content}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {question!.topicName || "Chưa phân chủ đề"} ·{" "}
+                            {QUESTION_TYPE_LABELS[question!.type]} ·{" "}
+                            {question!.options.length} đáp án
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                          {points} điểm
+                        </span>
+                      </div>
+                    ),
+                  )}
+                  {selectedQuestionObjects.length === 0 ? (
+                    <div className="px-4 py-10 text-center text-sm text-slate-400">
+                      Chưa có câu hỏi trong bài kiểm tra.
                     </div>
-                  </div>
-                ))}
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : null}
@@ -1373,22 +1450,34 @@ export function ExamWizardPage({
               </Button>
             ) : (
               <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => void save(false)}
-                  disabled={saving}
-                >
-                  <FileCheck2 className="size-4" />
-                  {saving
-                    ? "Đang lưu..."
-                    : examId
-                      ? "Lưu thay đổi"
-                      : "Lưu bản nháp"}
-                </Button>
-                <Button onClick={() => void save(true)} disabled={saving}>
-                  <Send className="size-4" />
-                  {saving ? "Đang xử lý..." : "Lưu và công bố"}
-                </Button>
+                {publishedExam ? (
+                  <Button onClick={() => void save(false)} disabled={saving}>
+                    <FileCheck2 className="size-4" />
+                    {saving ? "Đang lưu..." : "Lưu thay đổi"}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => void save(false)}
+                      disabled={saving}
+                    >
+                      <FileCheck2 className="size-4" />
+                      {saving
+                        ? "Đang lưu..."
+                        : examId
+                          ? "Lưu thay đổi"
+                          : "Lưu bản nháp"}
+                    </Button>
+                    <Button
+                      onClick={() => void save(true)}
+                      disabled={saving}
+                    >
+                      <Send className="size-4" />
+                      {saving ? "Đang xử lý..." : "Lưu và công bố"}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1429,7 +1518,9 @@ export function ExamWizardPage({
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-400">Môn học</dt>
                 <dd className="max-w-44 truncate font-bold">
-                  {info.subjectName || "—"}
+                  {info.subjectName
+                    ? toVietnameseSubjectName(info.subjectName)
+                    : "—"}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -1464,11 +1555,129 @@ export function ExamWizardPage({
               </div>
             </dl>
             <div className="mt-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-[13px] leading-5 text-amber-800">
-              Bạn có thể tiếp tục chỉnh sửa khi bài vẫn ở trạng thái bản nháp.
+              {publishedExam
+                ? "Bài đã công bố nhưng vẫn có thể chỉnh sửa trước giờ bắt đầu."
+                : "Bạn có thể tiếp tục chỉnh sửa khi bài vẫn ở trạng thái bản nháp."}
             </div>
           </div>
         </aside>
       </div>
+      <Modal
+        open={questionPickerOpen}
+        title="Chọn câu hỏi từ ngân hàng"
+        description={`Chỉ hiển thị câu hỏi thuộc môn ${info.subjectName ? toVietnameseSubjectName(info.subjectName) : "đã chọn"}.`}
+        onClose={() => setQuestionPickerOpen(false)}
+        width="max-w-5xl"
+        layerClassName="z-[130]"
+        bodyClassName="!p-0"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setQuestionPickerOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button onClick={applyQuestionPicker}>
+              <Check className="size-4" />
+              Áp dụng {draftQuestionIds.size} câu hỏi
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <Input
+            icon={Search}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Tìm theo nội dung hoặc chủ đề..."
+            className="sm:w-[420px]"
+            autoFocus
+          />
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <span className="text-xs font-semibold text-slate-500">
+              {draftQuestionIds.size} câu đã chọn
+            </span>
+            {filteredQuestions.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleAllFilteredQuestions}
+              >
+                {allFilteredQuestionsSelected
+                  ? "Bỏ chọn kết quả"
+                  : "Chọn tất cả kết quả"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="max-h-[min(62dvh,620px)] overflow-y-auto p-4">
+          {loadingQuestions ? (
+            <div className="py-16 text-center text-sm text-slate-400">
+              Đang tải câu hỏi...
+            </div>
+          ) : filteredQuestions.length === 0 ? (
+            <div className="py-16 text-center">
+              <FileQuestion className="mx-auto size-10 text-slate-300" />
+              <p className="mt-3 text-sm font-bold text-slate-700">
+                {search
+                  ? "Không tìm thấy câu hỏi phù hợp"
+                  : "Môn học này chưa có câu hỏi"}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {search
+                  ? "Thử tìm bằng nội dung hoặc chủ đề khác."
+                  : "Tạo câu hỏi mới trước khi thêm vào bài kiểm tra."}
+              </p>
+              {!search ? (
+                <Link
+                  href="/teacher/question-bank/new"
+                  className="mt-3 inline-flex text-xs font-bold text-brand-600 hover:text-brand-800"
+                >
+                  Tạo câu hỏi cho môn này
+                </Link>
+              ) : null}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredQuestions.map((question) => {
+                const chosen = draftQuestionIds.has(question.id);
+                return (
+                  <Button
+                    key={question.id}
+                    variant="ghost"
+                    onClick={() => toggleDraftQuestion(question.id)}
+                    className={`!h-auto w-full !justify-start items-start gap-3 rounded-xl border !p-3.5 text-left ${chosen ? "border-brand-300 !bg-brand-50 ring-1 ring-brand-100" : "border-slate-200 !bg-white hover:border-brand-200 hover:!bg-slate-50"}`}
+                    aria-pressed={chosen}
+                  >
+                    <span
+                      className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border ${chosen ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white"}`}
+                    >
+                      {chosen ? <Check className="size-4" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 block text-sm font-bold leading-5 text-slate-800">
+                        {question.content}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
+                        <span>
+                          {question.topicName || "Chưa phân chủ đề"}
+                        </span>
+                        <span>·</span>
+                        <span>{QUESTION_TYPE_LABELS[question.type]}</span>
+                        <span>·</span>
+                        <span>{DIFFICULTY_LABELS[question.difficulty]}</span>
+                        <span>·</span>
+                        <span>{question.defaultPoints} điểm</span>
+                      </span>
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Modal>
     </ExamWizardFrame>
   );
 }
@@ -1519,7 +1728,7 @@ export function ExamDetailPage() {
       <PageHeading
         eyebrow="Exam detail"
         title={exam.title}
-        description={`${exam.subjectName} · ${exam.className}`}
+        description={`${toVietnameseSubjectName(exam.subjectName)} · ${exam.className}`}
       />
       <div className="mx-auto max-w-[1180px] space-y-3">
         <div className="flex justify-end">
@@ -1555,7 +1764,7 @@ export function ExamDetailPage() {
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-semibold text-slate-500">
                   <span className="inline-flex items-center gap-1.5">
                     <BookOpen className="size-4 text-brand-500" />
-                    {exam.subjectName}
+                    {toVietnameseSubjectName(exam.subjectName)}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <ListChecks className="size-4 text-brand-500" />

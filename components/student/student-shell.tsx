@@ -4,17 +4,17 @@ import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   Bell,
   BookOpen,
+  BrainCircuit,
   CalendarDays,
   ChevronDown,
   CircleHelp,
-  FileText,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
   Settings,
-  UsersRound,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/auth-context";
@@ -37,19 +37,27 @@ const studentNavItems: StudentNavItem[] = [
     label: "Thời khóa biểu",
   },
   { icon: BookOpen, label: "Môn học", href: "/student/courses" },
-  { icon: FileText, label: "Bài tập" },
-  { icon: UsersRound, label: "Nhóm học tập" },
+  { icon: BrainCircuit, label: "Ôn tập", href: "/student/review" },
+  { icon: BarChart3, label: "Điểm số", href: "/student/grades" },
 ];
 
 function isNavItemActive(pathname: string, href?: string): boolean {
   if (!href) return false;
+
+  const isStudyRoute = /^\/student\/attempts\/[^/]+\/study(?:\/|$)/.test(
+    pathname,
+  );
+
+  if (href === "/student/review") {
+    return pathname === href || pathname.startsWith(`${href}/`) || isStudyRoute;
+  }
 
   if (href === "/student/courses") {
     return (
       pathname === href ||
       pathname.startsWith(`${href}/`) ||
       pathname.startsWith("/student/exams/") ||
-      pathname.startsWith("/student/attempts/")
+      (pathname.startsWith("/student/attempts/") && !isStudyRoute)
     );
   }
 
@@ -230,7 +238,9 @@ export function StudentShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-slate-200 bg-white px-2 lg:hidden"
         aria-label="Điều hướng nhanh"
       >
-        {studentNavItems.slice(0, 4).map(({ icon: Icon, label, href }) => {
+        {studentNavItems
+          .filter((item) => item.href && item.label !== "Thời khóa biểu")
+          .map(({ icon: Icon, label, href }) => {
           const active = isNavItemActive(pathname, href);
 
           return (

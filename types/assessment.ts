@@ -11,7 +11,7 @@ export interface Question {
   id: string;
   subjectId: string;
   subjectName: string;
-  topicId: string;
+  topicId: string | null;
   topicName: string;
   content: string;
   keyword?: string | null;
@@ -101,7 +101,7 @@ export interface QuestionFilters {
 export interface QuestionInput {
   subjectId: string;
   subjectName: string;
-  topicId: string;
+  topicId: string | null;
   topicName: string;
   content: string;
   type: QuestionType;
@@ -121,7 +121,7 @@ export interface BulkMoveQuestionsInput {
 }
 
 export interface BulkMoveQuestionsResult {
-  topic: Pick<Topic, "id" | "name">;
+  topic: Pick<Topic, "id" | "name"> | null;
   questions: Question[];
 }
 
