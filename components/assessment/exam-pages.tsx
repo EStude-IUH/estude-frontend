@@ -47,7 +47,6 @@ import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import {
   CustomSelect,
   Input,
-  Select,
   Textarea,
 } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
@@ -1135,27 +1134,30 @@ export function ExamWizardPage({
                     hint="Tên ngắn gọn, giúp sinh viên dễ nhận biết."
                   />
                 </div>
-                <Select
+                <CustomSelect
                   label="Môn học"
-                  required
                   value={info.subjectId}
-                  onChange={(event) => chooseSubject(event.target.value)}
-                >
-                  <option value="">Chọn môn được phân công</option>
-                  {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {getVietnameseSubjectName(subject)}
-                    </option>
-                  ))}
-                </Select>
-                <Select
+                  options={subjects.map((subject) => ({
+                    value: subject.id,
+                    label: getVietnameseSubjectName(subject),
+                  }))}
+                  placeholder="Chọn môn được phân công"
+                  ariaLabel="Chọn môn học được phân công"
+                  onValueChange={chooseSubject}
+                />
+                <CustomSelect
                   label="Lớp học"
-                  required
                   value={info.classId}
-                  onChange={(event) => {
+                  options={availableClasses.map((item) => ({
+                    value: item.id,
+                    label: item.name,
+                  }))}
+                  placeholder="Chọn lớp được phân công"
+                  ariaLabel="Chọn lớp học được phân công"
+                  onValueChange={(value) => {
                     const item =
                       availableClasses.find(
-                        (value) => value.id === event.target.value,
+                        (item) => item.id === value,
                       ) ?? availableClasses[0];
                     if (!item) return;
                     setInfo((current) => ({
@@ -1164,14 +1166,7 @@ export function ExamWizardPage({
                       className: item.name,
                     }));
                   }}
-                >
-                  <option value="">Chọn lớp được phân công</option>
-                  {availableClasses.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </Select>
+                />
                 <CustomSelect
                   label="Chủ đề"
                   value={info.topicName}

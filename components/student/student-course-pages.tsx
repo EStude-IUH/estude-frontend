@@ -181,20 +181,20 @@ export function StudentCoursesPage() {
           {filteredCourses.map((course) => (
             <article key={course.id} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg">
               <div className="h-1.5 bg-gradient-to-r from-brand-600 to-cyan-400" />
-              <div className="flex flex-1 flex-col p-5">
+              <div className="flex flex-1 flex-col p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><GraduationCap className="size-5" /></span>
+                  <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><GraduationCap className="size-5" /></span>
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">{course.subject.code}</span>
                 </div>
-                <h2 className="mt-4 text-lg font-black text-slate-950">
+                <h2 className="mt-5 text-lg font-black text-slate-950">
                   {getVietnameseSubjectName(course.subject)}
                 </h2>
-                <div className="mt-4 space-y-2.5 text-sm text-slate-600">
-                  <p className="flex items-center gap-2"><BookOpen className="size-4 text-brand-500" /><span className="font-semibold">{course.schoolClass.name}</span></p>
-                  <p className="flex items-center gap-2"><Hash className="size-4 text-brand-500" />Mã lớp: <b className="text-slate-800">{course.schoolClass.code}</b></p>
-                  <p className="flex items-center gap-2"><UserRound className="size-4 text-brand-500" />{course.teacher.fullName}</p>
+                <div className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3.5 text-sm text-slate-600">
+                  <p className="flex items-center gap-2"><BookOpen className="size-4 shrink-0 text-brand-500" /><span className="font-semibold text-slate-700">{course.schoolClass.name}</span></p>
+                  <p className="flex items-center gap-2"><Hash className="size-4 shrink-0 text-brand-500" />Mã lớp: <b className="text-slate-800">{course.schoolClass.code}</b></p>
+                  <p className="flex items-center gap-2"><UserRound className="size-4 shrink-0 text-brand-500" /><span className="truncate">{course.teacher.fullName}</span></p>
                 </div>
-                <Button className="mt-auto w-full pt-0" onClick={() => router.push(courseHref(course))}>Vào môn học</Button>
+                <Button className="mt-5 h-11 w-full" onClick={() => router.push(courseHref(course))}>Vào môn học</Button>
               </div>
             </article>
           ))}

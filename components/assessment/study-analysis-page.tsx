@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Send,
   TimerReset,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +26,7 @@ import { ErrorPanel } from "@/components/assessment/assessment-shell";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { examAttemptService } from "@/lib/assessment-api";
+import { ApiError } from "@/lib/auth-api";
 import type {
   StudyAnalysis,
   StudyLearningPath,
@@ -56,15 +58,29 @@ export function StudentStudyAnalysisPage() {
   const [analysis, setAnalysis] = useState<StudyAnalysis | null>(null);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [hints, setHints] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void examAttemptService
-      .createStudyAnalysis(params.id)
-      .then((loaded) => {
+    let active = true;
+    setLoading(true);
+    setGenerating(false);
+    setError("");
+
+    async function loadAnalysis() {
+      try {
+        let loaded: StudyAnalysis;
+        try {
+          loaded = await examAttemptService.getStudyAnalysis(params.id);
+        } catch (cause) {
+          if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+          if (active) setGenerating(true);
+          loaded = await examAttemptService.createStudyAnalysis(params.id);
+        }
+        if (!active) return;
         setAnalysis(loaded);
         setHints({});
         if (loaded.practiceSet?.status === "SUBMITTED") {
@@ -79,15 +95,25 @@ export function StudentStudyAnalysisPage() {
         } else {
           setAnswers({});
         }
-      })
-      .catch((cause) =>
+      } catch (cause) {
+        if (!active) return;
         setError(
           cause instanceof Error
             ? cause.message
             : "Không thể phân tích kết quả học tập",
-        ),
-      )
-      .finally(() => setLoading(false));
+        );
+      } finally {
+        if (active) {
+          setLoading(false);
+          setGenerating(false);
+        }
+      }
+    }
+
+    void loadAnalysis();
+    return () => {
+      active = false;
+    };
   }, [params.id]);
 
   const practice = analysis?.practiceSet ?? null;
@@ -180,10 +206,13 @@ export function StudentStudyAnalysisPage() {
           <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
             <BrainCircuit className="size-7 animate-pulse" />
           </span>
-          <h1 className="mt-5 text-xl font-black">Đang phân tích bài làm</h1>
+          <h1 className="mt-5 text-xl font-black">
+            {generating ? "Đang phân tích bài làm" : "Đang tải lộ trình ôn tập"}
+          </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            AI đang xác định phần kiến thức còn yếu và đối chiếu với tài liệu
-            giáo viên đã cung cấp.
+            {generating
+              ? "AI đang xác định phần kiến thức còn yếu và đối chiếu với tài liệu giáo viên đã cung cấp."
+              : "Đang lấy kết quả phân tích và bộ luyện tập đã lưu của bạn."}
           </p>
           <LoaderCircle className="mx-auto mt-5 size-5 animate-spin text-brand-600" />
         </div>
@@ -483,17 +512,27 @@ function LearningPathSection({
                 {step.durationMinutes} phút
               </span>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {step.objective}
-            </p>
-            <ul className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-              {step.activities.map((activity) => (
-                <li key={activity} className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-                  <span>{activity}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                Mục tiêu
+              </p>
+              <p className="mt-1.5 text-sm leading-6 text-slate-600">
+                {step.objective}
+              </p>
+            </div>
+            <div className="mt-3 rounded-xl bg-emerald-50/60 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                Cần hoàn thành
+              </p>
+              <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
+                {step.activities.map((activity) => (
+                  <li key={activity} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="mt-1 size-4 shrink-0 text-emerald-500" />
+                    <span>{activity}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </li>
         ))}
       </ol>
@@ -590,6 +629,20 @@ function PracticeSection({
           </span>
         )}
       </div>
+
+      {submitted && practice.correctCount === practice.totalQuestions ? (
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 sm:p-5">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-600">
+            <Trophy className="size-5" />
+          </span>
+          <div>
+            <p className="font-black">Chúc mừng! Bạn đã trả lời đúng tất cả câu hỏi.</p>
+            <p className="mt-1 text-sm leading-6 text-emerald-700">
+              Bạn đã hoàn thành tốt phần luyện tập này. Hãy tiếp tục duy trì phong độ ở các chủ đề khác nhé.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {!submitted && !started ? (
         <div className="mt-6 rounded-2xl bg-slate-50 p-4 sm:p-5">

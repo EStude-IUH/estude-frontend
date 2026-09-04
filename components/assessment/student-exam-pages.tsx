@@ -131,7 +131,18 @@ export function StudentExamList({
               Hiện chưa có bài kiểm tra được công bố.
             </div>
           ) : (
-            exams.map((exam) => (
+            exams.map((exam) => {
+              const attemptsRemaining =
+                exam.attemptsRemaining ??
+                Math.max(
+                  0,
+                  exam.settings.attemptsAllowed - (exam.attemptsUsed ?? 0),
+                );
+              const shouldHideStart =
+                exam.currentAttempt?.status === "SUBMITTED" &&
+                attemptsRemaining === 0;
+
+              return (
               <article
                 key={exam.id}
                 className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"
@@ -174,30 +185,34 @@ export function StudentExamList({
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className={`mt-4 grid gap-2 ${shouldHideStart ? "" : "sm:grid-cols-2"}`}>
                   <Button
                     variant="outline"
+                    className={shouldHideStart ? "w-full" : undefined}
                     onClick={() => router.push(`/student/exams/${exam.id}`)}
                   >
                     <Eye className="size-4" /> Xem chi tiết
                   </Button>
-                  <Button
-                    disabled={
-                      exam.status !== "ONGOING" || starting === exam.id
-                    }
-                    onClick={() => void start(exam)}
-                  >
-                    {starting === exam.id
-                      ? "Đang mở bài..."
-                      : exam.status === "ONGOING"
-                        ? "Bắt đầu làm bài"
-                        : exam.status === "SCHEDULED"
-                          ? "Chưa đến giờ mở"
-                          : "Không thể bắt đầu"}
-                  </Button>
+                  {!shouldHideStart ? (
+                    <Button
+                      disabled={
+                        exam.status !== "ONGOING" || starting === exam.id
+                      }
+                      onClick={() => void start(exam)}
+                    >
+                      {starting === exam.id
+                        ? "Đang mở bài..."
+                        : exam.status === "ONGOING"
+                          ? "Bắt đầu làm bài"
+                          : exam.status === "SCHEDULED"
+                            ? "Chưa đến giờ mở"
+                            : "Không thể bắt đầu"}
+                    </Button>
+                  ) : null}
                 </div>
               </article>
-            ))
+              );
+            })
           )}
         </div>
       )}
@@ -265,22 +280,22 @@ export function StudentExamDetailPage() {
 
   return (
     <AssessmentShell student>
+      <div className="mb-4 flex justify-start">
+        <Button
+          variant="ghost"
+          onClick={() =>
+            router.push(
+              `/student/courses/${encodeURIComponent(exam.classId)}/${encodeURIComponent(exam.subjectId)}`,
+            )
+          }
+        >
+          <ArrowLeft className="size-4" /> Quay lại môn học
+        </Button>
+      </div>
       <PageHeading
         eyebrow="Exam overview"
         title={exam.title}
         description={`${exam.subjectName} · ${exam.className}`}
-        action={
-          <Button
-            variant="ghost"
-            onClick={() =>
-              router.push(
-                `/student/courses/${encodeURIComponent(exam.classId)}/${encodeURIComponent(exam.subjectId)}`,
-              )
-            }
-          >
-            <ArrowLeft className="size-4" /> Quay lại môn học
-          </Button>
-        }
       />
       {error ? (
         <div className="mb-5">
@@ -825,22 +840,22 @@ export function StudentResultPage() {
     attempt.exam.settings.showScoreImmediately && needsWarning;
   return (
     <AssessmentShell student>
+      <div className="mb-4 flex justify-start">
+        <Button
+          variant="ghost"
+          onClick={() =>
+            router.push(
+              `/student/courses/${encodeURIComponent(attempt.exam.classId)}/${encodeURIComponent(attempt.exam.subjectId)}`,
+            )
+          }
+        >
+          <ArrowLeft className="size-4" /> Quay lại môn học
+        </Button>
+      </div>
       <PageHeading
         eyebrow="Submission received"
         title="Đã nộp bài thành công"
         description="Bài làm của bạn đã được ghi nhận trên hệ thống."
-        action={
-          <Button
-            variant="ghost"
-            onClick={() =>
-              router.push(
-                `/student/courses/${encodeURIComponent(attempt.exam.classId)}/${encodeURIComponent(attempt.exam.subjectId)}`,
-              )
-            }
-          >
-            <ArrowLeft className="size-4" /> Quay lại môn học
-          </Button>
-        }
       />
       <div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card sm:p-10">
         <div className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600">
