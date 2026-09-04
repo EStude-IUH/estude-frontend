@@ -589,6 +589,8 @@ export interface StudyPracticeSet {
   totalQuestions: number;
 }
 
+export type StudyPracticeMode = "EASY" | "HARD";
+
 export interface StudyAnalysis {
   id: string;
   attemptId: string;

@@ -6,15 +6,21 @@ import {
   BookOpen,
   BrainCircuit,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Clock3,
+  CircleHelp,
   FileSearch,
   Lightbulb,
   ListChecks,
   LoaderCircle,
+  RotateCcw,
+  Send,
+  TimerReset,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ErrorPanel } from "@/components/assessment/assessment-shell";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
@@ -22,6 +28,7 @@ import { examAttemptService } from "@/lib/assessment-api";
 import type {
   StudyAnalysis,
   StudyLearningPath,
+  StudyPracticeMode,
   StudyPracticeSet,
   StudySourceType,
 } from "@/types/assessment";
@@ -45,10 +52,13 @@ const sourceMeta: Record<
 export function StudentStudyAnalysisPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [analysis, setAnalysis] = useState<StudyAnalysis | null>(null);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [hints, setHints] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -56,6 +66,7 @@ export function StudentStudyAnalysisPage() {
       .createStudyAnalysis(params.id)
       .then((loaded) => {
         setAnalysis(loaded);
+        setHints({});
         if (loaded.practiceSet?.status === "SUBMITTED") {
           setAnswers(
             Object.fromEntries(
@@ -65,6 +76,8 @@ export function StudentStudyAnalysisPage() {
               ]),
             ),
           );
+        } else {
+          setAnswers({});
         }
       })
       .catch((cause) =>
@@ -78,6 +91,7 @@ export function StudentStudyAnalysisPage() {
   }, [params.id]);
 
   const practice = analysis?.practiceSet ?? null;
+  const activeTab = searchParams.get("tab") === "practice" ? "practice" : "theory";
   const answeredCount = useMemo(
     () =>
       practice?.questions.filter((question) => answers[question.id]?.length)
@@ -120,6 +134,43 @@ export function StudentStudyAnalysisPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function retryPractice() {
+    if (!practice) return;
+    setRetrying(true);
+    setError("");
+    try {
+      const updated = await examAttemptService.retryStudyPractice(practice.id);
+      setAnalysis((current) =>
+        current ? { ...current, practiceSet: updated } : current,
+      );
+      setAnswers({});
+      setHints({});
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể tạo lượt ôn tập mới",
+      );
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function getHint(questionId: string) {
+    if (!practice || hints[questionId]) return;
+    try {
+      const hint = await examAttemptService.getStudyPracticeHint(
+        practice.id,
+        questionId,
+      );
+      setHints((current) => ({ ...current, [questionId]: hint.message }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể lấy gợi ý đáp án");
+    }
+  }
+
+  function openTab(tab: "theory" | "practice") {
+    router.push(`/student/attempts/${params.id}/study?tab=${tab}`);
   }
 
   if (loading) {
@@ -204,7 +255,24 @@ export function StudentStudyAnalysisPage() {
         </div>
       </section>
 
-      {report.performance.needsWarning ? (
+      <nav className="mt-5 flex w-full gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card sm:w-fit">
+        <Button
+          variant={activeTab === "theory" ? "primary" : "ghost"}
+          className="gap-2"
+          onClick={() => openTab("theory")}
+        >
+          <BookOpen className="size-4" /> Ôn tập lý thuyết
+        </Button>
+        <Button
+          variant={activeTab === "practice" ? "primary" : "ghost"}
+          className="gap-2"
+          onClick={() => openTab("practice")}
+        >
+          <BrainCircuit className="size-4" /> Luyện tập
+        </Button>
+      </nav>
+
+      {activeTab === "theory" && report.performance.needsWarning ? (
         <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-600" />
           <div>
@@ -217,7 +285,7 @@ export function StudentStudyAnalysisPage() {
         </div>
       ) : null}
 
-      {report.aiStatus === "FALLBACK" ? (
+      {activeTab === "theory" && report.aiStatus === "FALLBACK" ? (
         <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <CircleAlert className="mt-0.5 size-5 shrink-0" />
           <p>
@@ -228,10 +296,11 @@ export function StudentStudyAnalysisPage() {
         </div>
       ) : null}
 
-      <LearningPathSection learningPath={report.learningPath} />
+      {activeTab === "theory" ? (
+        <>
+          <LearningPathSection learningPath={report.learningPath} />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-brand-700">
               <FileSearch className="size-5" />
@@ -241,9 +310,9 @@ export function StudentStudyAnalysisPage() {
               <p className="text-xs text-slate-500">Ưu tiên phần có tỷ lệ thấp</p>
             </div>
           </div>
-          <div className="mt-5 space-y-4">
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {report.topicPerformance.map((topic) => (
-              <div key={topic.topicName}>
+              <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="font-bold text-slate-700">
                     {topic.topicName}
@@ -264,9 +333,9 @@ export function StudentStudyAnalysisPage() {
               </div>
             ))}
           </div>
-        </aside>
+          </section>
 
-        <div className="space-y-4">
+        <div className="mt-6 space-y-4">
           <div>
             <h2 className="text-xl font-black">Nội dung cần ôn lại</h2>
             <p className="mt-1 text-sm text-slate-500">
@@ -350,16 +419,23 @@ export function StudentStudyAnalysisPage() {
             })
           )}
         </div>
-      </div>
+        </>
+      ) : null}
 
-      <PracticeSection
-        practice={practice}
-        answers={answers}
-        answeredCount={answeredCount}
-        submitting={submitting}
-        onChoose={choose}
-        onSubmit={() => void submitPractice()}
-      />
+      {activeTab === "practice" ? (
+        <PracticeSection
+          practice={practice}
+          answers={answers}
+          answeredCount={answeredCount}
+          submitting={submitting}
+          retrying={retrying}
+          hints={hints}
+          onChoose={choose}
+          onSubmit={() => void submitPractice()}
+          onRetry={() => void retryPractice()}
+          onGetHint={(questionId) => void getHint(questionId)}
+        />
+      ) : null}
     </StudentShell>
   );
 }
@@ -430,18 +506,53 @@ function PracticeSection({
   answers,
   answeredCount,
   submitting,
+  retrying,
+  hints,
   onChoose,
   onSubmit,
+  onRetry,
+  onGetHint,
 }: {
   practice: StudyPracticeSet | null;
   answers: Record<string, string[]>;
   answeredCount: number;
   submitting: boolean;
+  retrying: boolean;
+  hints: Record<string, string>;
   onChoose: (questionId: string, optionId: string) => void;
   onSubmit: () => void;
+  onRetry: () => void;
+  onGetHint: (questionId: string) => void;
 }) {
+  const [mode, setMode] = useState<StudyPracticeMode>("EASY");
+  const [started, setStarted] = useState(false);
+  const [index, setIndex] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const submitted = practice?.status === "SUBMITTED";
+  const practiceDuration = Math.max(300, (practice?.totalQuestions ?? 0) * 120);
+
+  useEffect(() => {
+    setStarted(false);
+    setIndex(0);
+    setRemainingSeconds(practiceDuration);
+  }, [practice?.id, practice?.status, practiceDuration]);
+
+  useEffect(() => {
+    if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0) return;
+    const timer = window.setInterval(
+      () => setRemainingSeconds((current) => Math.max(0, current - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [mode, remainingSeconds, started, submitted]);
+
   if (!practice) return null;
-  const submitted = practice.status === "SUBMITTED";
+  const timeExpired = mode === "HARD" && started && remainingSeconds === 0;
+  const locked = submitted || timeExpired;
+  const formattedRemaining = `${Math.floor(remainingSeconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(remainingSeconds % 60).toString().padStart(2, "0")}`;
+  const currentQuestion = practice.questions[index];
   return (
     <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -464,6 +575,15 @@ function PracticeSection({
               {practice.correctCount}/{practice.totalQuestions}
             </p>
           </div>
+        ) : mode === "HARD" && started ? (
+          <div className={`rounded-xl px-4 py-3 text-right ${timeExpired ? "bg-rose-50" : "bg-slate-100"}`}>
+            <p className={`text-xs font-bold ${timeExpired ? "text-rose-600" : "text-slate-500"}`}>
+              {timeExpired ? "Đã hết thời gian" : "Thời gian còn lại"}
+            </p>
+            <p className={`text-2xl font-black ${timeExpired ? "text-rose-700" : "text-slate-800"}`}>
+              {formattedRemaining}
+            </p>
+          </div>
         ) : (
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
             {answeredCount}/{practice.totalQuestions} câu đã chọn
@@ -471,7 +591,78 @@ function PracticeSection({
         )}
       </div>
 
-      <div className="mt-6 space-y-5">
+      {!submitted && !started ? (
+        <div className="mt-6 rounded-2xl bg-slate-50 p-4 sm:p-5">
+          <p className="text-sm font-black text-slate-900">Chọn chế độ luyện tập</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("EASY");
+                setStarted(false);
+                setRemainingSeconds(practiceDuration);
+              }}
+              className={`rounded-xl border p-4 text-left transition ${mode === "EASY" ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-100" : "border-slate-200 bg-white hover:border-emerald-300"}`}
+            >
+              <div className="flex items-center gap-2 font-black text-emerald-800">
+                <CircleHelp className="size-5" /> Dễ · học có hướng dẫn
+              </div>
+              <p className="mt-1.5 text-sm leading-5 text-slate-600">
+                Có nút gợi ý đáp án. Bạn có thể làm lại đến khi trả lời đúng tất cả câu hỏi.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("HARD");
+                setStarted(false);
+                setRemainingSeconds(practiceDuration);
+              }}
+              className={`rounded-xl border p-4 text-left transition ${mode === "HARD" ? "border-violet-400 bg-violet-50 ring-2 ring-violet-100" : "border-slate-200 bg-white hover:border-violet-300"}`}
+            >
+              <div className="flex items-center gap-2 font-black text-violet-800">
+                <TimerReset className="size-5" /> Khó · mô phỏng kiểm tra
+              </div>
+              <p className="mt-1.5 text-sm leading-5 text-slate-600">
+                Có giới hạn thời gian, không gợi ý và không hiện đáp án khi bạn chọn.
+              </p>
+            </button>
+          </div>
+          {!started ? (
+            <div className="mt-4 flex justify-end">
+              <Button
+                onClick={() => {
+                  setRemainingSeconds(practiceDuration);
+                  setStarted(true);
+                }}
+              >
+                {mode === "HARD" ? <TimerReset className="size-4" /> : <BrainCircuit className="size-4" />}
+                Bắt đầu luyện tập {mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {started && !submitted && currentQuestion ? (
+        <PracticeQuestionRunner
+          practice={practice}
+          question={currentQuestion}
+          questionIndex={index}
+          answers={answers}
+          mode={mode}
+          hints={hints}
+          locked={locked}
+          timeExpired={timeExpired}
+          submitting={submitting}
+          onChoose={onChoose}
+          onGetHint={onGetHint}
+          onGoTo={setIndex}
+          onSubmit={onSubmit}
+        />
+      ) : null}
+
+      {submitted ? <div className="mt-6 space-y-5">
         {practice.questions.map((question, index) => (
           <article
             key={question.id}
@@ -509,7 +700,7 @@ function PracticeSection({
                   <button
                     type="button"
                     key={option.id}
-                    disabled={submitted}
+                    disabled={locked}
                     onClick={() => onChoose(question.id, option.id)}
                     className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-semibold transition ${tone}`}
                   >
@@ -530,26 +721,202 @@ function PracticeSection({
                 </p>
                 <p className="mt-1 leading-6">{question.explanation}</p>
               </div>
+            ) : mode === "EASY" ? (
+              <div className="mt-4">
+                {hints[question.id] ? (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                    {hints[question.id]}
+                  </p>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
+                    onClick={() => onGetHint(question.id)}
+                  >
+                    <Lightbulb className="size-3.5" /> Gợi ý đáp án
+                  </Button>
+                )}
+              </div>
             ) : null}
           </article>
         ))}
-      </div>
+      </div> : null}
 
-      {!submitted ? (
-        <div className="mt-6 flex justify-end border-t border-slate-100 pt-5">
-          <Button
-            disabled={answeredCount < practice.totalQuestions || submitting}
-            onClick={onSubmit}
-          >
-            {submitting ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="size-4" />
-            )}
-            {submitting ? "Đang chấm bài..." : "Hoàn thành ôn tập"}
+      {submitted && practice.correctCount !== practice.totalQuestions ? (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+          <p className="text-sm text-slate-600">
+            {mode === "EASY"
+              ? "Bạn có thể làm lại để chinh phục toàn bộ câu hỏi."
+              : "Bạn có thể bắt đầu một lượt mô phỏng mới nếu muốn thử lại."}
+          </p>
+          <Button variant="outline" disabled={retrying} onClick={onRetry}>
+            {retrying ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+            {retrying ? "Đang tạo lượt mới..." : "Làm lại"}
           </Button>
         </div>
       ) : null}
     </section>
+  );
+}
+
+function PracticeQuestionRunner({
+  practice,
+  question,
+  questionIndex,
+  answers,
+  mode,
+  hints,
+  locked,
+  timeExpired,
+  submitting,
+  onChoose,
+  onGetHint,
+  onGoTo,
+  onSubmit,
+}: {
+  practice: StudyPracticeSet;
+  question: StudyPracticeSet["questions"][number];
+  questionIndex: number;
+  answers: Record<string, string[]>;
+  mode: StudyPracticeMode;
+  hints: Record<string, string>;
+  locked: boolean;
+  timeExpired: boolean;
+  submitting: boolean;
+  onChoose: (questionId: string, optionId: string) => void;
+  onGetHint: (questionId: string) => void;
+  onGoTo: (index: number) => void;
+  onSubmit: () => void;
+}) {
+  const answeredCount = practice.questions.filter(
+    (item) => answers[item.id]?.length,
+  ).length;
+  const isLastQuestion = questionIndex === practice.questions.length - 1;
+
+  return (
+    <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_270px]">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className="font-black text-brand-700">
+            Câu {questionIndex + 1} / {practice.totalQuestions}
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-black ${sourceMeta[question.sourceType].tone}`}
+          >
+            {sourceMeta[question.sourceType].label}
+          </span>
+        </div>
+        <div className="mt-7">
+          <p className="text-lg font-black leading-8 text-slate-950">
+            Câu {questionIndex + 1}. {question.content}
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            Chủ đề: {question.topicName} · Chọn một đáp án phù hợp nhất.
+          </p>
+          <div className="mt-6 space-y-3">
+            {question.options.map((option) => {
+              const selected = answers[question.id]?.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => onChoose(question.id, option.id)}
+                  className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition ${selected ? "border-brand-500 bg-brand-50 ring-2 ring-brand-100" : "border-slate-200 hover:border-brand-300"}`}
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-sm font-black text-slate-700">
+                    {option.label}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {option.text}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {mode === "EASY" ? (
+            <div className="mt-5">
+              {hints[question.id] ? (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                  {hints[question.id]}
+                </p>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
+                  onClick={() => onGetHint(question.id)}
+                >
+                  <Lightbulb className="size-3.5" /> Gợi ý đáp án
+                </Button>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-5">
+          <Button
+            variant="outline"
+            disabled={questionIndex === 0}
+            onClick={() => onGoTo(questionIndex - 1)}
+          >
+            <ChevronLeft className="size-4" /> Câu trước
+          </Button>
+          <span className="text-xs text-slate-400">
+            {timeExpired ? "Đã hết giờ" : "Đáp án được lưu trong phiên này"}
+          </span>
+          {isLastQuestion ? (
+            <Button
+              disabled={(!timeExpired && answeredCount < practice.totalQuestions) || submitting}
+              onClick={onSubmit}
+            >
+              {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
+              {submitting ? "Đang chấm..." : "Nộp bài"}
+            </Button>
+          ) : (
+            <Button onClick={() => onGoTo(questionIndex + 1)}>
+              Câu tiếp <ChevronRight className="size-4" />
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+        <h2 className="font-black">Danh sách câu hỏi</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Đã làm {answeredCount}/{practice.totalQuestions} câu
+        </p>
+        <div className="mt-4 grid grid-cols-5 gap-2">
+          {practice.questions.map((item, itemIndex) => {
+            const answered = Boolean(answers[item.id]?.length);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onGoTo(itemIndex)}
+                className={`grid size-10 place-items-center rounded-lg text-xs font-black ${itemIndex === questionIndex ? "bg-brand-600 text-white" : answered ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+              >
+                {itemIndex + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <p className="text-xs leading-5 text-slate-500">
+            {mode === "HARD"
+              ? "Đáp án chỉ được hiển thị sau khi nộp bài hoặc hết giờ."
+              : "Bạn có thể dùng gợi ý và làm lại nếu chưa đạt toàn bộ câu đúng."}
+          </p>
+          <Button
+            className="mt-4 w-full"
+            variant="danger"
+            disabled={(!timeExpired && answeredCount < practice.totalQuestions) || submitting}
+            onClick={onSubmit}
+          >
+            <Send className="size-4" /> Nộp bài ngay
+          </Button>
+        </div>
+      </aside>
+    </div>
   );
 }

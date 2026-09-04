@@ -463,4 +463,18 @@ export const examAttemptService = {
       { method: "POST", body: JSON.stringify({ answers }) },
     );
   },
+  retryStudyPractice(id: string): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(
+      `/study-practice-sets/${encodeURIComponent(id)}/retry`,
+      { method: "POST" },
+    );
+  },
+  getStudyPracticeHint(
+    practiceSetId: string,
+    questionId: string,
+  ): Promise<{ questionId: string; optionLabel: string; message: string }> {
+    return authenticatedRequest<{ questionId: string; optionLabel: string; message: string }>(
+      `/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`,
+    );
+  },
 };

@@ -1,13 +1,11 @@
 "use client";
 
 import {
-  ArrowRight,
+  AlertTriangle,
   BookOpenCheck,
   BrainCircuit,
   CalendarDays,
-  Route,
   Search,
-  Sparkles,
   Target,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
@@ -161,21 +159,25 @@ export function StudentReviewPage() {
 
   return (
     <StudentShell>
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-cyan-500 px-5 py-5 text-white shadow-lg shadow-brand-700/10 sm:px-6">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-blue-100">
-              <Sparkles className="size-4" /> Lộ trình học tập cá nhân hóa
-            </div>
-            <h1 className="mt-2 text-2xl font-black sm:text-3xl">Ôn tập cùng AI</h1>
-            <p className="mt-2 text-sm leading-6 text-blue-50">
-              AI phân tích câu trả lời sai, xác định phần kiến thức còn yếu và tạo bộ câu hỏi phù hợp cho từng bài kiểm tra chưa đạt.
+      <section className={`rounded-2xl border p-5 shadow-card sm:p-6 ${reviewItems.length ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <div className="flex items-start gap-3">
+          <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${reviewItems.length ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"}`}>
+            {reviewItems.length ? <AlertTriangle className="size-5" /> : <BookOpenCheck className="size-5" />}
+          </span>
+          <div>
+            <p className={`text-xs font-black uppercase tracking-[0.14em] ${reviewItems.length ? "text-rose-600" : "text-emerald-600"}`}>
+              {reviewItems.length ? "Cảnh báo kết quả học tập" : "Kết quả học tập"}
             </p>
-          </div>
-          <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs font-bold">
-            <ReviewStep icon={Target} label="Phân tích lỗi" />
-            <ReviewStep icon={BrainCircuit} label="Lập lộ trình" />
-            <ReviewStep icon={BookOpenCheck} label="Luyện câu hỏi" />
+            <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
+              {reviewItems.length
+                ? `Có ${reviewItems.length} bài kiểm tra cần được ôn lại`
+                : "Bạn chưa có bài kiểm tra điểm thấp cần ôn tập"}
+            </h1>
+            <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
+              {reviewItems.length
+                ? "Ưu tiên các bài có điểm thấp trước. Với mỗi bài, bạn có thể xem lại kiến thức hoặc bắt đầu luyện tập ngay."
+                : "Các bài kiểm tra có kết quả dưới 50% sẽ xuất hiện tại đây để bạn chủ động củng cố kiến thức."}
+            </p>
           </div>
         </div>
       </section>
@@ -207,9 +209,9 @@ export function StudentReviewPage() {
       <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         <header className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-black text-slate-950">Lộ trình được đề xuất</h2>
+            <h2 className="font-black text-slate-950">Danh sách bài kiểm tra cần ôn lại</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Mỗi bài chỉ lấy lượt làm có kết quả tốt nhất; bài đã đạt sẽ tự rời danh sách.
+              Mỗi bài lấy lượt làm có kết quả tốt nhất; bài đã đạt sẽ tự rời danh sách.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[300px_220px]">
@@ -245,7 +247,7 @@ export function StudentReviewPage() {
                 <TableHead className="!text-white">Học kỳ</TableHead>
                 <TableHead className="text-center !text-white">Kết quả</TableHead>
                 <TableHead className="text-center !text-white">Mức ưu tiên</TableHead>
-                <TableHead className="w-48 text-right !text-white">Thao tác</TableHead>
+                <TableHead className="w-64 text-right !text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -312,14 +314,21 @@ export function StudentReviewPage() {
                       </span>
                     </TableCell>
                     <TableCell className="!px-3">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
+                        >
+                          <BookOpenCheck className="size-3.5" /> Ôn lý thuyết
+                        </Button>
                         <Button
                           size="sm"
                           className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study`)}
+                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=practice`)}
                         >
-                          <Route className="size-3.5" /> Tạo / mở lộ trình
-                          <ArrowRight className="size-3.5" />
+                          <BrainCircuit className="size-3.5" /> Luyện tập
                         </Button>
                       </div>
                     </TableCell>
@@ -331,15 +340,6 @@ export function StudentReviewPage() {
         </div>
       </section>
     </StudentShell>
-  );
-}
-
-function ReviewStep({ icon: Icon, label }: { icon: ComponentType<{ className?: string }>; label: string }) {
-  return (
-    <div className="rounded-xl bg-white/15 px-3 py-3 backdrop-blur-sm">
-      <Icon className="mx-auto size-5" />
-      <span className="mt-1.5 block whitespace-nowrap">{label}</span>
-    </div>
   );
 }
 
