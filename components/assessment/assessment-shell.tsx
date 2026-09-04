@@ -380,6 +380,13 @@ function getWorkspaceBreadcrumbs(
     ];
   }
 
+  if (/^\/teacher\/exams\/[^/]+$/.test(pathname)) {
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      { label: "Chi tiết bài kiểm tra" },
+    ];
+  }
+
   if (!pathname.startsWith("/teacher/question-bank/")) return [];
 
   const currentLabel = pathname === "/teacher/question-bank/generate"

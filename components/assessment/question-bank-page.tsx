@@ -33,7 +33,10 @@ import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { academicDataService, questionBankService } from "@/lib/assessment-api";
-import { getVietnameseSubjectName } from "@/lib/subject-localization";
+import {
+  getVietnameseSubjectName,
+  toVietnameseSubjectName,
+} from "@/lib/subject-localization";
 import {
   DIFFICULTY_LABELS,
   QUESTION_TYPE_LABELS,
@@ -423,13 +426,14 @@ export function QuestionBankPage() {
                             {question.content}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {question.options.length} lựa chọn ·{" "}
-                            {question.defaultPoints} điểm
+                            {question.options.length} lựa chọn
                           </p>
                         </TableCell>
                         <TableCell>
                           <p className="font-semibold text-slate-700">
-                            {question.subjectName || "Chưa phân loại"}
+                            {question.subjectName
+                              ? toVietnameseSubjectName(question.subjectName)
+                              : "Chưa phân loại"}
                           </p>
                           <p className="mt-1 text-xs text-slate-400">
                             {question.topicName || "Tạo từ tài liệu"}

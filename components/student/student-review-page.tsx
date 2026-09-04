@@ -5,6 +5,7 @@ import {
   BookOpenCheck,
   BrainCircuit,
   CalendarDays,
+  Route,
   Search,
   Sparkles,
   Target,
@@ -236,15 +237,15 @@ export function StudentReviewPage() {
 
         <div className="overflow-x-auto">
           <Table className="min-w-[940px]">
-            <TableHeader className="bg-brand-600 text-white">
+            <TableHeader className="!bg-brand-600 !text-white">
               <tr>
-                <TableHead className="w-14 text-center text-white">#</TableHead>
-                <TableHead className="text-white">Bài kiểm tra</TableHead>
-                <TableHead className="text-white">Môn học / lớp</TableHead>
-                <TableHead className="text-white">Học kỳ</TableHead>
-                <TableHead className="text-center text-white">Kết quả</TableHead>
-                <TableHead className="text-center text-white">Mức ưu tiên</TableHead>
-                <TableHead className="w-48 text-right text-white">Thao tác</TableHead>
+                <TableHead className="w-14 text-center !text-white">#</TableHead>
+                <TableHead className="!text-white">Bài kiểm tra</TableHead>
+                <TableHead className="!text-white">Môn học / lớp</TableHead>
+                <TableHead className="!text-white">Học kỳ</TableHead>
+                <TableHead className="text-center !text-white">Kết quả</TableHead>
+                <TableHead className="text-center !text-white">Mức ưu tiên</TableHead>
+                <TableHead className="w-48 text-right !text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -267,7 +268,7 @@ export function StudentReviewPage() {
                     <TableCell className="text-center text-slate-500">
                       {index + 1}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="!px-3">
                       <p className="font-bold text-slate-950">{item.title}</p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
                         <CalendarDays className="size-3.5" /> Đã nộp {formatDate(item.submittedAt)}
@@ -314,10 +315,11 @@ export function StudentReviewPage() {
                       <div className="flex justify-end">
                         <Button
                           size="sm"
+                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
                           onClick={() => router.push(`/student/attempts/${item.id}/study`)}
                         >
-                          <BrainCircuit className="size-4" /> Tạo / mở lộ trình
-                          <ArrowRight className="size-4" />
+                          <Route className="size-3.5" /> Tạo / mở lộ trình
+                          <ArrowRight className="size-3.5" />
                         </Button>
                       </div>
                     </TableCell>

@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Clock3,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -17,6 +18,15 @@ export interface DateRangeValue {
 
 interface DateRangePickerProps extends DateRangeValue {
   onChange: (value: DateRangeValue) => void;
+  className?: string;
+  buttonClassName?: string;
+  singleDate?: boolean;
+}
+
+interface DateTimePickerProps {
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
   className?: string;
   buttonClassName?: string;
 }
@@ -31,6 +41,20 @@ const monthFormatter = new Intl.DateTimeFormat("vi-VN", {
   month: "long",
   year: "numeric",
 });
+const dateTimeFormatter = new Intl.DateTimeFormat("vi-VN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour12: false,
+});
+const hourOptions = Array.from({ length: 24 }, (_, hour) =>
+  String(hour).padStart(2, "0"),
+);
+const minuteOptions = Array.from({ length: 60 }, (_, minute) =>
+  String(minute).padStart(2, "0"),
+);
 
 function createDate(year: number, month: number, day: number): Date {
   return new Date(year, month, day, 12);
@@ -60,6 +84,36 @@ function toDateValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function parseDateTime(value: string): Date | null {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const date = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+  );
+  if (
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3]) ||
+    date.getHours() !== Number(match[4]) ||
+    date.getMinutes() !== Number(match[5])
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function toDateTimeValue(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${toDateValue(date)}T${hours}:${minutes}`;
 }
 
 function startOfMonth(date: Date): Date {
@@ -152,6 +206,7 @@ export function DateRangePicker({
   onChange,
   className,
   buttonClassName,
+  singleDate = false,
 }: DateRangePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => normalizeDate(new Date()), []);
@@ -183,6 +238,11 @@ export function DateRangePicker({
 
   function handleDaySelect(date: Date) {
     const value = toDateValue(date);
+    if (singleDate) {
+      onChange({ from: value, to: value });
+      setOpen(false);
+      return;
+    }
     const selectedFrom = parseDate(from);
 
     if (!selectedFrom || to) {
@@ -212,7 +272,7 @@ export function DateRangePicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Lọc theo khoảng thời gian"
+        aria-label={singleDate ? "Chọn ngày" : "Lọc theo khoảng thời gian"}
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-left text-sm outline-none transition hover:border-slate-300 focus:border-brand-400",
@@ -221,44 +281,59 @@ export function DateRangePicker({
         )}
       >
         <CalendarDays className="size-4 shrink-0 text-slate-400" />
-        <span className={cn("min-w-0 truncate", !from && "text-slate-400")}>
-          {displayFrom}
-        </span>
-        <span className="shrink-0 text-slate-400">-</span>
-        <span className={cn("min-w-0 truncate", !to && "text-slate-400")}>
-          {displayTo}
-        </span>
+        {singleDate ? (
+          <span className={cn("min-w-0 truncate", !from && "text-slate-400")}>
+            {displayFrom}
+          </span>
+        ) : (
+          <>
+            <span className={cn("min-w-0 truncate", !from && "text-slate-400")}>
+              {displayFrom}
+            </span>
+            <span className="shrink-0 text-slate-400">-</span>
+            <span className={cn("min-w-0 truncate", !to && "text-slate-400")}>
+              {displayTo}
+            </span>
+          </>
+        )}
       </button>
 
       {open ? (
         <div
           role="dialog"
-          aria-label="Chọn khoảng thời gian"
-          className="absolute right-0 top-full z-50 mt-2 grid max-h-[calc(100vh-7rem)] w-[min(680px,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/15 md:grid-cols-[132px_minmax(0,1fr)]"
+          aria-label={singleDate ? "Chọn ngày" : "Chọn khoảng thời gian"}
+          className={cn(
+            "absolute right-0 top-full z-50 mt-2 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/15",
+            singleDate
+              ? "w-[min(360px,calc(100vw-2rem))]"
+              : "grid w-[min(680px,calc(100vw-2rem))] md:grid-cols-[132px_minmax(0,1fr)]",
+          )}
         >
-          <div className="grid content-start grid-cols-2 gap-0.5 border-b border-slate-100 p-2 md:grid-cols-1 md:border-b-0 md:border-r">
-            {presets.map((preset) => {
-              const selected = preset.value.from === from && preset.value.to === to;
-              return (
-                <button
-                  type="button"
-                  key={preset.label}
-                  onClick={() => applyPreset(preset.value)}
-                  className={cn(
-                    "w-full rounded-lg px-2.5 py-1 text-left text-xs font-semibold transition",
-                    selected
-                      ? "bg-blue-50 font-bold text-brand-700"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
-                    preset.label === "Toàn bộ" && "col-span-2 md:col-span-1",
-                  )}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
+          {!singleDate ? (
+            <div className="grid content-start grid-cols-2 gap-0.5 border-b border-slate-100 p-2 md:grid-cols-1 md:border-b-0 md:border-r">
+              {presets.map((preset) => {
+                const selected = preset.value.from === from && preset.value.to === to;
+                return (
+                  <button
+                    type="button"
+                    key={preset.label}
+                    onClick={() => applyPreset(preset.value)}
+                    className={cn(
+                      "w-full rounded-lg px-2.5 py-1 text-left text-xs font-semibold transition",
+                      selected
+                        ? "bg-blue-50 font-bold text-brand-700"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+                      preset.label === "Toàn bộ" && "col-span-2 md:col-span-1",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
-          <div className="grid min-w-0 md:grid-cols-2">
+          <div className={cn("grid min-w-0", !singleDate && "md:grid-cols-2")}>
             <CalendarMonth
               month={visibleMonth}
               today={today}
@@ -267,9 +342,22 @@ export function DateRangePicker({
               onDaySelect={handleDaySelect}
               onPreviousMonth={() => setVisibleMonth((month) => addMonths(month, -1))}
               onPreviousYear={() => setVisibleMonth((month) => addMonths(month, -12))}
+              onNextMonth={
+                singleDate
+                  ? () => setVisibleMonth((month) => addMonths(month, 1))
+                  : undefined
+              }
+              onNextYear={
+                singleDate
+                  ? () => setVisibleMonth((month) => addMonths(month, 12))
+                  : undefined
+              }
             />
             <CalendarMonth
-              className="hidden border-l border-slate-100 md:block"
+              className={cn(
+                "border-l border-slate-100",
+                singleDate ? "hidden" : "hidden md:block",
+              )}
               month={addMonths(visibleMonth, 1)}
               today={today}
               from={from}
@@ -278,6 +366,189 @@ export function DateRangePicker({
               onNextMonth={() => setVisibleMonth((month) => addMonths(month, 1))}
               onNextYear={() => setVisibleMonth((month) => addMonths(month, 12))}
             />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function DateTimePicker({
+  value,
+  onChange,
+  label,
+  className,
+  buttonClassName,
+}: DateTimePickerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const today = useMemo(() => normalizeDate(new Date()), []);
+  const selectedDateTime = parseDateTime(value);
+  const selectedDate = selectedDateTime ? toDateValue(selectedDateTime) : "";
+  const [open, setOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    startOfMonth(selectedDateTime ?? today),
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setVisibleMonth(startOfMonth(parseDateTime(value) ?? today));
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, today, value]);
+
+  function currentValue() {
+    return parseDateTime(value) ?? new Date();
+  }
+
+  function selectDay(day: Date) {
+    const current = currentValue();
+    onChange(
+      toDateTimeValue(
+        new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate(),
+          current.getHours(),
+          current.getMinutes(),
+        ),
+      ),
+    );
+  }
+
+  function selectTime(part: "hour" | "minute", nextValue: string) {
+    const current = currentValue();
+    if (part === "hour") current.setHours(Number(nextValue));
+    else current.setMinutes(Number(nextValue));
+    onChange(toDateTimeValue(current));
+  }
+
+  function selectToday() {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    onChange(toDateTimeValue(now));
+    setVisibleMonth(startOfMonth(now));
+  }
+
+  const displayValue = selectedDateTime
+    ? dateTimeFormatter.format(selectedDateTime)
+    : "Chọn ngày và giờ";
+  const selectedHour = selectedDateTime
+    ? String(selectedDateTime.getHours()).padStart(2, "0")
+    : "00";
+  const selectedMinute = selectedDateTime
+    ? String(selectedDateTime.getMinutes()).padStart(2, "0")
+    : "00";
+
+  return (
+    <div ref={containerRef} className={cn("relative", className)}>
+      {label ? (
+        <span className="mb-2 block text-sm font-bold text-slate-700">
+          {label}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "flex h-10 w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-900 outline-none transition hover:border-slate-300 focus:border-brand-400 focus:ring-4 focus:ring-blue-100",
+          open && "border-brand-400 ring-4 ring-blue-100",
+          buttonClassName,
+        )}
+      >
+        <CalendarDays className="size-4 shrink-0 text-slate-400" />
+        <span className={cn("min-w-0 flex-1 truncate", !value && "text-slate-400")}>
+          {displayValue}
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label={label ?? "Chọn ngày và giờ"}
+          className="absolute left-0 top-full z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/15"
+        >
+          <CalendarMonth
+            month={visibleMonth}
+            today={today}
+            from={selectedDate}
+            to=""
+            onDaySelect={selectDay}
+            onPreviousMonth={() =>
+              setVisibleMonth((month) => addMonths(month, -1))
+            }
+            onPreviousYear={() =>
+              setVisibleMonth((month) => addMonths(month, -12))
+            }
+            onNextMonth={() =>
+              setVisibleMonth((month) => addMonths(month, 1))
+            }
+            onNextYear={() =>
+              setVisibleMonth((month) => addMonths(month, 12))
+            }
+          />
+          <div className="border-t border-slate-100 p-3">
+            <div className="flex items-center gap-2">
+              <Clock3 className="size-4 text-slate-400" />
+              <span className="mr-auto text-sm font-bold text-slate-700">
+                Thời gian
+              </span>
+              <select
+                value={selectedHour}
+                onChange={(event) => selectTime("hour", event.target.value)}
+                aria-label="Giờ"
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {hourOptions.map((hour) => (
+                  <option key={hour} value={hour}>
+                    {hour}
+                  </option>
+                ))}
+              </select>
+              <span className="font-black text-slate-400">:</span>
+              <select
+                value={selectedMinute}
+                onChange={(event) => selectTime("minute", event.target.value)}
+                aria-label="Phút"
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {minuteOptions.map((minute) => (
+                  <option key={minute} value={minute}>
+                    {minute}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-3 flex justify-between border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={selectToday}
+                className="rounded-lg px-3 py-2 text-xs font-bold text-brand-600 transition hover:bg-blue-50"
+              >
+                Hôm nay
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-700"
+              >
+                Xong
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

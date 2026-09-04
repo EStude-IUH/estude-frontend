@@ -51,7 +51,6 @@ export function QuestionEditorForm({
     difficulty: "MEDIUM",
     options: initialOptions,
     correctOptionIds: [],
-    defaultPoints: 1,
     explanation: "",
     disabled: false,
   });
@@ -110,7 +109,6 @@ export function QuestionEditorForm({
           difficulty: question.difficulty,
           options: question.options,
           correctOptionIds: question.correctOptionIds,
-          defaultPoints: question.defaultPoints,
           explanation: question.explanation,
           disabled: question.disabled,
         }),
@@ -270,7 +268,7 @@ export function QuestionEditorForm({
                 Giúp tìm và chọn câu hỏi nhanh hơn khi tạo đề.
               </p>
               <div
-                className={`grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px] ${embedded ? "mt-3" : "mt-4"}`}
+                className={`grid gap-4 md:grid-cols-2 ${embedded ? "mt-3" : "mt-4"}`}
               >
                 <CustomSelect
                   label="Môn học"
@@ -299,16 +297,6 @@ export function QuestionEditorForm({
                   ]}
                   onValueChange={chooseTopic}
                   disabled={!form.subjectId}
-                />
-                <Input
-                  label="Điểm mặc định"
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={form.defaultPoints}
-                  onChange={(event) =>
-                    update("defaultPoints", Number(event.target.value))
-                  }
                 />
               </div>
             </div>

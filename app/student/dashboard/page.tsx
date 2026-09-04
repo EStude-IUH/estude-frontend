@@ -4,7 +4,7 @@ import { StudentDashboardView } from '@/components/dashboard/dashboard-view';
 
 export const metadata: Metadata = {
   title: 'Không gian sinh viên',
-  description: 'Theo dõi khóa học, lịch học và tiến độ học tập cá nhân.',
+  description: 'Theo dõi và thực hiện các bài kiểm tra được giao.',
 };
 
 export default function StudentDashboardPage() {

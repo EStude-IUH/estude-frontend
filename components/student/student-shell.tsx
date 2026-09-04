@@ -8,7 +8,6 @@ import {
   Bell,
   BookOpen,
   BrainCircuit,
-  CalendarDays,
   ChevronDown,
   CircleHelp,
   LayoutDashboard,
@@ -29,12 +28,8 @@ interface StudentNavItem {
 const studentNavItems: StudentNavItem[] = [
   {
     icon: LayoutDashboard,
-    label: "Hôm nay",
+    label: "Trang chủ",
     href: "/student/dashboard",
-  },
-  {
-    icon: CalendarDays,
-    label: "Thời khóa biểu",
   },
   { icon: BookOpen, label: "Môn học", href: "/student/courses" },
   { icon: BrainCircuit, label: "Ôn tập", href: "/student/review" },
@@ -239,7 +234,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
         aria-label="Điều hướng nhanh"
       >
         {studentNavItems
-          .filter((item) => item.href && item.label !== "Thời khóa biểu")
+          .filter((item) => item.href)
           .map(({ icon: Icon, label, href }) => {
           const active = isNavItemActive(pathname, href);
 

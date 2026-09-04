@@ -42,6 +42,7 @@ import {
   TableLoadingBarRow,
 } from "@/components/ui/data-table";
 import { DataTableFooter } from "@/components/ui/data-table-footer";
+import { DateTimePicker } from "@/components/ui/date-range-picker";
 import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import {
   CustomSelect,
@@ -83,6 +84,49 @@ const wizardSteps = [
   { label: "Kiểm tra", description: "Xác nhận và lưu", icon: FileCheck2 },
 ];
 
+type ScoreDistributionMode = "even" | "custom";
+
+const DEFAULT_MAX_POINTS = 10;
+const MAX_EXAM_VERSIONS = 10;
+const SCORE_PRECISION = 100;
+const SCORE_TOLERANCE = 0.005;
+
+function roundPoints(value: number): number {
+  return Math.round((value + Number.EPSILON) * SCORE_PRECISION) / SCORE_PRECISION;
+}
+
+function formatPoints(value: number): string {
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(roundPoints(value));
+}
+
+function distributePointsEvenly(
+  items: ExamQuestion[],
+  maximumPoints: number,
+): ExamQuestion[] {
+  if (items.length === 0) return items;
+  const totalUnits = Math.max(0, Math.round(maximumPoints * SCORE_PRECISION));
+  const baseUnits = Math.floor(totalUnits / items.length);
+  const remainder = totalUnits - baseUnits * items.length;
+  return items.map((item, index) => ({
+    ...item,
+    points: (baseUnits + (index < remainder ? 1 : 0)) / SCORE_PRECISION,
+    order: index,
+  }));
+}
+
+function hasEvenPointDistribution(
+  items: ExamQuestion[],
+  maximumPoints: number,
+): boolean {
+  const expected = distributePointsEvenly(items, maximumPoints);
+  return items.every(
+    (item, index) =>
+      Math.abs(item.points - (expected[index]?.points ?? 0)) < SCORE_TOLERANCE,
+  );
+}
+
 function ExamWizardFrame({
   embedded,
   children,
@@ -105,6 +149,7 @@ function createBlankSettings(defaults?: TeacherExamDefaults): ExamSettings {
     endsAt: toDateTimeLocal(endsAt.toISOString()),
     durationMinutes: defaults?.durationMinutes ?? 45,
     attemptsAllowed: defaults?.attemptsAllowed ?? 1,
+    examVersionCount: 1,
     shuffleQuestions: defaults?.shuffleQuestions ?? false,
     shuffleAnswers: defaults?.shuffleAnswers ?? false,
     showScoreImmediately: defaults?.showScoreImmediately ?? true,
@@ -525,6 +570,9 @@ export function ExamWizardPage({
     useState(Boolean(examId));
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<ExamQuestion[]>([]);
+  const [maximumPoints, setMaximumPoints] = useState(DEFAULT_MAX_POINTS);
+  const [scoreDistributionMode, setScoreDistributionMode] =
+    useState<ScoreDistributionMode>("even");
   const [initializing, setInitializing] = useState(true);
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -603,11 +651,23 @@ export function ExamWizardPage({
           });
           setSettings({
             ...exam.settings,
+            examVersionCount: exam.settings.examVersionCount ?? 1,
             startsAt: toDateTimeLocal(exam.settings.startsAt),
             endsAt: toDateTimeLocal(exam.settings.endsAt),
           });
-          setSelected(
-            [...exam.questions].sort((left, right) => left.order - right.order),
+          const examQuestions = [...exam.questions].sort(
+            (left, right) => left.order - right.order,
+          );
+          const examMaximumPoints =
+            exam.totalPoints > 0
+              ? Math.min(exam.totalPoints, DEFAULT_MAX_POINTS)
+              : DEFAULT_MAX_POINTS;
+          setSelected(examQuestions);
+          setMaximumPoints(examMaximumPoints);
+          setScoreDistributionMode(
+            hasEvenPointDistribution(examQuestions, examMaximumPoints)
+              ? "even"
+              : "custom",
           );
           return;
         }
@@ -726,21 +786,44 @@ export function ExamWizardPage({
     return items.map((item, order) => ({ ...item, order }));
   }
 
+  function applyCurrentScoreDistribution(items: ExamQuestion[]) {
+    const normalized = normalizeOrder(items);
+    return scoreDistributionMode === "even"
+      ? distributePointsEvenly(normalized, maximumPoints)
+      : normalized;
+  }
+
+  function chooseScoreDistributionMode(mode: ScoreDistributionMode) {
+    setScoreDistributionMode(mode);
+    if (mode === "even") {
+      setSelected((items) => distributePointsEvenly(items, maximumPoints));
+    }
+  }
+
+  function updateMaximumPoints(value: number) {
+    const nextValue = Number.isFinite(value)
+      ? Math.min(DEFAULT_MAX_POINTS, Math.max(0, roundPoints(value)))
+      : 0;
+    setMaximumPoints(nextValue);
+    if (scoreDistributionMode === "even") {
+      setSelected((items) => distributePointsEvenly(items, nextValue));
+    }
+  }
+
   function toggleQuestion(question: Question) {
-    setSelected((items) =>
-      items.some((item) => item.questionId === question.id)
-        ? normalizeOrder(
-            items.filter((item) => item.questionId !== question.id),
-          )
+    setSelected((items) => {
+      const nextItems = items.some((item) => item.questionId === question.id)
+        ? items.filter((item) => item.questionId !== question.id)
         : [
             ...items,
             {
               questionId: question.id,
-              points: question.defaultPoints,
+              points: 0,
               order: items.length,
             },
-          ],
-    );
+          ];
+      return applyCurrentScoreDistribution(nextItems);
+    });
   }
 
   function openQuestionPicker() {
@@ -774,10 +857,10 @@ export function ExamWizardPage({
       )
       .map((question) => ({
         questionId: question.id,
-        points: question.defaultPoints,
+        points: 0,
         order: 0,
       }));
-    setSelected(normalizeOrder([...retained, ...added]));
+    setSelected(applyCurrentScoreDistribution([...retained, ...added]));
     setQuestionPickerOpen(false);
   }
 
@@ -785,7 +868,10 @@ export function ExamWizardPage({
     setSelected((items) =>
       items.map((item) =>
         item.questionId === questionId
-          ? { ...item, points: Math.max(0, points) }
+          ? {
+              ...item,
+              points: Number.isFinite(points) ? Math.max(0, roundPoints(points)) : 0,
+            }
           : item,
       ),
     );
@@ -835,6 +921,41 @@ export function ExamWizardPage({
       question: questions.find((question) => question.id === item.questionId),
     }))
     .filter((item) => item.question);
+  const assignedPoints = roundPoints(
+    selected.reduce((sum, item) => sum + item.points, 0),
+  );
+  const remainingPoints = roundPoints(maximumPoints - assignedPoints);
+  const hasCompleteScoreDistribution =
+    Math.abs(remainingPoints) < SCORE_TOLERANCE;
+
+  function validateQuestionScores() {
+    if (selected.length === 0) {
+      reportError("Hãy chọn ít nhất một câu hỏi");
+      return false;
+    }
+    if (!Number.isFinite(maximumPoints) || maximumPoints <= 0) {
+      reportError("Điểm tối đa phải lớn hơn 0");
+      return false;
+    }
+    if (maximumPoints > DEFAULT_MAX_POINTS) {
+      reportError(`Điểm tối đa không được vượt quá ${DEFAULT_MAX_POINTS}`);
+      return false;
+    }
+    if (selected.some((item) => !Number.isFinite(item.points) || item.points <= 0)) {
+      reportError("Điểm của mỗi câu hỏi phải lớn hơn 0");
+      return false;
+    }
+    if (!hasCompleteScoreDistribution) {
+      reportError(
+        remainingPoints > 0
+          ? `Còn thiếu ${formatPoints(remainingPoints)} điểm để đạt ${formatPoints(maximumPoints)} điểm`
+          : `Tổng điểm đang vượt ${formatPoints(Math.abs(remainingPoints))} điểm`,
+      );
+      return false;
+    }
+    return true;
+  }
+
   function canNext() {
     if (step === 1 && !info.title.trim()) {
       reportError("Vui lòng nhập tên bài kiểm tra");
@@ -852,14 +973,7 @@ export function ExamWizardPage({
       reportError("Vui lòng chọn chủ đề từ dữ liệu học vụ");
       return false;
     }
-    if (step === 2 && selected.length === 0) {
-      reportError("Hãy chọn ít nhất một câu hỏi");
-      return false;
-    }
-    if (step === 2 && selected.some((item) => item.points <= 0)) {
-      reportError("Điểm của mỗi câu hỏi phải lớn hơn 0");
-      return false;
-    }
+    if (step === 2 && !validateQuestionScores()) return false;
     if (step === 3) {
       const startsAt = new Date(settings.startsAt).getTime();
       const endsAt = new Date(settings.endsAt).getTime();
@@ -875,11 +989,23 @@ export function ExamWizardPage({
         reportError("Thời lượng và số lần làm bài phải lớn hơn 0");
         return false;
       }
+      if (
+        !Number.isInteger(settings.examVersionCount) ||
+        settings.examVersionCount < 1 ||
+        settings.examVersionCount > MAX_EXAM_VERSIONS
+      ) {
+        reportError(`Số lượng mã đề phải từ 1 đến ${MAX_EXAM_VERSIONS}`);
+        return false;
+      }
     }
     return true;
   }
 
   async function save(publishAfterSave = false) {
+    if (!validateQuestionScores()) {
+      setStep(2);
+      return;
+    }
     setSaving(true);
     const payload: ExamInput = {
       ...info,
@@ -1098,14 +1224,80 @@ export function ExamWizardPage({
                   Chọn từ ngân hàng
                 </Button>
               </div>
+              <div className="mt-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-end">
+                <Input
+                  label="Điểm tối đa"
+                  type="number"
+                  min="0.01"
+                  max={DEFAULT_MAX_POINTS}
+                  step="0.01"
+                  value={maximumPoints}
+                  onChange={(event) => {
+                    event.currentTarget.value = event.currentTarget.value.replace(
+                      /^0+(?=\d)/,
+                      "",
+                    );
+                    updateMaximumPoints(event.currentTarget.valueAsNumber);
+                  }}
+                />
+                <fieldset>
+                  <legend className="mb-1.5 text-sm font-bold text-slate-700">
+                    Cách phân chia điểm
+                  </legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => chooseScoreDistributionMode("even")}
+                      className={`!h-auto !justify-start px-3 py-2.5 text-left ${scoreDistributionMode === "even" ? "border-brand-500 !bg-blue-50 text-brand-700 ring-1 ring-brand-100" : "border-slate-200 !bg-white text-slate-600"}`}
+                      aria-pressed={scoreDistributionMode === "even"}
+                    >
+                      <span>
+                        <strong className="block text-sm">Chia đều tự động</strong>
+                        <small className="font-medium text-slate-500">
+                          Tự cập nhật khi thêm hoặc bớt câu hỏi
+                        </small>
+                      </span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => chooseScoreDistributionMode("custom")}
+                      className={`!h-auto !justify-start px-3 py-2.5 text-left ${scoreDistributionMode === "custom" ? "border-brand-500 !bg-blue-50 text-brand-700 ring-1 ring-brand-100" : "border-slate-200 !bg-white text-slate-600"}`}
+                      aria-pressed={scoreDistributionMode === "custom"}
+                    >
+                      <span>
+                        <strong className="block text-sm">Giáo viên tự nhập</strong>
+                        <small className="font-medium text-slate-500">
+                          Điều chỉnh điểm riêng cho từng câu
+                        </small>
+                      </span>
+                    </Button>
+                  </div>
+                </fieldset>
+                <div
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-3 text-sm lg:col-span-2"
+                  aria-live="polite"
+                >
+                  <span className="font-semibold text-slate-600">
+                    Đã phân bổ: {formatPoints(assignedPoints)} / {formatPoints(maximumPoints)} điểm
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${hasCompleteScoreDistribution ? "bg-emerald-100 text-emerald-700" : remainingPoints > 0 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}
+                  >
+                    {hasCompleteScoreDistribution
+                      ? "Đã đủ điểm"
+                      : remainingPoints > 0
+                        ? `Còn thiếu ${formatPoints(remainingPoints)} điểm`
+                        : `Đã vượt ${formatPoints(Math.abs(remainingPoints))} điểm`}
+                  </span>
+                </div>
+              </div>
               <div className="mt-5 overflow-hidden rounded-xl border border-brand-100 bg-brand-50/30">
                 <div className="flex items-center justify-between border-b border-brand-100 bg-brand-50 px-4 py-3">
                   <p className="text-sm font-black text-brand-900">
                     Đề đã chọn
                   </p>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
-                    {selected.length} câu ·{" "}
-                    {selected.reduce((sum, item) => sum + item.points, 0)} điểm
+                    {selected.length} câu · {formatPoints(assignedPoints)} điểm
                   </span>
                 </div>
                 <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
@@ -1157,23 +1349,36 @@ export function ExamWizardPage({
                             </Button>
                           </div>
                           <div className="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 pt-3">
-                            <Input
-                              type="number"
-                              min="0.25"
-                              step="0.25"
-                              value={points}
-                              onChange={(event) =>
-                                updateQuestionPoints(
-                                  question!.id,
-                                  Number(event.target.value),
-                                )
-                              }
-                              className="h-8 w-24"
-                              aria-label={`Điểm câu ${index + 1}`}
-                            />
-                            <span className="mr-auto text-[11px] font-semibold text-slate-400">
-                              điểm
-                            </span>
+                            <div className="mr-auto">
+                              <p className="mb-1 text-[11px] font-semibold text-slate-500">
+                                Điểm câu {index + 1}
+                              </p>
+                              {scoreDistributionMode === "custom" ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={points}
+                                    onChange={(event) =>
+                                      updateQuestionPoints(
+                                        question!.id,
+                                        event.currentTarget.valueAsNumber,
+                                      )
+                                    }
+                                    className="h-8 w-24"
+                                    aria-label={`Điểm câu ${index + 1}`}
+                                  />
+                                  <span className="text-[11px] font-semibold text-slate-400">
+                                    điểm
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="inline-flex h-8 items-center rounded-lg bg-brand-50 px-3 text-sm font-black text-brand-700">
+                                  {formatPoints(points)} điểm
+                                </span>
+                              )}
+                            </div>
                             <Button
                               variant="outline"
                               size="sm"
@@ -1216,25 +1421,23 @@ export function ExamWizardPage({
                 </p>
               </div>
               <div className="grid gap-5 md:grid-cols-2">
-                <Input
+                <DateTimePicker
                   label="Thời gian bắt đầu"
-                  type="datetime-local"
                   value={settings.startsAt}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setSettings((current) => ({
                       ...current,
-                      startsAt: event.target.value,
+                      startsAt: value,
                     }))
                   }
                 />
-                <Input
+                <DateTimePicker
                   label="Thời gian kết thúc"
-                  type="datetime-local"
                   value={settings.endsAt}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setSettings((current) => ({
                       ...current,
-                      endsAt: event.target.value,
+                      endsAt: value,
                     }))
                   }
                 />
@@ -1262,6 +1465,84 @@ export function ExamWizardPage({
                     }))
                   }
                 />
+                <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 md:col-span-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-black text-slate-800">
+                        Tạo nhiều mã đề
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Mỗi mã đề có thứ tự câu hỏi và đáp án riêng, được giữ
+                        nguyên trong suốt lượt làm bài.
+                      </p>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings.examVersionCount > 1}
+                      onCheckedChange={(checked) =>
+                        setSettings((current) => ({
+                          ...current,
+                          examVersionCount: checked ? 2 : 1,
+                          shuffleQuestions: checked
+                            ? true
+                            : current.shuffleQuestions,
+                          shuffleAnswers: checked
+                            ? true
+                            : current.shuffleAnswers,
+                        }))
+                      }
+                      aria-label="Tạo nhiều mã đề"
+                    />
+                  </div>
+                  {settings.examVersionCount > 1 ? (
+                    <div className="mt-4 grid gap-4 border-t border-brand-100 pt-4 md:grid-cols-[180px_minmax(0,1fr)] md:items-end">
+                      <Input
+                        label="Số lượng mã đề"
+                        type="number"
+                        min="2"
+                        max={MAX_EXAM_VERSIONS}
+                        value={settings.examVersionCount}
+                        onChange={(event) => {
+                          event.currentTarget.value =
+                            event.currentTarget.value.replace(/^0+(?=\d)/, "");
+                          const value = event.currentTarget.valueAsNumber;
+                          setSettings((current) => ({
+                            ...current,
+                            examVersionCount: Number.isFinite(value)
+                              ? Math.min(
+                                  MAX_EXAM_VERSIONS,
+                                  Math.max(2, Math.round(value)),
+                                )
+                              : 2,
+                            shuffleQuestions: true,
+                            shuffleAnswers: true,
+                          }));
+                        }}
+                      />
+                      <div>
+                        <p className="mb-2 text-xs font-bold text-slate-500">
+                          Các mã đề sẽ được tạo
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(
+                            { length: settings.examVersionCount },
+                            (_, index) => (
+                              <span
+                                key={index}
+                                className="rounded-lg border border-brand-200 bg-white px-2.5 py-1.5 text-xs font-black text-brand-700"
+                              >
+                                Mã {String(index + 1).padStart(3, "0")}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs font-semibold text-brand-700 md:col-span-2">
+                        Trộn câu hỏi và đáp án được bật bắt buộc khi có nhiều mã
+                        đề.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
                   {(
                     [
@@ -1273,24 +1554,37 @@ export function ExamWizardPage({
                       ],
                       ["showCorrectAnswers", "Cho xem đáp án đúng"],
                     ] as const
-                  ).map(([key, label]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50/40"
-                    >
-                      <span>{label}</span>
-                      <ToggleSwitch
-                        checked={settings[key]}
-                        onCheckedChange={(checked) =>
-                          setSettings((current) => ({
-                            ...current,
-                            [key]: checked,
-                          }))
-                        }
-                        aria-label={label}
-                      />
-                    </div>
-                  ))}
+                  ).map(([key, label]) => {
+                    const forcedByExamVersions =
+                      settings.examVersionCount > 1 &&
+                      (key === "shuffleQuestions" || key === "shuffleAnswers");
+                    return (
+                      <div
+                        key={key}
+                        className={`flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-4 text-sm font-semibold text-slate-700 transition ${forcedByExamVersions ? "bg-slate-50" : "hover:border-brand-200 hover:bg-brand-50/40"}`}
+                      >
+                        <span>
+                          {label}
+                          {forcedByExamVersions ? (
+                            <small className="mt-0.5 block font-medium text-brand-600">
+                              Bắt buộc khi tạo nhiều mã đề
+                            </small>
+                          ) : null}
+                        </span>
+                        <ToggleSwitch
+                          checked={forcedByExamVersions || settings[key]}
+                          disabled={forcedByExamVersions}
+                          onCheckedChange={(checked) =>
+                            setSettings((current) => ({
+                              ...current,
+                              [key]: checked,
+                            }))
+                          }
+                          aria-label={label}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1335,7 +1629,7 @@ export function ExamWizardPage({
                       Tổng điểm
                     </p>
                     <p className="mt-1 text-lg font-black text-slate-900">
-                      {selected.reduce((sum, item) => sum + item.points, 0)}
+                      {formatPoints(assignedPoints)}
                     </p>
                   </div>
                   <div className="px-4 py-3.5">
@@ -1510,7 +1804,7 @@ export function ExamWizardPage({
               <div className="rounded-xl bg-violet-50 p-4">
                 <p className="text-xs font-semibold text-violet-600">Tổng điểm</p>
                 <p className="mt-1.5 text-2xl font-black text-violet-800">
-                  {selected.reduce((sum, item) => sum + item.points, 0)}
+                  {formatPoints(assignedPoints)}
                 </p>
               </div>
             </div>
@@ -1565,7 +1859,7 @@ export function ExamWizardPage({
       <Modal
         open={questionPickerOpen}
         title="Chọn câu hỏi từ ngân hàng"
-        description={`Chỉ hiển thị câu hỏi thuộc môn ${info.subjectName ? toVietnameseSubjectName(info.subjectName) : "đã chọn"}.`}
+        titleClassName="!text-brand-700"
         onClose={() => setQuestionPickerOpen(false)}
         width="max-w-5xl"
         layerClassName="z-[130]"
@@ -1667,8 +1961,6 @@ export function ExamWizardPage({
                         <span>{QUESTION_TYPE_LABELS[question.type]}</span>
                         <span>·</span>
                         <span>{DIFFICULTY_LABELS[question.difficulty]}</span>
-                        <span>·</span>
-                        <span>{question.defaultPoints} điểm</span>
                       </span>
                     </span>
                   </Button>
@@ -1730,17 +2022,8 @@ export function ExamDetailPage() {
         title={exam.title}
         description={`${toVietnameseSubjectName(exam.subjectName)} · ${exam.className}`}
       />
-      <div className="mx-auto max-w-[1180px] space-y-3">
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => router.push("/teacher/exams")}
-          >
-            <ArrowLeft className="size-4" /> Quay lại
-          </Button>
-        </div>
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+      <div className="grid w-full gap-3 lg:h-[calc(100dvh-106px)] lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-1 lg:row-start-1">
           <div className="relative overflow-hidden px-4 py-4 sm:px-5">
             <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-brand-100/50 blur-2xl" />
             <div className="relative flex items-start gap-3">
@@ -1758,7 +2041,7 @@ export function ExamDetailPage() {
                     {exam.published ? "Đã công bố" : "Bản nháp"}
                   </span>
                 </div>
-                <h2 className="mt-2 truncate text-xl font-black text-slate-950">
+                <h2 className="mt-2 text-xl font-black leading-7 text-slate-950">
                   {exam.title}
                 </h2>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-semibold text-slate-500">
@@ -1780,14 +2063,14 @@ export function ExamDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60 sm:grid-cols-4">
-            <div className="border-b border-r border-slate-100 px-4 py-2.5 sm:border-b-0">
+          <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60">
+            <div className="border-b border-r border-slate-100 px-4 py-2.5">
               <p className="text-[11px] font-semibold text-slate-400">Câu hỏi</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.questions.length}
               </p>
             </div>
-            <div className="border-b border-slate-100 px-4 py-2.5 sm:border-b-0 sm:border-r">
+            <div className="border-b border-slate-100 px-4 py-2.5">
               <p className="text-[11px] font-semibold text-slate-400">Tổng điểm</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.totalPoints}
@@ -1808,8 +2091,8 @@ export function ExamDetailPage() {
           </div>
         </section>
 
-        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+        <div className="contents">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:min-h-0 lg:flex-col">
             <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-3">
                 <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -1825,7 +2108,7 @@ export function ExamDetailPage() {
             </div>
 
             {orderedQuestions.length === 0 ? (
-              <div className="grid min-h-48 place-items-center px-5 py-10 text-center">
+              <div className="grid min-h-48 place-items-center px-5 py-10 text-center lg:min-h-0 lg:flex-1">
                 <div>
                   <span className="mx-auto grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
                     <FileQuestion className="size-5" />
@@ -1836,7 +2119,7 @@ export function ExamDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2 p-3 sm:p-4">
+              <div className="space-y-2 p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
                 {orderedQuestions.map((item, index) => {
                   const question = questions.find(
                     (value) => value.id === item.questionId,
@@ -1874,7 +2157,7 @@ export function ExamDetailPage() {
             )}
           </section>
 
-          <aside className="space-y-3 lg:sticky lg:top-20">
+          <aside className="space-y-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
               <div className="flex items-center gap-3">
                 <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -1911,6 +2194,12 @@ export function ExamDetailPage() {
               </div>
               <dl className="mt-3 divide-y divide-slate-100 text-[13px]">
                 <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+                  <dt className="text-slate-500">Số mã đề</dt>
+                  <dd className="font-bold text-slate-800">
+                    {exam.settings.examVersionCount}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5">
                   <dt className="text-slate-500">Xáo trộn câu hỏi</dt>
                   <dd className="font-bold text-slate-800">
                     {exam.settings.shuffleQuestions ? "Có" : "Không"}

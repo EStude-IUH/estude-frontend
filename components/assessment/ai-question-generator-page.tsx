@@ -74,7 +74,6 @@ const initialForm: GenerateAiQuestionsInput = {
   difficulty: "MEDIUM",
   quantity: 5,
   includeExplanation: true,
-  defaultPoints: 1,
 };
 
 function errorMessage(cause: unknown, fallback: string) {
@@ -434,7 +433,7 @@ export function AiQuestionGeneratorPage() {
                 onCancel={() => setCustomizingDifficulty(false)}
               />
             ) : null}
-            <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+            <div>
               <Field label="Số lượng câu hỏi">
                 <Input
                   type="number"
@@ -452,17 +451,6 @@ export function AiQuestionGeneratorPage() {
                   Tối đa {difficultySettings?.maxQuestionsPerGeneration ?? 100}{" "}
                   câu mỗi lần tạo.
                 </span>
-              </Field>
-              <Field label="Điểm mặc định">
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.25}
-                  value={form.defaultPoints}
-                  onChange={(event) =>
-                    update("defaultPoints", Number(event.target.value))
-                  }
-                />
               </Field>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">

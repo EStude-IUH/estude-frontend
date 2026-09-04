@@ -56,7 +56,6 @@ export interface GenerateAiQuestionsInput {
   difficulty: Difficulty;
   quantity: number;
   includeExplanation: boolean;
-  defaultPoints: number;
 }
 
 export interface DifficultyLevelDefinition {
@@ -108,7 +107,6 @@ export interface QuestionInput {
   difficulty: Difficulty;
   options: QuestionOption[];
   correctOptionIds: string[];
-  defaultPoints: number;
   explanation: string;
   disabled: boolean;
 }
@@ -408,6 +406,7 @@ export interface ExamSettings {
   endsAt: string;
   durationMinutes: number;
   attemptsAllowed: number;
+  examVersionCount: number;
   shuffleQuestions: boolean;
   shuffleAnswers: boolean;
   showScoreImmediately: boolean;
@@ -491,6 +490,7 @@ export interface ExamAttempt {
   score: number | null;
   correctCount: number | null;
   durationSeconds: number | null;
+  examCode: string | null;
 }
 
 export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE";
@@ -518,6 +518,26 @@ export interface StudyWeakArea {
   sourceReferences: Array<{ documentName: string; page: number }>;
 }
 
+export type StudyPerformanceLevel =
+  | "PENDING"
+  | "BELOW_AVERAGE"
+  | "AVERAGE_TO_GOOD"
+  | "STRONG";
+
+export interface StudyLearningPathStep {
+  order: number;
+  topicName: string;
+  title: string;
+  objective: string;
+  activities: string[];
+  durationMinutes: number;
+}
+
+export interface StudyLearningPath {
+  totalDurationMinutes: number;
+  steps: StudyLearningPathStep[];
+}
+
 export interface StudyAnalysisReport {
   aiStatus: "READY" | "FALLBACK";
   summary: string;
@@ -536,9 +556,13 @@ export interface StudyAnalysisReport {
     correctCount: number;
     totalQuestions: number;
     ungradedEssayCount: number;
+    scorePercentage: number | null;
+    level: StudyPerformanceLevel;
+    needsWarning: boolean;
   };
   topicPerformance: StudyTopicPerformance[];
   weakAreas: StudyWeakArea[];
+  learningPath: StudyLearningPath;
 }
 
 export interface StudyPracticeQuestion {

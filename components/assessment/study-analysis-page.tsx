@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   BookOpen,
   BrainCircuit,
   CheckCircle2,
   CircleAlert,
+  Clock3,
   FileSearch,
   Lightbulb,
+  ListChecks,
   LoaderCircle,
   Sparkles,
 } from "lucide-react";
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { examAttemptService } from "@/lib/assessment-api";
 import type {
   StudyAnalysis,
+  StudyLearningPath,
   StudyPracticeSet,
   StudySourceType,
 } from "@/types/assessment";
@@ -200,6 +204,19 @@ export function StudentStudyAnalysisPage() {
         </div>
       </section>
 
+      {report.performance.needsWarning ? (
+        <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-600" />
+          <div>
+            <p className="font-black">Kết quả hiện tại dưới mức trung bình</p>
+            <p className="mt-1 leading-6">
+              Bạn nên hoàn thành lộ trình bên dưới theo đúng thứ tự, ưu tiên các
+              chủ đề có độ chính xác thấp trước.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {report.aiStatus === "FALLBACK" ? (
         <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <CircleAlert className="mt-0.5 size-5 shrink-0" />
@@ -210,6 +227,8 @@ export function StudentStudyAnalysisPage() {
           </p>
         </div>
       ) : null}
+
+      <LearningPathSection learningPath={report.learningPath} />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
@@ -342,6 +361,69 @@ export function StudentStudyAnalysisPage() {
         onSubmit={() => void submitPractice()}
       />
     </StudentShell>
+  );
+}
+
+function LearningPathSection({
+  learningPath,
+}: {
+  learningPath: StudyLearningPath;
+}) {
+  return (
+    <section className="mt-6 rounded-2xl border border-brand-100 bg-white p-5 shadow-card sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+            <ListChecks className="size-5" />
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
+              Lộ trình tự động
+            </p>
+            <h2 className="mt-1 text-xl font-black">Lộ trình học dành cho bạn</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Hoàn thành lần lượt từng bước để củng cố kiến thức hiệu quả hơn.
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-brand-700">
+          <Clock3 className="size-3.5" /> Khoảng {learningPath.totalDurationMinutes} phút
+        </span>
+      </div>
+
+      <ol className="mt-6 grid gap-4 lg:grid-cols-2">
+        {learningPath.steps.map((step) => (
+          <li
+            key={`${step.order}-${step.topicName}`}
+            className="relative rounded-2xl border border-slate-200 p-5"
+          >
+            <div className="flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-sm font-black text-white">
+                {step.order}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-brand-600">{step.topicName}</p>
+                <h3 className="mt-1 font-black text-slate-900">{step.title}</h3>
+              </div>
+              <span className="ml-auto shrink-0 text-xs font-bold text-slate-400">
+                {step.durationMinutes} phút
+              </span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              {step.objective}
+            </p>
+            <ul className="mt-4 space-y-2">
+              {step.activities.map((activity) => (
+                <li key={activity} className="flex gap-2 text-sm text-slate-600">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
+                  <span>{activity}</span>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

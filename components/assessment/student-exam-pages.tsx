@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock3,
   Eye,
+  LoaderCircle,
   Play,
   RotateCcw,
   Send,
@@ -32,6 +33,7 @@ import {
   type Exam,
   type ExamAnswer,
   type ExamAttempt,
+  type StudyAnalysis,
   type StudentExamStatus,
 } from "@/types/assessment";
 
@@ -564,6 +566,11 @@ export function StudentAttemptPage() {
           <h1 className="mt-1 text-xl font-black sm:text-2xl">
             {attempt.exam.title}
           </h1>
+          {attempt.examCode ? (
+            <span className="mt-2 inline-flex rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-black text-brand-700">
+              Mã đề {attempt.examCode}
+            </span>
+          ) : null}
         </div>
         <div
           className={`flex items-center gap-2 rounded-xl px-4 py-2 text-lg font-black ${secondsLeft < 300 ? "bg-rose-50 text-rose-700" : "bg-slate-950 text-white"}`}
@@ -733,17 +740,64 @@ export function StudentResultPage() {
   const [attempt, setAttempt] = useState<(ExamAttempt & { exam: Exam }) | null>(
     null,
   );
+  const [analysis, setAnalysis] = useState<StudyAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(true);
+  const [analysisError, setAnalysisError] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
+    let active = true;
     void examAttemptService
       .getAttempt(params.id)
-      .then(setAttempt)
+      .then((loaded) => {
+        if (active) setAttempt(loaded);
+      })
       .catch((cause) =>
-        setError(
-          cause instanceof Error ? cause.message : "Không thể tải kết quả",
-        ),
+        active
+          ? setError(
+              cause instanceof Error ? cause.message : "Không thể tải kết quả",
+            )
+          : undefined,
       );
+
+    void examAttemptService
+      .createStudyAnalysis(params.id)
+      .then((loaded) => {
+        if (active) setAnalysis(loaded);
+      })
+      .catch((cause) => {
+        if (active) {
+          setAnalysisError(
+            cause instanceof Error
+              ? cause.message
+              : "Không thể tự động phân tích bài làm",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setAnalysisLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [params.id]);
+
+  async function retryStudyAnalysis() {
+    setAnalysisLoading(true);
+    setAnalysisError("");
+    try {
+      setAnalysis(await examAttemptService.createStudyAnalysis(params.id));
+    } catch (cause) {
+      setAnalysisError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tự động phân tích bài làm",
+      );
+    } finally {
+      setAnalysisLoading(false);
+    }
+  }
+
   if (error)
     return (
       <AssessmentShell student>
@@ -760,6 +814,15 @@ export function StudentResultPage() {
     ? `${Math.floor(attempt.durationSeconds / 60)} phút ${attempt.durationSeconds % 60} giây`
     : "—";
   const total = attempt.exam.questions.length;
+  const scorePercentage =
+    attempt.score !== null && attempt.exam.totalPoints > 0
+      ? Math.round((attempt.score / attempt.exam.totalPoints) * 100)
+      : null;
+  const needsWarning =
+    analysis?.report.performance.needsWarning ??
+    (scorePercentage !== null && scorePercentage < 50);
+  const showLowScoreWarning =
+    attempt.exam.settings.showScoreImmediately && needsWarning;
   return (
     <AssessmentShell student>
       <PageHeading
@@ -784,6 +847,11 @@ export function StudentResultPage() {
           <CheckCircle2 className="size-9" />
         </div>
         <h2 className="mt-5 text-xl font-black">{attempt.exam.title}</h2>
+        {attempt.examCode ? (
+          <span className="mt-2 inline-flex rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-black text-brand-700">
+            Mã đề {attempt.examCode}
+          </span>
+        ) : null}
         <div className="mt-7 grid gap-3 text-left sm:grid-cols-3">
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="text-xs text-slate-400">Thời gian làm</p>
@@ -826,12 +894,64 @@ export function StudentResultPage() {
             Bài làm đã được ghi nhận. Kết quả sẽ hiển thị khi giáo viên công bố.
           </div>
         )}
-        <Button
-          className="mt-5 w-full"
-          onClick={() => router.push(`/student/attempts/${attempt.id}/study`)}
-        >
-          <Sparkles className="size-4" /> Phân tích và ôn tập với AI
-        </Button>
+
+        {showLowScoreWarning ? (
+          <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-left text-sm text-rose-800">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-600" />
+            <div>
+              <p className="font-black">Cảnh báo kết quả dưới trung bình</p>
+              <p className="mt-1 leading-6">
+                Điểm của bạn đang dưới 5/10. AI đã ưu tiên các chủ đề còn yếu
+                để tạo lộ trình ôn tập phù hợp.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-left">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-violet-700">
+              {analysisLoading ? (
+                <LoaderCircle className="size-5 animate-spin" />
+              ) : (
+                <Sparkles className="size-5" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-black text-violet-900">
+                {analysisLoading
+                  ? "AI đang phân tích bài làm"
+                  : analysis
+                    ? "Đã tạo phân tích và lộ trình học"
+                    : "Chưa thể tạo phân tích AI"}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-violet-700">
+                {analysisLoading
+                  ? "Hệ thống đang xác định phần kiến thức cần củng cố và xây dựng lộ trình tự động."
+                  : analysis
+                    ? `Lộ trình gồm ${analysis.report.learningPath.steps.length} bước, dự kiến ${analysis.report.learningPath.totalDurationMinutes} phút.`
+                    : analysisError}
+              </p>
+            </div>
+          </div>
+
+          {analysis ? (
+            <Button
+              className="mt-4 w-full"
+              onClick={() => router.push(`/student/attempts/${attempt.id}/study`)}
+            >
+              <Sparkles className="size-4" /> Xem phân tích và lộ trình học
+            </Button>
+          ) : analysisLoading ? null : (
+            <Button
+              variant="outline"
+              className="mt-4 w-full"
+              onClick={() => void retryStudyAnalysis()}
+            >
+              Thử phân tích lại
+            </Button>
+          )}
+        </div>
       </div>
     </AssessmentShell>
   );

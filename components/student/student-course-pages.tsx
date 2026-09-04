@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
 import { academicDataService, examService } from "@/lib/assessment-api";
+import { rememberStudentCourseAccess } from "@/lib/student-recent-courses";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   Exam,
@@ -141,7 +142,13 @@ export function StudentCourseDetailPage() {
     setLoading(true);
     void academicDataService
       .getStudentCourse(params.classId, params.subjectId)
-      .then(setCourse)
+      .then((loadedCourse) => {
+        setCourse(loadedCourse);
+        rememberStudentCourseAccess(
+          loadedCourse.classId,
+          loadedCourse.subjectId,
+        );
+      })
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải môn học"))
       .finally(() => setLoading(false));
     void examService.getExams()

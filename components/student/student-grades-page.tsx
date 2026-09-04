@@ -153,12 +153,6 @@ export function StudentGradesPage() {
 
   return (
     <StudentShell>
-      <header className="mb-4">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">Kết quả học tập</p>
-        <h1 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">Điểm số của tôi</h1>
-        <p className="mt-1 text-sm text-slate-500">Theo dõi điểm theo năm học, học kỳ, lớp và từng môn học.</p>
-      </header>
-
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <CustomSelect
@@ -253,16 +247,16 @@ export function StudentGradesPage() {
           <p className="mt-0.5 text-xs text-slate-500">Các lượt làm tốt nhất trong phạm vi đang chọn.</p>
         </header>
         <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+          <Table className="min-w-[860px]">
+            <TableHeader className="bg-brand-600 text-white">
               <tr>
-                <TableHead>Bài kiểm tra</TableHead>
-                <TableHead>Môn học</TableHead>
-                <TableHead>Học kỳ</TableHead>
-                <TableHead className="text-center">Điểm</TableHead>
-                <TableHead className="text-center">Thang 10</TableHead>
-                <TableHead>Ngày nộp</TableHead>
-                <TableHead className="w-20 text-right">Thao tác</TableHead>
+                <TableHead className="text-white">Bài kiểm tra</TableHead>
+                <TableHead className="text-white">Môn học</TableHead>
+                <TableHead className="text-white">Học kỳ</TableHead>
+                <TableHead className="text-center text-white">Điểm</TableHead>
+                <TableHead className="text-center text-white">Thang 10</TableHead>
+                <TableHead className="text-white">Ngày nộp</TableHead>
+                <TableHead className="w-20 text-right text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -270,7 +264,7 @@ export function StudentGradesPage() {
               {filteredAttempts.map((item) => (
                 <tr key={item.id} className="transition hover:bg-slate-50/70">
                   <TableCell className="font-bold text-slate-900">{item.title}</TableCell>
-                  <TableCell>{item.subjectName}</TableCell>
+                  <TableCell>{toVietnameseSubjectName(item.subjectName)}</TableCell>
                   <TableCell>{item.termName ?? "Chưa xác định"}</TableCell>
                   <TableCell className="text-center font-bold">{item.score}/{item.totalPoints}</TableCell>
                   <TableCell className="text-center font-black">{tenPointScore(item.percentage)}</TableCell>
