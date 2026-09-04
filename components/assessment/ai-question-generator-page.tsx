@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  ArrowLeft,
   BrainCircuit,
   Check,
   Info,
@@ -22,12 +21,13 @@ import {
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/form-control";
+import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
 import {
   academicDataService,
   aiQuestionService,
   aiQuestionSettingsService,
 } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   Difficulty,
   DifficultyLevelDefinition,
@@ -131,6 +131,7 @@ export function AiQuestionGeneratorPage() {
         setForm((current) => ({
           ...current,
           materialId: current.materialId || pdfs[0]?.id || "",
+          quantity: teacherSettings.defaultQuantity,
           difficulty: teacherSettings.effectiveLevels.some(
             (level) => level.code === current.difficulty,
           )
@@ -180,6 +181,16 @@ export function AiQuestionGeneratorPage() {
       setError("Thư viện chưa có tài liệu PDF để tạo câu hỏi.");
       return;
     }
+    const maxQuantity =
+      difficultySettings?.maxQuestionsPerGeneration ?? 100;
+    if (
+      !Number.isInteger(form.quantity) ||
+      form.quantity < 1 ||
+      form.quantity > maxQuantity
+    ) {
+      setError(`Số lượng câu hỏi phải từ 1 đến ${maxQuantity}.`);
+      return;
+    }
     setGenerating(true);
     setQuestions([]);
     try {
@@ -221,8 +232,9 @@ export function AiQuestionGeneratorPage() {
     setSavingDifficulty(true);
     setError("");
     try {
-      const result =
-        await aiQuestionSettingsService.updateMine(difficultyDraft);
+      const result = await aiQuestionSettingsService.updateMine({
+        levels: difficultyDraft,
+      });
       setDifficultySettings(result);
       setDifficultyDraft(createDifficultyDraft(result));
       setCustomizingDifficulty(false);
@@ -265,14 +277,6 @@ export function AiQuestionGeneratorPage() {
         eyebrow="RAG · Gemini"
         title="Tạo câu hỏi tự động"
         description="Chọn PDF từ thư viện của bạn. AI chỉ dùng nội dung trong tài liệu và mọi câu đều cần được duyệt trước khi vào ngân hàng."
-        action={
-          <Link href="/teacher/question-bank">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="size-4" />
-              Ngân hàng câu hỏi
-            </Button>
-          </Link>
-        }
       />
       {error ? (
         <div className="mb-3">
@@ -297,18 +301,19 @@ export function AiQuestionGeneratorPage() {
           </div>
           <div className="grid gap-3">
             <Field label="Tài liệu nguồn">
-              <Select
-                required
+              <CustomSelect
                 value={form.materialId}
-                onChange={(event) => update("materialId", event.target.value)}
-              >
-                <option value="">Chọn PDF trong thư viện...</option>
-                {materials.map((material) => (
-                  <option key={material.id} value={material.id}>
-                    {material.originalName}
-                  </option>
-                ))}
-              </Select>
+                options={materials.map((material) => ({
+                  value: material.id,
+                  label: material.originalName,
+                }))}
+                onValueChange={(value) => update("materialId", value)}
+                placeholder="Chọn PDF trong thư viện..."
+                ariaLabel="Chọn tài liệu nguồn"
+                searchable
+                searchPlaceholder="Tìm tài liệu PDF..."
+                emptyMessage="Không tìm thấy tài liệu"
+              />
               {!materials.length ? (
                 <Link
                   href="/teacher/materials"
@@ -325,90 +330,98 @@ export function AiQuestionGeneratorPage() {
                 maxLength={200}
                 placeholder="Ví dụ: Chuẩn hóa dữ liệu, chương 3, Linked List..."
               />
-              <span className="text-xs font-normal leading-5 text-slate-400">
-                Nhập mục cụ thể để RAG ưu tiên đúng phần đó; bỏ trống để tự tìm
-                nội dung trọng tâm.
-              </span>
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Môn học (không bắt buộc)">
-                <Select
-                  value={form.subjectId ?? ""}
-                  onChange={(event) =>
-                    update("subjectId", event.target.value || undefined)
-                  }
-                >
-                  <option value="">Không phân loại môn học</option>
-                  {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.name}
-                    </option>
+            <div className="grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Môn học (không bắt buộc)">
+                  <CustomSelect
+                    value={form.subjectId ?? ""}
+                    options={[
+                      { value: "", label: "Không phân loại môn học" },
+                      ...subjects.map((subject) => ({
+                        value: subject.id,
+                        label: getVietnameseSubjectName(subject),
+                      })),
+                    ]}
+                    onValueChange={(value) =>
+                      update("subjectId", value || undefined)
+                    }
+                    ariaLabel="Chọn môn học"
+                    searchable
+                    searchPlaceholder="Tìm môn học..."
+                    emptyMessage="Không tìm thấy môn học"
+                  />
+                </Field>
+                <Field label="Chủ đề gợi ý (không bắt buộc)">
+                  <CustomSelect
+                    disabled={!form.subjectId}
+                    value={form.topicId ?? ""}
+                    options={[
+                      { value: "", label: "Tự xác định từ tài liệu" },
+                      ...topics.map((topic) => ({
+                        value: topic.id,
+                        label: topic.name,
+                      })),
+                    ]}
+                    onValueChange={(value) =>
+                      update("topicId", value || undefined)
+                    }
+                    ariaLabel="Chọn chủ đề gợi ý"
+                    searchable
+                    searchPlaceholder="Tìm chủ đề..."
+                    emptyMessage="Không tìm thấy chủ đề"
+                  />
+                </Field>
+              </div>
+              <Field label="Loại câu hỏi">
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ["SINGLE_CHOICE", "Trắc nghiệm"],
+                      ["TRUE_FALSE", "Đúng / Sai"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <ChoiceButton
+                      key={value}
+                      active={form.questionType === value}
+                      onClick={() => update("questionType", value)}
+                    >
+                      {label}
+                    </ChoiceButton>
                   ))}
-                </Select>
+                </div>
               </Field>
-              <Field label="Chủ đề gợi ý (không bắt buộc)">
-                <Select
-                  disabled={!form.subjectId}
-                  value={form.topicId ?? ""}
-                  onChange={(event) =>
-                    update("topicId", event.target.value || undefined)
-                  }
-                >
-                  <option value="">Tự xác định từ tài liệu</option>
-                  {topics.map((topic) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.name}
-                    </option>
+              <Field label="Độ khó">
+                <div className="grid grid-cols-2 gap-2">
+                  {activeDifficultyLevels.map((level) => (
+                    <ChoiceButton
+                      key={level.code}
+                      active={form.difficulty === level.code}
+                      onClick={() => update("difficulty", level.code)}
+                    >
+                      {level.label}
+                    </ChoiceButton>
                   ))}
-                </Select>
+                </div>
+                <span className="text-xs font-normal leading-5 text-slate-400">
+                  {
+                    activeDifficultyLevels.find(
+                      (level) => level.code === form.difficulty,
+                    )?.description
+                  }
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCustomizingDifficulty((current) => !current)
+                  }
+                  className="flex w-fit items-center gap-1.5 text-xs font-bold text-violet-600 hover:underline"
+                >
+                  <Settings2 className="size-3.5" />
+                  Tùy chỉnh 3–4 mức độ
+                </button>
               </Field>
             </div>
-            <Field label="Loại câu hỏi">
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    ["SINGLE_CHOICE", "Trắc nghiệm"],
-                    ["TRUE_FALSE", "Đúng / Sai"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <ChoiceButton
-                    key={value}
-                    active={form.questionType === value}
-                    onClick={() => update("questionType", value)}
-                  >
-                    {label}
-                  </ChoiceButton>
-                ))}
-              </div>
-            </Field>
-            <Field label="Độ khó">
-              <div className="grid grid-cols-2 gap-2">
-                {activeDifficultyLevels.map((level) => (
-                  <ChoiceButton
-                    key={level.code}
-                    active={form.difficulty === level.code}
-                    onClick={() => update("difficulty", level.code)}
-                  >
-                    {level.label}
-                  </ChoiceButton>
-                ))}
-              </div>
-              <span className="text-xs font-normal leading-5 text-slate-400">
-                {
-                  activeDifficultyLevels.find(
-                    (level) => level.code === form.difficulty,
-                  )?.description
-                }
-              </span>
-              <button
-                type="button"
-                onClick={() => setCustomizingDifficulty((current) => !current)}
-                className="flex w-fit items-center gap-1.5 text-xs font-bold text-violet-600 hover:underline"
-              >
-                <Settings2 className="size-3.5" />
-                Tùy chỉnh 3–4 mức độ
-              </button>
-            </Field>
             {customizingDifficulty && difficultySettings ? (
               <TeacherDifficultyEditor
                 settings={difficultySettings}
@@ -421,26 +434,24 @@ export function AiQuestionGeneratorPage() {
               />
             ) : null}
             <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-sm font-bold text-slate-700">
-                    Số lượng
-                  </label>
-                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-sm font-black text-slate-700">
-                    {form.quantity}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={20}
+              <Field label="Số lượng câu hỏi">
+                <Input
+                  type="number"
+                  min="1"
+                  max={
+                    difficultySettings?.maxQuestionsPerGeneration ?? 100
+                  }
+                  required
                   value={form.quantity}
                   onChange={(event) =>
                     update("quantity", Number(event.target.value))
                   }
-                  className="w-full accent-brand-600"
                 />
-              </div>
+                <span className="text-xs font-normal text-slate-400">
+                  Tối đa {difficultySettings?.maxQuestionsPerGeneration ?? 100}{" "}
+                  câu mỗi lần tạo.
+                </span>
+              </Field>
               <Field label="Điểm mặc định">
                 <Input
                   type="number"
@@ -495,7 +506,7 @@ export function AiQuestionGeneratorPage() {
 
         <section className="min-w-0">
           {generating ? (
-            <div className="grid min-h-[260px] place-items-center rounded-lg border border-slate-200 bg-white p-5 text-center shadow-card">
+            <div className="grid min-h-[260px] place-items-center rounded-lg border border-slate-200 bg-white p-5 text-center shadow-card xl:min-h-[calc(100dvh-96px)]">
               <div>
                 <LoaderCircle className="mx-auto size-9 animate-spin text-violet-600" />
                 <p className="mt-4 font-black text-slate-800">
@@ -538,7 +549,7 @@ export function AiQuestionGeneratorPage() {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center">
+            <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center xl:min-h-[calc(100dvh-96px)]">
               <span className="grid size-12 place-items-center rounded-xl bg-violet-50 text-violet-600">
                 <BrainCircuit className="size-6" />
               </span>
@@ -806,22 +817,21 @@ function GeneratedQuestionCard({
             }
             className="font-semibold"
           />
-          <Select
+          <CustomSelect
             value={draft.difficulty}
-            onChange={(event) =>
+            options={difficultyLevels.map((level) => ({
+              value: level.code,
+              label: level.label,
+            }))}
+            onValueChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                difficulty: event.target.value as Difficulty,
+                difficulty: value as Difficulty,
               }))
             }
             className="max-w-48"
-          >
-            {difficultyLevels.map((level) => (
-              <option key={level.code} value={level.code}>
-                {level.label}
-              </option>
-            ))}
-          </Select>
+            ariaLabel="Chọn độ khó"
+          />
           <div className="grid gap-2">
             {draft.options.map((option, optionIndex) => (
               <div key={option.id} className="flex items-center gap-2">

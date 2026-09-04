@@ -30,6 +30,7 @@ import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import { ApiError } from "@/lib/auth-api";
 import type { Subject, SubjectImportResult } from "@/types/assessment";
 
@@ -60,6 +61,7 @@ export function SubjectManagementPanel() {
   const [form, setForm] = useState({
     code: "",
     name: "",
+    vietnameseName: "",
     description: "",
     isActive: true,
   });
@@ -109,7 +111,7 @@ export function SubjectManagementPanel() {
   }, [page, totalPages]);
   function openCreate() {
     setEditingSubject(null);
-    setForm({ code: "", name: "", description: "", isActive: true });
+    setForm({ code: "", name: "", vietnameseName: "", description: "", isActive: true });
     setIsModalOpen(true);
   }
   function openImport() {
@@ -122,6 +124,7 @@ export function SubjectManagementPanel() {
     setForm({
       code: subject.code,
       name: subject.name,
+      vietnameseName: getVietnameseSubjectName(subject),
       description: subject.description,
       isActive: subject.isActive,
     });
@@ -255,7 +258,7 @@ export function SubjectManagementPanel() {
               <tr>
                 <TableHead className="w-14 text-center">#</TableHead>
                 <TableHead>Mã môn học</TableHead>
-                <TableHead>Tên môn học</TableHead>
+                <TableHead>Tên môn học tiếng Việt</TableHead>
                 <TableHead>Mô tả</TableHead>
                 <TableHead>Trạng thái</TableHead>
                 <TableHead className="w-32 text-right">Thao tác</TableHead>
@@ -283,7 +286,12 @@ export function SubjectManagementPanel() {
                         {subject.code}
                       </TableCell>
                       <TableCell className="font-bold text-slate-900">
-                        {subject.name}
+                        {getVietnameseSubjectName(subject)}
+                        {subject.name !== getVietnameseSubjectName(subject) ? (
+                          <span className="mt-0.5 block text-xs font-medium text-slate-400">
+                            {subject.name}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="max-w-sm truncate text-sm text-slate-500">
                         {subject.description || "--"}
@@ -302,7 +310,7 @@ export function SubjectManagementPanel() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`Sửa ${subject.name}`}
+                            aria-label={`Sửa ${getVietnameseSubjectName(subject)}`}
                             onClick={() => openEdit(subject)}
                           >
                             <Edit3 className="size-4" />
@@ -311,7 +319,7 @@ export function SubjectManagementPanel() {
                             variant="ghost"
                             size="sm"
                             className="text-rose-600 hover:bg-rose-50"
-                            aria-label={`Xóa ${subject.name}`}
+                            aria-label={`Xóa ${getVietnameseSubjectName(subject)}`}
                             onClick={() => setDeleteSubject(subject)}
                           >
                             <Trash2 className="size-4" />
@@ -342,7 +350,7 @@ export function SubjectManagementPanel() {
       <Modal
         open={isImportOpen}
         title="Import danh sách môn học"
-        description="Tải file mẫu, điền dữ liệu và import từ tệp Excel .xlsx."
+        description="Tải file mẫu, điền tên môn học tiếng Việt và import từ tệp Excel .xlsx."
         onClose={() => {
           if (!isImporting) setIsImportOpen(false);
         }}
@@ -466,7 +474,7 @@ export function SubjectManagementPanel() {
               }
             />
             <Input
-              label="Tên môn học"
+              label="Tên môn học (quốc tế)"
               required
               value={form.name}
               onChange={(event) =>
@@ -474,6 +482,14 @@ export function SubjectManagementPanel() {
               }
             />
           </div>
+          <Input
+            label="Tên môn học tiếng Việt"
+            required
+            value={form.vietnameseName}
+            onChange={(event) =>
+              setForm({ ...form, vietnameseName: event.target.value })
+            }
+          />
           <Input
             label="Mô tả"
             value={form.description}

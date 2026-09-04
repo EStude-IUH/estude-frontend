@@ -21,6 +21,7 @@ export interface Question {
   correctOptionIds: string[];
   defaultPoints: number;
   explanation: string;
+  disabled: boolean;
   generatedByAi?: boolean;
   sourceMaterialId?: string | null;
   source?: QuestionSource | null;
@@ -66,6 +67,7 @@ export interface DifficultyLevelDefinition {
 
 export interface SystemDifficultySettings {
   levels: DifficultyLevelDefinition[];
+  maxQuestionsPerGeneration: number;
   configured: boolean;
 }
 
@@ -73,6 +75,8 @@ export interface TeacherDifficultySettings {
   systemLevels: DifficultyLevelDefinition[];
   customLevels: DifficultyLevelDefinition[] | null;
   effectiveLevels: DifficultyLevelDefinition[];
+  maxQuestionsPerGeneration: number;
+  defaultQuantity: number;
   usingSystemDefaults: boolean;
 }
 
@@ -106,6 +110,7 @@ export interface QuestionInput {
   correctOptionIds: string[];
   defaultPoints: number;
   explanation: string;
+  disabled: boolean;
 }
 
 export interface AcademicYear {
@@ -134,6 +139,7 @@ export interface Subject {
   id: string;
   code: string;
   name: string;
+  vietnameseName?: string | null;
   description: string;
   keyword?: string | null;
   isActive: boolean;
@@ -221,7 +227,7 @@ export interface SubjectTeacherAssignment {
     avatarUrl: string | null;
     status: string;
   };
-  subject: Pick<Subject, "id" | "code" | "name"> & { description?: string };
+  subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName"> & { description?: string };
   schoolClass: Pick<SchoolClass, "id" | "code" | "name" | "academicYearId">;
 }
 
@@ -232,7 +238,7 @@ export interface TeacherAssignedClass {
   academicYearId: string;
   keyword?: string | null;
   studentCount: number;
-  subjects: Array<Pick<Subject, "id" | "code" | "name">>;
+  subjects: Array<Pick<Subject, "id" | "code" | "name" | "vietnameseName">>;
 }
 
 export interface TeacherManagedStudent {
@@ -304,7 +310,7 @@ export interface MaterialClassAssignment {
   name: string;
   description: string;
   schoolClass: Pick<SchoolClass, "id" | "code" | "name">;
-  subject: Pick<Subject, "id" | "code" | "name">;
+  subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName">;
 }
 
 export interface MaterialAssignmentTarget {
@@ -332,7 +338,7 @@ export interface ClassTopic {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-  subject: Pick<Subject, "id" | "code" | "name">;
+  subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName">;
   materials: LearningMaterial[];
 }
 

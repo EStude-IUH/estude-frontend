@@ -5,6 +5,7 @@ import { ArrowRight, BookOpenCheck, LoaderCircle, Search, School, UserRound, Use
 import { useRouter } from "next/navigation";
 import { academicDataService } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import { Button } from "@/components/ui/button";
 import type { ClassRoster, TeacherAssignedClass } from "@/types/assessment";
 import {
@@ -153,7 +154,7 @@ export function TeacherAssignedClassesPanel() {
             <div className="min-w-0">
               <h2 className="truncate font-black text-slate-900">{selectedClass?.name ?? "Danh sách học viên"}</h2>
               <p className="mt-1 truncate text-xs text-slate-500">
-                {selectedClass ? `${selectedClass.code} · ${selectedClass.subjects.map((subject) => subject.name).join(", ")}` : "Chọn một lớp để xem chi tiết"}
+                {selectedClass ? `${selectedClass.code} · ${selectedClass.subjects.map(getVietnameseSubjectName).join(", ")}` : "Chọn một lớp để xem chi tiết"}
               </p>
             </div>
             {selectedClass ? <div className="flex shrink-0 items-center gap-2">

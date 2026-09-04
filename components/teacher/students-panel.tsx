@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Mail,
@@ -44,6 +45,7 @@ function getInitial(fullName: string): string {
 }
 
 export function TeacherStudentsPanel() {
+  const router = useRouter();
   const [students, setStudents] = useState<TeacherManagedStudent[]>([]);
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
   const [search, setSearch] = useState("");
@@ -150,9 +152,9 @@ export function TeacherStudentsPanel() {
                 <TableHead className="w-14 text-center">#</TableHead>
                 <TableHead>Học sinh</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Tài khoản</TableHead>
-                <TableHead>Lớp quản lý</TableHead>
-                <TableHead>Trạng thái</TableHead>
+                <TableHead className="text-center">Tài khoản</TableHead>
+                <TableHead className="text-center">Lớp học</TableHead>
+                <TableHead className="text-center">Trạng thái</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -170,7 +172,24 @@ export function TeacherStudentsPanel() {
               ) : null}
               {!isLoading
                 ? pagedStudents.map((student, index) => (
-                    <tr key={student.id} className="transition hover:bg-slate-50/70">
+                    <tr
+                      key={student.id}
+                      tabIndex={0}
+                      onClick={() =>
+                        router.push(
+                          `/teacher/students/${encodeURIComponent(student.id)}`,
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(
+                            `/teacher/students/${encodeURIComponent(student.id)}`,
+                          );
+                        }
+                      }}
+                      className="cursor-pointer transition hover:bg-blue-50/70 focus-visible:bg-blue-50 focus-visible:outline-none"
+                    >
                       <TableCell className="text-center text-xs text-slate-400">
                         {(page - 1) * pageSize + index + 1}
                       </TableCell>
@@ -193,6 +212,8 @@ export function TeacherStudentsPanel() {
                         {student.email ? (
                           <a
                             href={`mailto:${student.email}`}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
                             className="inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline"
                           >
                             <Mail className="size-3.5" /> {student.email}
@@ -201,11 +222,11 @@ export function TeacherStudentsPanel() {
                           <span className="text-slate-400">Chưa cập nhật</span>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs font-semibold text-slate-600">
+                      <TableCell className="text-center font-mono text-xs font-semibold text-slate-600">
                         {student.accountName}
                       </TableCell>
                       <TableCell>
-                        <div className="flex max-w-72 flex-wrap gap-1.5">
+                        <div className="mx-auto flex max-w-72 flex-wrap justify-center gap-1.5">
                           {student.classes.map((schoolClass) => (
                             <span
                               key={schoolClass.id}
@@ -217,7 +238,7 @@ export function TeacherStudentsPanel() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${getStatusClass(student.status)}`}>
                           {statusLabels[student.status]}
                         </span>

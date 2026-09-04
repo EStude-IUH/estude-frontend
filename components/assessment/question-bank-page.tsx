@@ -9,12 +9,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   AssessmentShell,
   ErrorPanel,
   PageHeading,
 } from "@/components/assessment/assessment-shell";
+import { QuestionEditorForm } from "@/components/assessment/question-editor-page";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -28,6 +28,8 @@ import {
 import { DataTableFooter } from "@/components/ui/data-table-footer";
 import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { Select } from "@/components/ui/form-control";
+import { Modal } from "@/components/ui/modal";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { questionBankService } from "@/lib/assessment-api";
 import {
   DIFFICULTY_LABELS,
@@ -45,8 +47,8 @@ const difficultyTone: Record<Difficulty, string> = {
 };
 
 export function QuestionBankPage() {
-  const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
@@ -54,6 +56,7 @@ export function QuestionBankPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
+  const [updatingStatusId, setUpdatingStatusId] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -106,11 +109,35 @@ export function QuestionBankPage() {
     }
   }
 
+  async function updateQuestionStatus(question: Question, enabled: boolean) {
+    setUpdatingStatusId(question.id);
+    setError("");
+    try {
+      const updatedQuestion = await questionBankService.updateQuestion(
+        question.id,
+        { disabled: !enabled },
+      );
+      setQuestions((items) =>
+        items.map((item) =>
+          item.id === updatedQuestion.id ? updatedQuestion : item,
+        ),
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể cập nhật trạng thái câu hỏi",
+      );
+    } finally {
+      setUpdatingStatusId("");
+    }
+  }
+
   return (
     <AssessmentShell>
       <PageHeading title="Ngân hàng câu hỏi" />
 
-      <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+      <div className="flex h-[calc(100dvh-86px)] min-h-0 w-full flex-col overflow-hidden">
         <section className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[360px_170px_190px]">
@@ -175,29 +202,30 @@ export function QuestionBankPage() {
           </div>
         </section>
 
-        <section className="mt-2 flex min-h-0 shrink flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+        <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
           {error ? (
             <div className="m-4">
               <ErrorPanel message={error} />
             </div>
           ) : null}
-          <div className="min-h-0 shrink overflow-auto">
-            <Table className="min-w-[1100px]">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <Table className="min-w-[1220px]">
               <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
                 <tr>
                   <TableHead className="w-14 text-center">#</TableHead>
                   <TableHead>Nội dung</TableHead>
                   <TableHead className="w-56">Môn / Chủ đề</TableHead>
-                  <TableHead className="w-40">Loại</TableHead>
-                  <TableHead className="w-36">Độ khó</TableHead>
+                  <TableHead className="w-40 text-center">Loại</TableHead>
+                  <TableHead className="w-36 text-center">Độ khó</TableHead>
+                  <TableHead className="w-40">Trạng thái</TableHead>
                   <TableHead className="w-32 text-right">Thao tác</TableHead>
                 </tr>
               </TableHeader>
               <TableBody>
-                {loading ? <TableLoadingBarRow colSpan={6} /> : null}
+                {loading ? <TableLoadingBarRow colSpan={7} /> : null}
                 {!loading && questions.length === 0 ? (
                   <TableEmptyRow
-                    colSpan={6}
+                    colSpan={7}
                     icon={<FileQuestion className="size-5 text-slate-400" />}
                     message="Chưa có câu hỏi phù hợp"
                   />
@@ -207,15 +235,13 @@ export function QuestionBankPage() {
                       <tr
                         key={question.id}
                         className="cursor-pointer transition hover:bg-slate-50/70"
-                        onClick={() =>
-                          router.push(`/teacher/question-bank/${question.id}/edit`)
-                        }
+                        onClick={() => setEditingQuestion(question)}
                       >
                         <TableCell className="text-center text-xs text-slate-400">
                           {(page - 1) * pageSize + index + 1}
                         </TableCell>
                         <TableCell>
-                          <p className="max-w-4xl font-bold leading-6 text-slate-900">
+                          <p className="max-w-4xl text-[14px] font-bold leading-6 text-slate-700">
                             {question.content}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
@@ -230,17 +256,38 @@ export function QuestionBankPage() {
                             {question.topicName || "Tạo từ tài liệu"}
                           </p>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <span className="inline-flex rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
                             {QUESTION_TYPE_LABELS[question.type]}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center">
                           <span
                             className={`inline-flex rounded-md px-2.5 py-1 text-xs font-bold ${difficultyTone[question.difficulty]}`}
                           >
                             {DIFFICULTY_LABELS[question.difficulty]}
                           </span>
+                        </TableCell>
+                        <TableCell
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <ToggleSwitch
+                            checked={!question.disabled}
+                            loading={updatingStatusId === question.id}
+                            aria-label={
+                              question.disabled
+                                ? `Bật câu hỏi ${question.content}`
+                                : `Vô hiệu hóa câu hỏi ${question.content}`
+                            }
+                            title={
+                              question.disabled
+                                ? "Bật câu hỏi"
+                                : "Vô hiệu hóa câu hỏi"
+                            }
+                            onCheckedChange={(enabled) =>
+                              void updateQuestionStatus(question, enabled)
+                            }
+                          />
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <div className="flex justify-end gap-1">
@@ -249,9 +296,7 @@ export function QuestionBankPage() {
                               size="sm"
                               title="Chỉnh sửa"
                               aria-label={`Chỉnh sửa câu hỏi ${question.content}`}
-                              onClick={() =>
-                                router.push(`/teacher/question-bank/${question.id}/edit`)
-                              }
+                              onClick={() => setEditingQuestion(question)}
                             >
                               <Pencil size={18} strokeWidth={2.5} />
                             </Button>
@@ -289,6 +334,33 @@ export function QuestionBankPage() {
           />
         </section>
       </div>
+      {editingQuestion ? (
+        <Modal
+          open
+          title="Chỉnh sửa câu hỏi"
+          description="Cập nhật nội dung, phân loại, đáp án và điểm của câu hỏi."
+          width="max-w-5xl"
+          bodyClassName="max-h-[calc(100dvh-6rem)] overflow-y-auto !p-4"
+          compact
+          onClose={() => setEditingQuestion(null)}
+        >
+          <QuestionEditorForm
+            key={editingQuestion.id}
+            questionId={editingQuestion.id}
+            embedded
+            onCancel={() => setEditingQuestion(null)}
+            onSaved={(updatedQuestion) => {
+              setQuestions((items) =>
+                items.map((item) =>
+                  item.id === updatedQuestion.id ? updatedQuestion : item,
+                ),
+              );
+              setEditingQuestion(null);
+              void load();
+            }}
+          />
+        </Modal>
+      ) : null}
     </AssessmentShell>
   );
 }

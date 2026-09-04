@@ -35,6 +35,13 @@ export function toVietnameseSubjectName(name: string): string {
   return vietnameseNameByEnglishName.get(normalizeSearchKeyword(name)) ?? name;
 }
 
+export function getVietnameseSubjectName(subject: {
+  name: string;
+  vietnameseName?: string | null;
+}): string {
+  return subject.vietnameseName?.trim() || toVietnameseSubjectName(subject.name);
+}
+
 export function getSubjectApiSearchQueries(search: string): string[] {
   const trimmedSearch = search.trim();
   if (!trimmedSearch) return [""];

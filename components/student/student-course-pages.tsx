@@ -17,6 +17,7 @@ import { StudentExamList } from "@/components/assessment/student-exam-pages";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { academicDataService, examService } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { Exam, StudentCourse } from "@/types/assessment";
 
 function courseHref(course: StudentCourse): string {
@@ -35,7 +36,10 @@ export function StudentCoursesPage() {
       .then((items) =>
         setCourses(
           [...items].sort((left, right) =>
-            left.subject.name.localeCompare(right.subject.name, "vi"),
+            getVietnameseSubjectName(left.subject).localeCompare(
+              getVietnameseSubjectName(right.subject),
+              "vi",
+            ),
           ),
         ),
       )
@@ -90,7 +94,7 @@ export function StudentCoursesPage() {
                   </span>
                 </div>
                 <h2 className="mt-4 text-lg font-black text-slate-950">
-                  {course.subject.name}
+                  {getVietnameseSubjectName(course.subject)}
                 </h2>
                 <div className="mt-4 space-y-2.5 text-sm text-slate-600">
                   <p className="flex items-center gap-2">
@@ -189,7 +193,7 @@ export function StudentCourseDetailPage() {
                     {course.subject.code}
                   </p>
                   <h1 className="mt-1 text-2xl font-black sm:text-3xl">
-                    {course.subject.name}
+                    {getVietnameseSubjectName(course.subject)}
                   </h1>
                   <p className="mt-3 text-sm text-blue-50">
                     {course.schoolClass.name} · Mã lớp {course.schoolClass.code}

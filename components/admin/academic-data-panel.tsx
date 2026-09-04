@@ -13,6 +13,7 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Input, Select } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { academicDataService } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   AcademicYear,
   GradeComponent,
@@ -589,7 +590,7 @@ function GradeComponentConfiguration({
           <option value="">Chọn môn học</option>
           {subjects.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.code} · {item.name}
+              {item.code} · {getVietnameseSubjectName(item)}
             </option>
           ))}
         </Select>
@@ -607,7 +608,7 @@ function GradeComponentConfiguration({
       ) : null}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm">
         <span className="font-semibold text-slate-600">
-          {selectedSubject ? `Môn ${selectedSubject.name} · ` : ""}
+          {selectedSubject ? `Môn ${getVietnameseSubjectName(selectedSubject)} · ` : ""}
           <b
             className={
               totalWeight === 100 ? "text-emerald-700" : "text-amber-600"

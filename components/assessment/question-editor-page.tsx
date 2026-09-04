@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Check, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -10,10 +10,12 @@ import {
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/form-control";
+import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
 import { academicDataService, questionBankService } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   Difficulty,
+  Question,
   QuestionInput,
   QuestionOption,
   QuestionType,
@@ -28,10 +30,17 @@ const initialOptions: QuestionOption[] = [
   { id: "d", label: "D", text: "" },
 ];
 
-export function QuestionEditorPage() {
-  const params = useParams<{ id?: string }>();
-  const router = useRouter();
-  const questionId = params.id === "new" ? undefined : params.id;
+export function QuestionEditorForm({
+  questionId,
+  onSaved,
+  onCancel,
+  embedded = false,
+}: {
+  questionId?: string;
+  onSaved: (question: Question) => void;
+  onCancel: () => void;
+  embedded?: boolean;
+}) {
   const [form, setForm] = useState<QuestionInput>({
     subjectId: "",
     subjectName: "",
@@ -44,6 +53,7 @@ export function QuestionEditorPage() {
     correctOptionIds: [],
     defaultPoints: 1,
     explanation: "",
+    disabled: false,
   });
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -56,12 +66,6 @@ export function QuestionEditorPage() {
       .getSubjects()
       .then((items) => {
         setSubjects(items);
-        if (!questionId && items[0])
-          setForm((current) => ({
-            ...current,
-            subjectId: items[0].id,
-            subjectName: items[0].name,
-          }));
       })
       .catch((cause) =>
         setError(
@@ -71,24 +75,25 @@ export function QuestionEditorPage() {
   }, [questionId]);
 
   useEffect(() => {
-    if (!form.subjectId) return;
+    if (!form.subjectId) {
+      setTopics([]);
+      return;
+    }
+    let cancelled = false;
     void academicDataService
       .getTopics(form.subjectId)
       .then((items) => {
-        setTopics(items);
-        if (!questionId && items[0] && !form.topicId)
-          setForm((current) => ({
-            ...current,
-            topicId: items[0].id,
-            topicName: items[0].name,
-          }));
+        if (!cancelled) setTopics(items);
       })
       .catch((cause) =>
         setError(
           cause instanceof Error ? cause.message : "Không thể tải chủ đề",
         ),
       );
-  }, [form.subjectId, form.topicId, questionId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [form.subjectId]);
 
   useEffect(() => {
     if (!questionId) return;
@@ -107,6 +112,7 @@ export function QuestionEditorPage() {
           correctOptionIds: question.correctOptionIds,
           defaultPoints: question.defaultPoints,
           explanation: question.explanation,
+          disabled: question.disabled,
         }),
       )
       .catch((cause) =>
@@ -127,10 +133,11 @@ export function QuestionEditorPage() {
   function chooseSubject(subjectId: string) {
     const subject = subjects.find((item) => item.id === subjectId);
     if (!subject) return;
+    setTopics([]);
     setForm((current) => ({
       ...current,
       subjectId: subject.id,
-      subjectName: subject.name,
+      subjectName: getVietnameseSubjectName(subject),
       topicId: "",
       topicName: "",
     }));
@@ -138,11 +145,10 @@ export function QuestionEditorPage() {
 
   function chooseTopic(topicId: string) {
     const topic = topics.find((item) => item.id === topicId);
-    if (!topic) return;
     setForm((current) => ({
       ...current,
-      topicId: topic.id,
-      topicName: topic.name,
+      topicId: topic?.id ?? "",
+      topicName: topic?.name ?? "",
     }));
   }
 
@@ -191,14 +197,16 @@ export function QuestionEditorPage() {
         options: form.type === "ESSAY" ? [] : form.options,
         correctOptionIds: form.type === "ESSAY" ? [] : form.correctOptionIds,
       };
+      if (!payload.subjectId)
+        throw new Error("Vui lòng chọn môn học");
       if (!payload.content.trim())
         throw new Error("Vui lòng nhập nội dung câu hỏi");
       if (payload.type !== "ESSAY" && payload.correctOptionIds.length === 0)
         throw new Error("Vui lòng chọn đáp án đúng");
-      if (questionId)
-        await questionBankService.updateQuestion(questionId, payload);
-      else await questionBankService.createQuestion(payload);
-      router.push("/teacher/question-bank");
+      const savedQuestion = questionId
+        ? await questionBankService.updateQuestion(questionId, payload)
+        : await questionBankService.createQuestion(payload);
+      onSaved(savedQuestion);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Không thể lưu câu hỏi",
@@ -209,26 +217,10 @@ export function QuestionEditorPage() {
   }
 
   if (loading)
-    return (
-      <AssessmentShell>
-        <LoadingPanel />
-      </AssessmentShell>
-    );
+    return <LoadingPanel />;
 
   return (
-    <AssessmentShell>
-      <PageHeading
-        title={questionId ? "Chỉnh sửa câu hỏi" : "Tạo câu hỏi mới"}
-        action={
-          <Button
-            variant="ghost"
-            onClick={() => router.push("/teacher/question-bank")}
-          >
-            <ArrowLeft className="size-4" />
-            Quay lại
-          </Button>
-        }
-      />
+    <>
       {error ? (
         <div className="mb-4">
           <ErrorPanel message={error} />
@@ -237,51 +229,125 @@ export function QuestionEditorPage() {
 
       <form
         onSubmit={(event) => void submit(event)}
-        className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
+        className="w-full"
       >
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-5">
+        <section
+          className={
+            embedded
+              ? "w-full"
+              : "w-full rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+          }
+        >
+          <div className={embedded ? "grid gap-4" : "grid gap-5"}>
             <Textarea
               label="Nội dung câu hỏi"
               required
               value={form.content}
               onChange={(event) => update("content", event.target.value)}
-              rows={5}
+              rows={embedded ? 3 : 5}
               placeholder="Nhập nội dung câu hỏi..."
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Select
+            <div
+              className={
+                embedded
+                  ? "border-y border-slate-100 py-4"
+                  : "border-y border-slate-100 py-5"
+              }
+            >
+              <h2 className="font-bold text-slate-900">Phân loại</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Giúp tìm và chọn câu hỏi nhanh hơn khi tạo đề.
+              </p>
+              <div
+                className={`grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px] ${embedded ? "mt-3" : "mt-4"}`}
+              >
+                <CustomSelect
+                  label="Môn học"
+                  value={form.subjectId}
+                  options={subjects.map((subject) => ({
+                    value: subject.id,
+                    label: getVietnameseSubjectName(subject),
+                  }))}
+                  onValueChange={chooseSubject}
+                  placeholder="Chọn môn học"
+                />
+                <CustomSelect
+                  label="Chủ đề"
+                  value={form.topicId}
+                  options={[
+                    {
+                      value: "",
+                      label: form.subjectId
+                        ? "Không chọn chủ đề"
+                        : "Chọn môn học trước",
+                    },
+                    ...topics.map((topic) => ({
+                      value: topic.id,
+                      label: topic.name,
+                    })),
+                  ]}
+                  onValueChange={chooseTopic}
+                  disabled={!form.subjectId}
+                />
+                <Input
+                  label="Điểm mặc định"
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  value={form.defaultPoints}
+                  onChange={(event) =>
+                    update("defaultPoints", Number(event.target.value))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <CustomSelect
                 label="Loại câu hỏi"
                 value={form.type}
-                onChange={(event) =>
-                  changeType(event.target.value as QuestionType)
-                }
-              >
-                <option value="SINGLE_CHOICE">Trắc nghiệm một đáp án</option>
-                <option value="MULTIPLE_CHOICE">
-                  Trắc nghiệm nhiều đáp án
-                </option>
-                <option value="TRUE_FALSE">Đúng / Sai</option>
-                <option value="ESSAY">Tự luận</option>
-              </Select>
-              <Select
+                options={[
+                  { value: "SINGLE_CHOICE", label: "Trắc nghiệm một đáp án" },
+                  { value: "MULTIPLE_CHOICE", label: "Trắc nghiệm nhiều đáp án" },
+                  { value: "TRUE_FALSE", label: "Đúng / Sai" },
+                  { value: "ESSAY", label: "Tự luận" },
+                ]}
+                onValueChange={(value) => changeType(value as QuestionType)}
+              />
+              <CustomSelect
                 label="Độ khó"
                 value={form.difficulty}
-                onChange={(event) =>
-                  update("difficulty", event.target.value as Difficulty)
+                options={[
+                  { value: "EASY", label: "Dễ" },
+                  { value: "MEDIUM", label: "Trung bình" },
+                  { value: "HARD", label: "Khó" },
+                  { value: "VERY_HARD", label: "Rất khó" },
+                ]}
+                onValueChange={(value) =>
+                  update("difficulty", value as Difficulty)
                 }
-              >
-                <option value="EASY">Dễ</option>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="HARD">Khó</option>
-                <option value="VERY_HARD">Rất khó</option>
-              </Select>
+              />
+              <CustomSelect
+                label="Trạng thái"
+                value={form.disabled ? "DISABLED" : "ENABLED"}
+                options={[
+                  { value: "ENABLED", label: "Đang sử dụng" },
+                  { value: "DISABLED", label: "Đã vô hiệu hóa" },
+                ]}
+                onValueChange={(value) =>
+                  update("disabled", value === "DISABLED")
+                }
+              />
             </div>
 
             {form.type !== "ESSAY" ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
+              <div
+                className={`rounded-xl border border-slate-200 bg-slate-50/60 ${embedded ? "p-3" : "p-4"}`}
+              >
+                <div
+                  className={`flex items-center justify-between gap-3 ${embedded ? "mb-2" : "mb-3"}`}
+                >
                   <div>
                     <p className="text-sm font-bold text-slate-800">
                       Danh sách đáp án
@@ -294,7 +360,7 @@ export function QuestionEditorPage() {
                     {form.type === "SINGLE_CHOICE" ? "Chọn 1" : "Chọn nhiều"}
                   </span>
                 </div>
-                <div className="space-y-2">
+                <div className={embedded ? "space-y-1.5" : "space-y-2"}>
                   {form.options.map((option, index) => (
                     <div key={option.id} className="flex items-center gap-2">
                       <button
@@ -303,14 +369,11 @@ export function QuestionEditorPage() {
                         className={`grid size-9 shrink-0 place-items-center rounded-lg border text-xs font-black transition ${form.correctOptionIds.includes(option.id) ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white text-slate-500 hover:border-brand-300"}`}
                         aria-label={`Đánh dấu đáp án ${option.label} là đúng`}
                       >
-                        {form.correctOptionIds.includes(option.id) ? (
-                          <Check className="size-4" />
-                        ) : (
-                          option.label
-                        )}
+                        {option.label}
                       </button>
                       <div className="min-w-0 flex-1">
                         <Input
+                          className={embedded ? "h-9" : undefined}
                           value={option.text}
                           onChange={(event) =>
                             updateOption(index, event.target.value)
@@ -333,11 +396,13 @@ export function QuestionEditorPage() {
               />
             )}
 
-            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <div
+              className={`flex justify-end gap-2 border-t border-slate-100 ${embedded ? "pt-3" : "pt-4"}`}
+            >
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.push("/teacher/question-bank")}
+                onClick={onCancel}
               >
                 Hủy
               </Button>
@@ -348,48 +413,24 @@ export function QuestionEditorPage() {
             </div>
           </div>
         </section>
-
-        <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="font-bold text-slate-900">Phân loại</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Giúp tìm và chọn câu hỏi nhanh hơn khi tạo đề.
-          </p>
-          <div className="mt-5 grid gap-4">
-            <Select
-              label="Môn học"
-              value={form.subjectId}
-              onChange={(event) => chooseSubject(event.target.value)}
-            >
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </Select>
-            <Select
-              label="Chủ đề"
-              value={form.topicId}
-              onChange={(event) => chooseTopic(event.target.value)}
-            >
-              {topics.map((topic) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.name}
-                </option>
-              ))}
-            </Select>
-            <Input
-              label="Điểm mặc định"
-              type="number"
-              min="0"
-              step="0.25"
-              value={form.defaultPoints}
-              onChange={(event) =>
-                update("defaultPoints", Number(event.target.value))
-              }
-            />
-          </div>
-        </aside>
       </form>
+    </>
+  );
+}
+
+export function QuestionEditorPage() {
+  const params = useParams<{ id?: string }>();
+  const router = useRouter();
+  const questionId = params.id === "new" ? undefined : params.id;
+
+  return (
+    <AssessmentShell>
+      <PageHeading title={questionId ? "Chỉnh sửa câu hỏi" : "Tạo câu hỏi mới"} />
+      <QuestionEditorForm
+        questionId={questionId}
+        onSaved={() => router.push("/teacher/question-bank")}
+        onCancel={() => router.push("/teacher/question-bank")}
+      />
     </AssessmentShell>
   );
 }

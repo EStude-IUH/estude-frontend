@@ -108,10 +108,10 @@ export const academicDataService = {
   deleteTerm(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/terms/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
-  createSubject(payload: Pick<Subject, "code" | "name"> & { description?: string }): Promise<Subject> {
+  createSubject(payload: Pick<Subject, "code" | "name"> & { vietnameseName: string; description?: string }): Promise<Subject> {
     return authenticatedRequest<Subject>("/subjects", { method: "POST", body: JSON.stringify(payload) });
   },
-  updateSubject(id: string, payload: Partial<Pick<Subject, "code" | "name" | "description" | "isActive">>): Promise<Subject> {
+  updateSubject(id: string, payload: Partial<Pick<Subject, "code" | "name" | "vietnameseName" | "description" | "isActive">>): Promise<Subject> {
     return authenticatedRequest<Subject>(`/subjects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
   },
   deleteSubject(id: string): Promise<Record<string, never>> {
@@ -306,7 +306,7 @@ export const questionBankService = {
   createQuestion(payload: QuestionInput): Promise<Question> {
     return authenticatedRequest<Question>("/question-bank", { method: "POST", body: JSON.stringify(payload) });
   },
-  updateQuestion(id: string, payload: QuestionInput): Promise<Question> {
+  updateQuestion(id: string, payload: Partial<QuestionInput>): Promise<Question> {
     return authenticatedRequest<Question>(`/question-bank/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
   },
   deleteQuestion(id: string): Promise<Record<string, never>> {
@@ -349,19 +349,25 @@ export const aiQuestionSettingsService = {
   getSystem(): Promise<SystemDifficultySettings> {
     return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system");
   },
-  updateSystem(levels: DifficultyLevelDefinition[]): Promise<SystemDifficultySettings> {
+  updateSystem(
+    levels: DifficultyLevelDefinition[],
+    maxQuestionsPerGeneration: number,
+  ): Promise<SystemDifficultySettings> {
     return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system", {
       method: "PUT",
-      body: JSON.stringify({ levels }),
+      body: JSON.stringify({ levels, maxQuestionsPerGeneration }),
     });
   },
   getMine(): Promise<TeacherDifficultySettings> {
     return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me");
   },
-  updateMine(levels: DifficultyLevelDefinition[]): Promise<TeacherDifficultySettings> {
+  updateMine(settings: {
+    levels?: DifficultyLevelDefinition[];
+    defaultQuantity?: number;
+  }): Promise<TeacherDifficultySettings> {
     return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me", {
       method: "PUT",
-      body: JSON.stringify({ levels }),
+      body: JSON.stringify(settings),
     });
   },
 };

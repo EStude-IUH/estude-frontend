@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
+  BrainCircuit,
   CalendarRange,
   Clock3,
   LoaderCircle,
@@ -20,7 +21,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-control";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { useActionNotification } from "@/components/ui/action-notification";
-import { teacherSettingsService } from "@/lib/assessment-api";
+import {
+  aiQuestionSettingsService,
+  teacherSettingsService,
+} from "@/lib/assessment-api";
 import type { TeacherExamDefaults } from "@/types/assessment";
 
 const DEFAULT_EXAM_DEFAULTS: TeacherExamDefaults = {
@@ -69,6 +73,8 @@ const switches: Array<{
 export function TeacherSettingsPage() {
   const { notify } = useActionNotification();
   const [form, setForm] = useState<TeacherExamDefaults>(DEFAULT_EXAM_DEFAULTS);
+  const [aiDefaultQuantity, setAiDefaultQuantity] = useState(5);
+  const [maxAiQuestionQuantity, setMaxAiQuestionQuantity] = useState(100);
   const [configured, setConfigured] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,13 +83,17 @@ export function TeacherSettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void teacherSettingsService
-      .getExamDefaults()
-      .then((result) => {
+    void Promise.all([
+      teacherSettingsService.getExamDefaults(),
+      aiQuestionSettingsService.getMine(),
+    ])
+      .then(([result, aiSettings]) => {
         if (cancelled) return;
         setForm(result.examDefaults);
         setConfigured(result.configured);
         setUpdatedAt(result.updatedAt);
+        setAiDefaultQuantity(aiSettings.defaultQuantity);
+        setMaxAiQuestionQuantity(aiSettings.maxQuestionsPerGeneration);
       })
       .catch((cause) => {
         if (!cancelled) {
@@ -103,11 +113,18 @@ export function TeacherSettingsPage() {
     setSaving(true);
     setError("");
     try {
-      const result = await teacherSettingsService.updateExamDefaults(form);
+      const [result, aiSettings] = await Promise.all([
+        teacherSettingsService.updateExamDefaults(form),
+        aiQuestionSettingsService.updateMine({
+          defaultQuantity: aiDefaultQuantity,
+        }),
+      ]);
       setForm(result.examDefaults);
       setConfigured(result.configured);
       setUpdatedAt(result.updatedAt);
-      notify("Đã lưu cấu hình mặc định của bài kiểm tra", {
+      setAiDefaultQuantity(aiSettings.defaultQuantity);
+      setMaxAiQuestionQuantity(aiSettings.maxQuestionsPerGeneration);
+      notify("Đã lưu cấu hình mặc định của giáo viên", {
         key: "teacher-exam-defaults-saved",
       });
     } catch (cause) {
@@ -131,10 +148,10 @@ export function TeacherSettingsPage() {
               </span>
               <div>
                 <h2 className="text-lg font-extrabold text-slate-950">
-                  Cấu hình mặc định bài kiểm tra
+                  Cấu hình mặc định của giáo viên
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Tự động điền các thiết lập này khi bạn tạo bài kiểm tra mới.
+                  Tự động điền khi tạo bài kiểm tra hoặc câu hỏi bằng AI.
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-400">
                   {configured
@@ -150,7 +167,10 @@ export function TeacherSettingsPage() {
                 type="button"
                 variant="outline"
                 disabled={saving}
-                onClick={() => setForm({ ...DEFAULT_EXAM_DEFAULTS })}
+                onClick={() => {
+                  setForm({ ...DEFAULT_EXAM_DEFAULTS });
+                  setAiDefaultQuantity(Math.min(5, maxAiQuestionQuantity));
+                }}
               >
                 <RotateCcw size={17} strokeWidth={2.5} />
                 Mặc định
@@ -254,6 +274,36 @@ export function TeacherSettingsPage() {
               </div>
             </section>
           </div>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-card">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600">
+                <BrainCircuit className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-slate-950">
+                  Tạo câu hỏi bằng AI
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Giá trị được điền sẵn mỗi khi bạn mở màn hình tạo câu hỏi.
+                </p>
+                <div className="mt-4 max-w-xs">
+                  <Input
+                    label="Số lượng câu hỏi mặc định"
+                    type="number"
+                    min="1"
+                    max={maxAiQuestionQuantity}
+                    required
+                    value={aiDefaultQuantity}
+                    onChange={(event) =>
+                      setAiDefaultQuantity(Number(event.target.value))
+                    }
+                    hint={`Tối đa ${maxAiQuestionQuantity} câu theo cấu hình hệ thống.`}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
 
         </form>
       )}

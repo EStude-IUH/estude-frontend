@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { ClassTopic, ClassTopicInput, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
 
 const emptyForm: ClassTopicInput = { subjectId: "", name: "", description: "", sortOrder: 0 };
@@ -180,7 +181,7 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
           <div className="min-w-0">
             <h2 className="truncate text-xl font-black text-slate-950">{schoolClass?.name ?? "Lớp học"}</h2>
             <p className="mt-1 text-sm text-slate-500">{schoolClass?.code} · {schoolClass?.studentCount ?? 0} học viên</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">{schoolClass?.subjects.map((subject) => <span key={subject.id} className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-brand-700">{subject.code} · {subject.name}</span>)}</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">{schoolClass?.subjects.map((subject) => <span key={subject.id} className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-brand-700">{subject.code} · {getVietnameseSubjectName(subject)}</span>)}</div>
           </div>
         </div>
         <Button className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
@@ -224,7 +225,7 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
 
       <Modal open={isTopicModalOpen} title={editingTopic ? "Chỉnh sửa chủ đề" : "Tạo chủ đề"} description="Chủ đề được quản lý riêng theo lớp và môn học được phân công." onClose={() => setIsTopicModalOpen(false)} footer={<Button type="submit" form="class-topic-form" disabled={saving || !form.subjectId || !form.name.trim()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editingTopic ? "Lưu thay đổi" : "Tạo chủ đề"}</Button>}>
         <form id="class-topic-form" onSubmit={(event) => void saveTopic(event)} className="grid gap-4">
-          <label className="grid gap-2 text-sm font-bold text-slate-700">Môn học<select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} disabled={Boolean(editingTopic)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-normal outline-none focus:border-brand-500 disabled:bg-slate-50">{schoolClass?.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}</select></label>
+          <label className="grid gap-2 text-sm font-bold text-slate-700">Môn học<select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} disabled={Boolean(editingTopic)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-normal outline-none focus:border-brand-500 disabled:bg-slate-50">{schoolClass?.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {getVietnameseSubjectName(subject)}</option>)}</select></label>
           <label className="grid gap-2 text-sm font-bold text-slate-700">Tên chủ đề<input required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ví dụ: React Hooks" className="h-11 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" /></label>
           <label className="grid gap-2 text-sm font-bold text-slate-700">Mô tả<textarea rows={4} maxLength={1000} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Mô tả nội dung và mục tiêu của chủ đề" className="rounded-xl border border-slate-200 p-3 font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" /></label>
           <label className="grid gap-2 text-sm font-bold text-slate-700">Thứ tự hiển thị<input type="number" min={0} value={form.sortOrder ?? 0} onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })} className="h-11 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500" /></label>

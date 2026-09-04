@@ -45,6 +45,8 @@ export function AiDifficultySettingsPanel() {
   const [levels, setLevels] = useState<DifficultyLevelDefinition[]>(
     builtInLevels.slice(0, 3),
   );
+  const [maxQuestionsPerGeneration, setMaxQuestionsPerGeneration] =
+    useState(100);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -52,7 +54,10 @@ export function AiDifficultySettingsPanel() {
   useEffect(() => {
     aiQuestionSettingsService
       .getSystem()
-      .then((result) => setLevels(result.levels))
+      .then((result) => {
+        setLevels(result.levels);
+        setMaxQuestionsPerGeneration(result.maxQuestionsPerGeneration);
+      })
       .catch((cause) =>
         setError(
           cause instanceof Error
@@ -89,8 +94,12 @@ export function AiDifficultySettingsPanel() {
     setSaving(true);
     setError("");
     try {
-      const result = await aiQuestionSettingsService.updateSystem(levels);
+      const result = await aiQuestionSettingsService.updateSystem(
+        levels,
+        maxQuestionsPerGeneration,
+      );
       setLevels(result.levels);
+      setMaxQuestionsPerGeneration(result.maxQuestionsPerGeneration);
       notify("Đã lưu bộ độ khó mặc định cho câu hỏi AI", {
         key: "ai-difficulty-system-saved",
       });
@@ -141,23 +150,36 @@ export function AiDifficultySettingsPanel() {
             {error}
           </p>
         ) : null}
-        <div className="mt-6 flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
-          <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
-            <SlidersHorizontal className="size-4" />
-            Số mức độ
-          </span>
-          <div className="flex gap-2">
-            {([3, 4] as const).map((count) => (
-              <button
-                key={count}
-                type="button"
-                onClick={() => changeLevelCount(count)}
-                className={`rounded-lg px-4 py-2 text-xs font-black ${levels.length === count ? "bg-brand-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-              >
-                {count} mức
-              </button>
-            ))}
+        <div className="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 md:grid-cols-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <SlidersHorizontal className="size-4" />
+              Số mức độ
+            </span>
+            <div className="flex gap-2">
+              {([3, 4] as const).map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  onClick={() => changeLevelCount(count)}
+                  className={`rounded-lg px-4 py-2 text-xs font-black ${levels.length === count ? "bg-brand-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
+                >
+                  {count} mức
+                </button>
+              ))}
+            </div>
           </div>
+          <Input
+            label="Số câu tối đa mỗi lần tạo"
+            type="number"
+            min="1"
+            max="100"
+            required
+            value={maxQuestionsPerGeneration}
+            onChange={(event) =>
+              setMaxQuestionsPerGeneration(Number(event.target.value))
+            }
+          />
         </div>
         {loading ? (
           <div className="grid min-h-48 place-items-center">

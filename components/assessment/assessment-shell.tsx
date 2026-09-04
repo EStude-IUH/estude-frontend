@@ -20,6 +20,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { StudentShell } from "@/components/student/student-shell";
@@ -100,9 +101,17 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       .map((part) => part[0])
       .join("")
       .toUpperCase() ?? "ES";
-  const roleLabel = "Giảng viên";
+  const roleLabel = "Giáo viên";
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ${isSidebarCollapsed ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0" : "lg:max-w-[180px] lg:translate-x-0 lg:opacity-100"}`;
   const workspaceTitle = getWorkspaceTitle(pathname, links);
+  const hasQuestionBankBreadcrumb =
+    pathname === "/teacher/question-bank/generate" ||
+    /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname);
+  const breadcrumbParent = hasQuestionBankBreadcrumb
+    ? { href: "/teacher/question-bank", label: "Ngân hàng câu hỏi" }
+    : pathname === "/teacher/exams/new"
+      ? { href: "/teacher/exams", label: "Bài kiểm tra" }
+      : null;
 
   async function handleSignOut() {
     setIsAccountMenuOpen(false);
@@ -123,9 +132,28 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
         >
           <Menu className="size-5" />
         </button>
-        <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
-          {workspaceTitle}
-        </h1>
+        {breadcrumbParent ? (
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-2 text-base font-bold tracking-tight sm:text-lg"
+          >
+            <Link
+              href={breadcrumbParent.href}
+              className="shrink-0 text-slate-500 transition-colors hover:text-brand-700"
+            >
+              {breadcrumbParent.label}
+            </Link>
+            <ChevronRight
+              aria-hidden="true"
+              className="size-4 shrink-0 text-slate-400"
+            />
+            <h1 className="truncate text-brand-700">{workspaceTitle}</h1>
+          </nav>
+        ) : (
+          <h1 className="truncate text-base font-bold tracking-tight text-brand-700 sm:text-lg">
+            {workspaceTitle}
+          </h1>
+        )}
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
           <button
             type="button"
@@ -260,7 +288,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <main
-        className={`min-h-screen px-3.5 pb-8 pt-[74px] transition-[margin] ${isSidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[266px]"}`}
+        className={`min-h-screen px-3.5 pt-[74px] transition-[margin] ${pathname === "/teacher/question-bank" ? "pb-3" : "pb-8"} ${isSidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[266px]"}`}
       >
         <div
           className={
@@ -321,7 +349,7 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
   if (pathname === "/teacher/question-bank/new") return "Tạo câu hỏi mới";
   if (/^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname))
     return "Chỉnh sửa câu hỏi";
-  if (pathname === "/teacher/exams/new") return "Tạo bài kiểm tra";
+  if (pathname === "/teacher/exams/new") return "Tạo mới bài kiểm tra";
   if (/^\/teacher\/exams\/[^/]+\/submissions\/[^/]+$/.test(pathname))
     return "Chấm bài";
   if (/^\/teacher\/exams\/[^/]+\/submissions$/.test(pathname))

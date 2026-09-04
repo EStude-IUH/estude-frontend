@@ -9,13 +9,11 @@ import {
   CalendarClock,
   Check,
   ChevronRight,
-  CirclePlus,
   Clock3,
   Edit3,
   Eye,
   FileCheck2,
   FileQuestion,
-  GripVertical,
   ListChecks,
   Plus,
   Search,
@@ -57,8 +55,11 @@ import {
   teacherSettingsService,
 } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
+import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import {
+  DIFFICULTY_LABELS,
   EXAM_STATUS_LABELS,
+  QUESTION_TYPE_LABELS,
   type Exam,
   type ExamInput,
   type ExamQuestion,
@@ -250,7 +251,7 @@ export function TeacherExamsPage() {
   return (
     <AssessmentShell>
       <PageHeading title="Bài kiểm tra" />
-      <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+      <div className="flex max-h-[calc(100dvh-106px)] min-h-0 w-full flex-col overflow-hidden">
         <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)_180px]">
@@ -299,7 +300,7 @@ export function TeacherExamsPage() {
             </div>
           ) : null}
           <div className="min-h-0 shrink overflow-auto">
-          <Table className="min-w-[1280px]">
+          <Table className="min-w-[1280px] [&_button]:!text-[13px] [&_p]:!text-[13px] [&_span]:!text-[13px]">
             <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
               <tr>
                 <TableHead className="w-14 text-center">#</TableHead>
@@ -333,7 +334,7 @@ export function TeacherExamsPage() {
                       className="cursor-pointer transition hover:bg-slate-50/70"
                       onClick={() => router.push(`/teacher/exams/${exam.id}`)}
                     >
-                      <TableCell className="text-center text-xs text-slate-400">
+                      <TableCell className="text-center text-[13px] text-slate-400">
                         {(page - 1) * pageSize + index + 1}
                       </TableCell>
                       <TableCell>
@@ -348,14 +349,14 @@ export function TeacherExamsPage() {
                           {exam.title}
                         </button>
                         {!exam.published ? (
-                          <p className="mt-1 text-[11px] font-semibold text-amber-600">
+                          <p className="mt-1 text-[13px] font-semibold text-amber-600">
                             Có thể chỉnh sửa
                           </p>
                         ) : null}
                       </TableCell>
                       <TableCell>
                         <p className="font-semibold text-slate-800">{exam.subjectName}</p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-[13px] text-slate-400">
                           {formatClassLabel(
                             assignedClasses,
                             exam.classId,
@@ -364,7 +365,7 @@ export function TeacherExamsPage() {
                         </p>
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass(exam.status)}`}>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[13px] font-black ${statusClass(exam.status)}`}>
                           {EXAM_STATUS_LABELS[exam.status]}
                         </span>
                       </TableCell>
@@ -376,11 +377,11 @@ export function TeacherExamsPage() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <p className="font-semibold">{exam.settings.durationMinutes} phút</p>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-[13px] text-slate-400">
                           {exam.settings.attemptsAllowed} lượt làm
                         </p>
                       </TableCell>
-                      <TableCell className="min-w-52 whitespace-nowrap text-xs">
+                      <TableCell className="min-w-52 whitespace-nowrap text-[13px]">
                         <p className="flex items-center gap-1.5 text-slate-600">
                           <CalendarClock className="size-3.5 text-brand-500" />
                           {formatExamDate(exam.settings.startsAt)}
@@ -455,7 +456,7 @@ export function TeacherExamsPage() {
           </Table>
           </div>
           <DataTableFooter
-            className="shrink-0 bg-white"
+            className="shrink-0 bg-white text-[13px] [&_*]:!text-[13px]"
             rowCount={pagedExams.length}
             totalItems={visibleExams.length}
             itemLabel="bài kiểm tra"
@@ -585,7 +586,7 @@ export function ExamWizardPage({
           setInfo((current) => ({
             ...current,
             subjectId: firstSubject.id,
-            subjectName: firstSubject.name,
+            subjectName: getVietnameseSubjectName(firstSubject),
           }));
         if (firstClass)
           setInfo((current) => ({
@@ -669,7 +670,7 @@ export function ExamWizardPage({
     setInfo((current) => ({
       ...current,
       subjectId: subject.id,
-      subjectName: subject.name,
+      subjectName: getVietnameseSubjectName(subject),
       classId: firstCompatibleClass?.id ?? "",
       className: firstCompatibleClass?.name ?? "",
       topicName: "",
@@ -728,6 +729,7 @@ export function ExamWizardPage({
 
   const filteredQuestions = questions.filter(
     (question) =>
+      !question.disabled &&
       question.subjectId === info.subjectId &&
       matchesSearchKeyword(question.keyword, search),
   );
@@ -847,36 +849,9 @@ export function ExamWizardPage({
   return (
     <ExamWizardFrame embedded={embedded}>
       {!embedded ? (
-        <>
-          <PageHeading
-            title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
-          />
-          <div className="mb-5 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
-            <div className="flex items-start gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
-                {examId ? (
-                  <Edit3 className="size-5" />
-                ) : (
-                  <CirclePlus className="size-5" />
-                )}
-              </span>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
-                  {examId ? "Bản nháp" : "Thiết lập đề mới"}
-                </p>
-                <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
-                  {examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
-                </h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  Hoàn thành 4 bước, kiểm tra lại đề rồi lưu nháp hoặc công bố.
-                </p>
-              </div>
-            </div>
-            <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
-              <ArrowLeft className="size-4" /> Thoát
-            </Button>
-          </div>
-        </>
+        <PageHeading
+          title={examId ? "Chỉnh sửa bài kiểm tra" : "Tạo bài kiểm tra"}
+        />
       ) : null}
 
       <div className="mb-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -953,7 +928,7 @@ export function ExamWizardPage({
                   <option value="">Chọn môn được phân công</option>
                   {subjects.map((subject) => (
                     <option key={subject.id} value={subject.id}>
-                      {subject.name}
+                      {getVietnameseSubjectName(subject)}
                     </option>
                   ))}
                 </Select>
@@ -1498,91 +1473,239 @@ export function ExamDetailPage() {
         <LoadingPanel />
       </AssessmentShell>
     );
+
+  const orderedQuestions = [...exam.questions].sort(
+    (left, right) => left.order - right.order,
+  );
+
   return (
     <AssessmentShell>
       <PageHeading
         eyebrow="Exam detail"
         title={exam.title}
         description={`${exam.subjectName} · ${exam.className}`}
-        action={
-          <Button variant="ghost" onClick={() => router.push("/teacher/exams")}>
+      />
+      <div className="mx-auto max-w-[1180px] space-y-3">
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => router.push("/teacher/exams")}
+          >
             <ArrowLeft className="size-4" /> Quay lại
           </Button>
-        }
-      />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-          <h2 className="font-black">Danh sách câu hỏi</h2>
-          <div className="mt-4 space-y-2">
-            {exam.questions
-              .sort((a, b) => a.order - b.order)
-              .map((item, index) => {
-                const question = questions.find(
-                  (value) => value.id === item.questionId,
-                );
-                return (
-                  <div
-                    key={item.questionId}
-                    className="flex items-start gap-3 rounded-xl border border-slate-100 p-4"
+        </div>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+          <div className="relative overflow-hidden px-4 py-4 sm:px-5">
+            <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-brand-100/50 blur-2xl" />
+            <div className="relative flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/20">
+                <FileCheck2 className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(exam.status)}`}
                   >
-                    <GripVertical className="mt-1 size-4 text-slate-300" />
-                    <span className="font-black text-brand-700">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <p className="font-bold">
-                        {question?.content ?? `Câu hỏi ${item.questionId}`}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {item.points} điểm
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                    {EXAM_STATUS_LABELS[exam.status]}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+                    {exam.published ? "Đã công bố" : "Bản nháp"}
+                  </span>
+                </div>
+                <h2 className="mt-2 truncate text-xl font-black text-slate-950">
+                  {exam.title}
+                </h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-semibold text-slate-500">
+                  <span className="inline-flex items-center gap-1.5">
+                    <BookOpen className="size-4 text-brand-500" />
+                    {exam.subjectName}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <ListChecks className="size-4 text-brand-500" />
+                    {exam.className}
+                  </span>
+                </div>
+                {exam.description ? (
+                  <p className="mt-2 max-w-3xl whitespace-pre-wrap text-[13px] leading-5 text-slate-500">
+                    {exam.description}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60 sm:grid-cols-4">
+            <div className="border-b border-r border-slate-100 px-4 py-2.5 sm:border-b-0">
+              <p className="text-[11px] font-semibold text-slate-400">Câu hỏi</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">
+                {exam.questions.length}
+              </p>
+            </div>
+            <div className="border-b border-slate-100 px-4 py-2.5 sm:border-b-0 sm:border-r">
+              <p className="text-[11px] font-semibold text-slate-400">Tổng điểm</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">
+                {exam.totalPoints}
+              </p>
+            </div>
+            <div className="border-r border-slate-100 px-4 py-2.5">
+              <p className="text-[11px] font-semibold text-slate-400">Thời lượng</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">
+                {exam.settings.durationMinutes} phút
+              </p>
+            </div>
+            <div className="px-4 py-2.5">
+              <p className="text-[11px] font-semibold text-slate-400">Lượt làm</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">
+                {exam.settings.attemptsAllowed}
+              </p>
+            </div>
           </div>
         </section>
-        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-          <span
-            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(exam.status)}`}
-          >
-            {EXAM_STATUS_LABELS[exam.status]}
-          </span>
-          <dl className="mt-5 space-y-4 text-sm">
-            <div>
-              <dt className="text-xs text-slate-400">Lịch làm bài</dt>
-              <dd className="mt-1 font-bold">
-                {new Date(exam.settings.startsAt).toLocaleString("vi-VN")} –{" "}
-                {new Date(exam.settings.endsAt).toLocaleString("vi-VN")}
-              </dd>
+
+        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3">
+                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                  <ListChecks className="size-4" />
+                </span>
+                <h2 className="font-black text-slate-900">
+                  Danh sách câu hỏi
+                </h2>
+              </div>
+              <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-black text-brand-700">
+                {orderedQuestions.length} câu
+              </span>
             </div>
-            <div>
-              <dt className="text-xs text-slate-400">Cấu hình</dt>
-              <dd className="mt-1 font-bold">
-                {exam.settings.durationMinutes} phút ·{" "}
-                {exam.settings.attemptsAllowed} lần
-              </dd>
-            </div>
-          </dl>
-          {!exam.published ? (
-            <Button
-              className="mt-6 w-full"
-              onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}
-            >
-              <Edit3 className="size-4" /> Chỉnh sửa bản nháp
-            </Button>
-          ) : (
-            <Button
-              className="mt-6 w-full"
-              variant="secondary"
-              onClick={() =>
-                router.push(`/teacher/exams/${exam.id}/submissions`)
-              }
-            >
-              <FileCheck2 className="size-4" /> Xem bài nộp
-            </Button>
-          )}
-        </aside>
+
+            {orderedQuestions.length === 0 ? (
+              <div className="grid min-h-48 place-items-center px-5 py-10 text-center">
+                <div>
+                  <span className="mx-auto grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
+                    <FileQuestion className="size-5" />
+                  </span>
+                  <p className="mt-3 text-[13px] font-semibold text-slate-500">
+                    Bài kiểm tra chưa có câu hỏi.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 p-3 sm:p-4">
+                {orderedQuestions.map((item, index) => {
+                  const question = questions.find(
+                    (value) => value.id === item.questionId,
+                  );
+                  return (
+                    <article
+                      key={item.questionId}
+                      className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:border-brand-200 hover:bg-brand-50/20"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-[13px] font-black text-brand-700">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold leading-6 text-slate-900">
+                          {question?.content ?? `Câu hỏi ${item.questionId}`}
+                        </p>
+                        {question ? (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                            <span className="rounded-md bg-slate-100 px-2 py-0.5">
+                              {QUESTION_TYPE_LABELS[question.type]}
+                            </span>
+                            <span className="rounded-md bg-slate-100 px-2 py-0.5">
+                              {DIFFICULTY_LABELS[question.difficulty]}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-black text-violet-700">
+                        {item.points} điểm
+                      </span>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <aside className="space-y-3 lg:sticky lg:top-20">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                  <CalendarClock className="size-4" />
+                </span>
+                <h2 className="font-black text-slate-900">Lịch làm bài</h2>
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <CalendarClock className="size-3.5 text-brand-500" /> Bắt đầu
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
+                    {formatExamDate(exam.settings.startsAt)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <Clock3 className="size-3.5 text-rose-400" /> Kết thúc
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
+                    {formatExamDate(exam.settings.endsAt)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                <span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-700">
+                  <Settings2 className="size-4" />
+                </span>
+                <h2 className="font-black text-slate-900">Cấu hình bài thi</h2>
+              </div>
+              <dl className="mt-3 divide-y divide-slate-100 text-[13px]">
+                <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+                  <dt className="text-slate-500">Xáo trộn câu hỏi</dt>
+                  <dd className="font-bold text-slate-800">
+                    {exam.settings.shuffleQuestions ? "Có" : "Không"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5">
+                  <dt className="text-slate-500">Xáo trộn đáp án</dt>
+                  <dd className="font-bold text-slate-800">
+                    {exam.settings.shuffleAnswers ? "Có" : "Không"}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5 last:pb-0">
+                  <dt className="text-slate-500">Hiện điểm sau khi nộp</dt>
+                  <dd className="font-bold text-slate-800">
+                    {exam.settings.showScoreImmediately ? "Có" : "Không"}
+                  </dd>
+                </div>
+              </dl>
+
+              {!exam.published ? (
+                <Button
+                  className="mt-4 w-full"
+                  onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}
+                >
+                  <Edit3 className="size-4" /> Chỉnh sửa bản nháp
+                </Button>
+              ) : (
+                <Button
+                  className="mt-4 w-full"
+                  variant="secondary"
+                  onClick={() =>
+                    router.push(`/teacher/exams/${exam.id}/submissions`)
+                  }
+                >
+                  <FileCheck2 className="size-4" /> Xem bài nộp
+                </Button>
+              )}
+            </section>
+          </aside>
+        </div>
       </div>
     </AssessmentShell>
   );

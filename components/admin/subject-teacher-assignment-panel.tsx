@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
-import { getSubjectApiSearchQueries, toVietnameseSubjectName } from "@/lib/subject-localization";
+import { getSubjectApiSearchQueries, getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { SubjectTeacherAssignment } from "@/types/assessment";
 import type { UsersPage } from "@/types/users";
 
@@ -224,7 +224,7 @@ export function SubjectTeacherAssignmentPanel() {
       ])
       .then(([loadedClasses, loadedSubjects, teacherPage]) => {
         setClassOptions(loadedClasses.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` })));
-        setSubjectOptions(loadedSubjects.map((item) => ({ value: item.id, label: `${item.code} · ${toVietnameseSubjectName(item.name)}` })));
+        setSubjectOptions(loadedSubjects.map((item) => ({ value: item.id, label: `${item.code} · ${getVietnameseSubjectName(item)}` })));
         setTeacherOptions(teacherPage.items.map((item) => ({ value: item.id, label: `${item.fullName} · ${item.accountName}` })));
       })
       .catch((cause: unknown) => {
@@ -273,7 +273,7 @@ export function SubjectTeacherAssignmentPanel() {
       );
       if (requestId !== subjectRequestId.current) return;
       const results = [...new Map(responses.flat().map((item) => [item.id, item])).values()];
-      const options = results.map((item) => ({ value: item.id, label: `${item.code} · ${toVietnameseSubjectName(item.name)}` }));
+      const options = results.map((item) => ({ value: item.id, label: `${item.code} · ${getVietnameseSubjectName(item)}` }));
       setSubjectOptions((current) => preserveSelectedOptions(options, current, [form.subjectId, subjectFilter]));
     } catch (cause) {
       if (requestId === subjectRequestId.current) {
@@ -314,7 +314,7 @@ export function SubjectTeacherAssignmentPanel() {
     setEditing(item);
     setError("");
     setTeacherOptions((current) => ensureOption(current, { value: item.teacherId, label: `${item.teacher.fullName} · ${item.teacher.accountName}` }));
-    setSubjectOptions((current) => ensureOption(current, { value: item.subjectId, label: `${item.subject.code} · ${toVietnameseSubjectName(item.subject.name)}` }));
+    setSubjectOptions((current) => ensureOption(current, { value: item.subjectId, label: `${item.subject.code} · ${getVietnameseSubjectName(item.subject)}` }));
     setClassOptions((current) => ensureOption(current, { value: item.classId, label: `${item.schoolClass.code} · ${item.schoolClass.name}` }));
     setForm({ teacherId: item.teacherId, subjectId: item.subjectId, classId: item.classId });
     setIsModalOpen(true);
@@ -394,7 +394,7 @@ export function SubjectTeacherAssignmentPanel() {
                 <tr key={item.id} className="transition hover:bg-slate-50/70">
                   <TableCell className="text-center text-xs text-slate-400">{(page - 1) * pageSize + index + 1}</TableCell>
                   <TableCell><p className="font-bold text-slate-900">{item.teacher.fullName}</p><p className="mt-0.5 text-xs text-slate-400">{item.teacher.accountName}</p></TableCell>
-                  <TableCell><p className="font-bold text-slate-800">{toVietnameseSubjectName(item.subject.name)}</p><p className="mt-0.5 text-xs font-semibold text-brand-600">{item.subject.code}</p></TableCell>
+                  <TableCell><p className="font-bold text-slate-800">{getVietnameseSubjectName(item.subject)}</p><p className="mt-0.5 text-xs font-semibold text-brand-600">{item.subject.code}</p></TableCell>
                   <TableCell><p className="font-bold text-slate-800">{item.schoolClass.name}</p><p className="mt-0.5 text-xs text-slate-400">{item.schoolClass.code}</p></TableCell>
                   <TableCell><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></TableCell>
                   <TableCell><div className="flex justify-end gap-1"><Button variant="ghost" size="sm" aria-label="Chỉnh sửa phân công" onClick={() => openEdit(item)}><Edit3 className="size-4" /></Button><Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label="Xóa phân công" onClick={() => setDeleting(item)}><Trash2 className="size-4" /></Button></div></TableCell>
@@ -472,7 +472,7 @@ export function SubjectTeacherAssignmentPanel() {
       ) : null}
 
       <ConfirmationDialog open={Boolean(deleting)} title="Xóa phân công giáo viên môn học" onClose={() => setDeleting(null)} onConfirm={() => void handleDelete()} loading={saving} confirmVariant="danger" confirmLabel="Xóa phân công">
-        <p>Phân công <b>{deleting?.teacher.fullName}</b> dạy môn <b>{deleting ? toVietnameseSubjectName(deleting.subject.name) : ""}</b> tại lớp <b>{deleting?.schoolClass.name}</b> sẽ được xóa mềm.</p>
+        <p>Phân công <b>{deleting?.teacher.fullName}</b> dạy môn <b>{deleting ? getVietnameseSubjectName(deleting.subject) : ""}</b> tại lớp <b>{deleting?.schoolClass.name}</b> sẽ được xóa mềm.</p>
       </ConfirmationDialog>
     </div>
   );
