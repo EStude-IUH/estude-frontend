@@ -14,6 +14,8 @@ import {
   Layers3,
   LoaderCircle,
   Mail,
+  Search,
+  SlidersHorizontal,
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
@@ -30,8 +32,10 @@ import {
   TableHead,
   TableHeader,
 } from "@/components/ui/data-table";
+import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { academicDataService, examService } from "@/lib/assessment-api";
+import { normalizeSearchKeyword } from "@/lib/search-keyword";
 import { rememberStudentCourseAccess } from "@/lib/student-recent-courses";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
@@ -60,6 +64,9 @@ export function StudentCoursesPage() {
   const [courses, setCourses] = useState<StudentCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<"subject" | "code" | "class">("subject");
 
   useEffect(() => {
     void academicDataService
@@ -82,13 +89,75 @@ export function StudentCoursesPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const classOptions = useMemo(() => {
+    const classes = new Map<string, { code: string; name: string }>();
+    for (const course of courses) {
+      classes.set(course.classId, course.schoolClass);
+    }
+    return [
+      { value: "all", label: "Tất cả lớp học" },
+      ...[...classes.entries()]
+        .sort(([, left], [, right]) => left.code.localeCompare(right.code, "vi"))
+        .map(([id, schoolClass]) => ({
+          value: id,
+          label: `${schoolClass.code} · ${schoolClass.name}`,
+        })),
+    ];
+  }, [courses]);
+
+  const filteredCourses = useMemo(() => {
+    const keyword = normalizeSearchKeyword(search);
+    return courses
+      .filter(
+        (course) =>
+          (classFilter === "all" || course.classId === classFilter) &&
+          (!keyword ||
+            normalizeSearchKeyword(
+              getVietnameseSubjectName(course.subject),
+              course.subject.name,
+              course.subject.code,
+              course.schoolClass.name,
+              course.schoolClass.code,
+              course.teacher.fullName,
+            ).includes(keyword)),
+      )
+      .sort((left, right) => {
+        if (sortBy === "code") {
+          return left.subject.code.localeCompare(right.subject.code, "vi");
+        }
+        if (sortBy === "class") {
+          return left.schoolClass.code.localeCompare(right.schoolClass.code, "vi");
+        }
+        return getVietnameseSubjectName(left.subject).localeCompare(
+          getVietnameseSubjectName(right.subject),
+          "vi",
+        );
+      });
+  }, [classFilter, courses, search, sortBy]);
+
   return (
     <StudentShell>
-      <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">Không gian học tập</p>
-        <h1 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">Môn học của tôi</h1>
-        <p className="mt-2 text-sm text-slate-500">Chọn môn học để xem nội dung, tài liệu và bài kiểm tra được giao.</p>
-      </div>
+      <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+        <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">Không gian học tập</p>
+            <h1 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">Môn học của tôi</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Chọn môn học để xem nội dung, tài liệu và bài kiểm tra được giao.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-white text-brand-600 shadow-sm"><BookOpen className="size-5" /></span>
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Môn đang theo học</p>
+              <p className="text-2xl font-black text-brand-700">{courses.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-3 border-t border-slate-100 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-[520px_260px_220px]">
+          <Input icon={Search} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo tên môn, mã môn, lớp hoặc giáo viên..." aria-label="Tìm môn học" />
+          <CustomSelect value={classFilter} options={classOptions} onValueChange={setClassFilter} ariaLabel="Lọc theo lớp học" />
+          <CustomSelect value={sortBy} options={[{ value: "subject", label: "Sắp xếp: Tên môn" }, { value: "code", label: "Sắp xếp: Mã môn" }, { value: "class", label: "Sắp xếp: Mã lớp" }]} onValueChange={(value) => setSortBy(value as typeof sortBy)} ariaLabel="Sắp xếp môn học" />
+        </div>
+      </section>
       {error ? <ErrorPanel message={error} /> : null}
       {loading ? <LoadingPanel /> : courses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-14 text-center">
@@ -96,11 +165,23 @@ export function StudentCoursesPage() {
           <p className="mt-3 text-sm font-semibold text-slate-500">Bạn chưa được gán vào môn học nào.</p>
         </div>
       ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => (
-            <article key={course.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg">
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-500">Hiển thị <span className="font-black text-slate-950">{filteredCourses.length}</span> / {courses.length} môn học</p>
+            {(search || classFilter !== "all") ? <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-brand-700"><SlidersHorizontal className="size-3.5" /> Đang áp dụng bộ lọc</span> : null}
+          </div>
+          {filteredCourses.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+              <Search className="mx-auto size-8 text-slate-300" />
+              <p className="mt-3 font-bold text-slate-700">Không tìm thấy môn học phù hợp.</p>
+              <p className="mt-1 text-sm text-slate-500">Thử tìm bằng tên môn, mã môn hoặc thay đổi bộ lọc lớp.</p>
+              <Button variant="outline" className="mt-4" onClick={() => { setSearch(""); setClassFilter("all"); }}>Xóa bộ lọc</Button>
+            </div>
+          ) : <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {filteredCourses.map((course) => (
+            <article key={course.id} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg">
               <div className="h-1.5 bg-gradient-to-r from-brand-600 to-cyan-400" />
-              <div className="p-5">
+              <div className="flex flex-1 flex-col p-5">
                 <div className="flex items-start justify-between gap-4">
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><GraduationCap className="size-5" /></span>
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">{course.subject.code}</span>
@@ -113,11 +194,12 @@ export function StudentCoursesPage() {
                   <p className="flex items-center gap-2"><Hash className="size-4 text-brand-500" />Mã lớp: <b className="text-slate-800">{course.schoolClass.code}</b></p>
                   <p className="flex items-center gap-2"><UserRound className="size-4 text-brand-500" />{course.teacher.fullName}</p>
                 </div>
-                <Button className="mt-5 w-full" onClick={() => router.push(courseHref(course))}>Vào môn học</Button>
+                <Button className="mt-auto w-full pt-0" onClick={() => router.push(courseHref(course))}>Vào môn học</Button>
               </div>
             </article>
           ))}
-        </div>
+          </div>}
+        </>
       )}
     </StudentShell>
   );

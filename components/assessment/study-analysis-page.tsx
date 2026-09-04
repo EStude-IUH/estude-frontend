@@ -12,7 +12,6 @@ import {
   Lightbulb,
   ListChecks,
   LoaderCircle,
-  Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -158,13 +157,10 @@ export function StudentStudyAnalysisPage() {
   const { report } = analysis;
   return (
     <StudentShell>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4">
         <Button variant="ghost" onClick={() => router.push("/student/review")}>
           <ArrowLeft className="size-4" /> Quay lại ôn tập
         </Button>
-        <span className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
-          <Sparkles className="size-3.5" /> Trợ giảng AI
-        </span>
       </div>
 
       {error ? (
@@ -173,32 +169,36 @@ export function StudentStudyAnalysisPage() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-cyan-500 p-6 text-white shadow-xl shadow-brand-700/15 sm:p-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-center">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)] lg:items-center">
           <div>
-            <p className="text-sm font-bold text-blue-100">
+            <p className="text-sm font-bold text-brand-600">
               {report.exam.subjectName} · {report.exam.className}
             </p>
-            <h1 className="mt-2 text-2xl font-black sm:text-3xl">
-              Phân tích sau bài kiểm tra
+            <h1 className="mt-1.5 text-2xl font-black text-slate-950 sm:text-3xl">
+              Kết quả và lộ trình ôn tập
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-50">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {report.summary}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white/15 p-4 backdrop-blur">
-              <p className="text-xs text-blue-100">Độ chính xác</p>
-              <p className="mt-1 text-3xl font-black">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl bg-blue-50 p-4">
+              <p className="text-xs font-semibold text-brand-600">Độ chính xác</p>
+              <p className="mt-1 text-2xl font-black text-brand-800">
                 {report.performance.accuracy}%
               </p>
             </div>
-            <div className="rounded-2xl bg-white/15 p-4 backdrop-blur">
-              <p className="text-xs text-blue-100">Câu đúng</p>
-              <p className="mt-1 text-3xl font-black">
+            <div className="rounded-xl bg-emerald-50 p-4">
+              <p className="text-xs font-semibold text-emerald-700">Câu đúng</p>
+              <p className="mt-1 text-2xl font-black text-emerald-800">
                 {report.performance.correctCount}/
                 {report.performance.totalQuestions}
               </p>
+            </div>
+            <div className="rounded-xl bg-violet-50 p-4">
+              <p className="text-xs font-semibold text-violet-700">Điểm bài làm</p>
+              <p className="mt-1 text-2xl font-black text-violet-800">{report.performance.score ?? "—"}/{report.performance.totalPoints}</p>
             </div>
           </div>
         </div>
@@ -370,19 +370,17 @@ function LearningPathSection({
   learningPath: StudyLearningPath;
 }) {
   return (
-    <section className="mt-6 rounded-2xl border border-brand-100 bg-white p-5 shadow-card sm:p-6">
+    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
             <ListChecks className="size-5" />
           </span>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">
-              Lộ trình tự động
-            </p>
-            <h2 className="mt-1 text-xl font-black">Lộ trình học dành cho bạn</h2>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">Lộ trình đề xuất</p>
+            <h2 className="mt-1 text-xl font-black">Học theo từng bước</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Hoàn thành lần lượt từng bước để củng cố kiến thức hiệu quả hơn.
+              Hoàn thành lần lượt để củng cố phần kiến thức còn yếu.
             </p>
           </div>
         </div>
@@ -391,13 +389,13 @@ function LearningPathSection({
         </span>
       </div>
 
-      <ol className="mt-6 grid gap-4 lg:grid-cols-2">
+      <ol className="mt-5 space-y-3">
         {learningPath.steps.map((step) => (
           <li
             key={`${step.order}-${step.topicName}`}
-            className="relative rounded-2xl border border-slate-200 p-5"
+            className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5"
           >
-            <div className="flex items-start gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-sm font-black text-white">
                 {step.order}
               </span>
@@ -405,16 +403,16 @@ function LearningPathSection({
                 <p className="text-xs font-bold text-brand-600">{step.topicName}</p>
                 <h3 className="mt-1 font-black text-slate-900">{step.title}</h3>
               </div>
-              <span className="ml-auto shrink-0 text-xs font-bold text-slate-400">
+              <span className="ml-auto shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-bold text-slate-500">
                 {step.durationMinutes} phút
               </span>
             </div>
-            <p className="mt-4 text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-slate-600">
               {step.objective}
             </p>
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
               {step.activities.map((activity) => (
-                <li key={activity} className="flex gap-2 text-sm text-slate-600">
+                <li key={activity} className="flex gap-2">
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />
                   <span>{activity}</span>
                 </li>

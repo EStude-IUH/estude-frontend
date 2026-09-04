@@ -299,6 +299,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             pathname.startsWith("/teacher/question-bank")
               || pathname === "/teacher/exams"
               || pathname === "/teacher/exams/new"
+              || pathname.startsWith("/teacher/exams/")
               || pathname === "/teacher/settings/exam-defaults"
               ? "w-full"
               : "mx-auto max-w-[1280px]"
@@ -377,6 +378,31 @@ function getWorkspaceBreadcrumbs(
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
       { label: "Tạo mới bài kiểm tra" },
+    ];
+  }
+
+  const submissionDetailMatch = pathname.match(
+    /^\/teacher\/exams\/([^/]+)\/submissions\/[^/]+$/,
+  );
+  if (submissionDetailMatch) {
+    const examId = submissionDetailMatch[1];
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      { label: "Chi tiết bài kiểm tra", href: `/teacher/exams/${examId}` },
+      { label: "Danh sách bài nộp", href: `/teacher/exams/${examId}/submissions` },
+      { label: "Chi tiết bài làm" },
+    ];
+  }
+
+  const submissionsMatch = pathname.match(
+    /^\/teacher\/exams\/([^/]+)\/submissions$/,
+  );
+  if (submissionsMatch) {
+    const examId = submissionsMatch[1];
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      { label: "Chi tiết bài kiểm tra", href: `/teacher/exams/${examId}` },
+      { label: "Danh sách bài nộp" },
     ];
   }
 

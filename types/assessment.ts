@@ -482,6 +482,7 @@ export interface ExamAttempt {
   examId: string;
   studentId: string;
   studentName: string;
+  studentCode?: string | null;
   status: AttemptStatus;
   startedAt: string;
   expiresAt: string | null;

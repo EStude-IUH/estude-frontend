@@ -2022,9 +2022,9 @@ export function ExamDetailPage() {
         title={exam.title}
         description={`${toVietnameseSubjectName(exam.subjectName)} · ${exam.className}`}
       />
-      <div className="grid w-full gap-3 lg:h-[calc(100dvh-106px)] lg:grid-cols-[380px_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)] lg:overflow-hidden">
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-1 lg:row-start-1">
-          <div className="relative overflow-hidden px-4 py-4 sm:px-5">
+      <div className="grid w-full items-start gap-3 lg:grid-cols-[430px_minmax(0,1fr)]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-1 lg:flex lg:min-h-0 lg:flex-col">
+          <div className="relative overflow-hidden px-4 py-3 sm:px-5">
             <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-brand-100/50 blur-2xl" />
             <div className="relative flex items-start gap-3">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/20">
@@ -2064,35 +2064,98 @@ export function ExamDetailPage() {
           </div>
 
           <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60">
-            <div className="border-b border-r border-slate-100 px-4 py-2.5">
+            <div className="border-b border-r border-slate-100 px-4 py-2">
               <p className="text-[11px] font-semibold text-slate-400">Câu hỏi</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.questions.length}
               </p>
             </div>
-            <div className="border-b border-slate-100 px-4 py-2.5">
+            <div className="border-b border-slate-100 px-4 py-2">
               <p className="text-[11px] font-semibold text-slate-400">Tổng điểm</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.totalPoints}
               </p>
             </div>
-            <div className="border-r border-slate-100 px-4 py-2.5">
+            <div className="border-r border-slate-100 px-4 py-2">
               <p className="text-[11px] font-semibold text-slate-400">Thời lượng</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.settings.durationMinutes} phút
               </p>
             </div>
-            <div className="px-4 py-2.5">
+            <div className="px-4 py-2">
               <p className="text-[11px] font-semibold text-slate-400">Lượt làm</p>
               <p className="mt-0.5 text-base font-black text-slate-900">
                 {exam.settings.attemptsAllowed}
               </p>
             </div>
           </div>
+          <div className="divide-y divide-slate-100 border-t border-slate-100 lg:min-h-0 lg:flex-1">
+            <section className="p-3 sm:p-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                  <CalendarClock className="size-4" />
+                </span>
+                <h2 className="font-black text-slate-900">Lịch làm bài</h2>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <CalendarClock className="size-3.5 text-brand-500" /> Bắt đầu
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
+                    {formatExamDate(exam.settings.startsAt)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <Clock3 className="size-3.5 text-rose-400" /> Kết thúc
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
+                    {formatExamDate(exam.settings.endsAt)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="p-3 sm:p-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-700">
+                  <Settings2 className="size-4" />
+                </span>
+                <h2 className="font-black text-slate-900">Cấu hình bài thi</h2>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-slate-50 px-3 py-2">
+                  <dt className="text-slate-400">Số mã đề</dt>
+                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.examVersionCount}</dd>
+                </div>
+                <div className="rounded-lg bg-slate-50 px-3 py-2">
+                  <dt className="text-slate-400">Xáo trộn câu hỏi</dt>
+                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.shuffleQuestions ? "Có" : "Không"}</dd>
+                </div>
+                <div className="rounded-lg bg-slate-50 px-3 py-2">
+                  <dt className="text-slate-400">Xáo trộn đáp án</dt>
+                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.shuffleAnswers ? "Có" : "Không"}</dd>
+                </div>
+                <div className="rounded-lg bg-slate-50 px-3 py-2">
+                  <dt className="text-slate-400">Hiện điểm sau khi nộp</dt>
+                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.showScoreImmediately ? "Có" : "Không"}</dd>
+                </div>
+              </dl>
+              {!exam.published ? (
+                <Button className="mt-4 w-full" onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}>
+                  <Edit3 className="size-4" /> Chỉnh sửa bản nháp
+                </Button>
+              ) : (
+                <Button className="mt-4 w-full" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>
+                  <FileCheck2 className="size-4" /> Xem bài nộp
+                </Button>
+              )}
+            </section>
+          </div>
         </section>
 
-        <div className="contents">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:min-h-0 lg:flex-col">
+        <section className="overflow-hidden rounded-2xl bg-white lg:col-start-2 lg:flex lg:max-h-[calc(100dvh-106px)] lg:min-h-0 lg:flex-col">
             <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-3">
                 <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
@@ -2119,7 +2182,7 @@ export function ExamDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2 p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+              <div className="max-h-[calc(100dvh-180px)] space-y-2 overflow-y-auto overscroll-contain p-3 sm:p-4 lg:min-h-0 lg:max-h-none lg:flex-1">
                 {orderedQuestions.map((item, index) => {
                   const question = questions.find(
                     (value) => value.id === item.questionId,
@@ -2157,89 +2220,6 @@ export function ExamDetailPage() {
             )}
           </section>
 
-          <aside className="space-y-3 lg:col-start-1 lg:row-start-2 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
-                  <CalendarClock className="size-4" />
-                </span>
-                <h2 className="font-black text-slate-900">Lịch làm bài</h2>
-              </div>
-              <div className="mt-3 space-y-2">
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    <CalendarClock className="size-3.5 text-brand-500" /> Bắt đầu
-                  </p>
-                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
-                    {formatExamDate(exam.settings.startsAt)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    <Clock3 className="size-3.5 text-rose-400" /> Kết thúc
-                  </p>
-                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
-                    {formatExamDate(exam.settings.endsAt)}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-700">
-                  <Settings2 className="size-4" />
-                </span>
-                <h2 className="font-black text-slate-900">Cấu hình bài thi</h2>
-              </div>
-              <dl className="mt-3 divide-y divide-slate-100 text-[13px]">
-                <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
-                  <dt className="text-slate-500">Số mã đề</dt>
-                  <dd className="font-bold text-slate-800">
-                    {exam.settings.examVersionCount}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2.5">
-                  <dt className="text-slate-500">Xáo trộn câu hỏi</dt>
-                  <dd className="font-bold text-slate-800">
-                    {exam.settings.shuffleQuestions ? "Có" : "Không"}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2.5">
-                  <dt className="text-slate-500">Xáo trộn đáp án</dt>
-                  <dd className="font-bold text-slate-800">
-                    {exam.settings.shuffleAnswers ? "Có" : "Không"}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2.5 last:pb-0">
-                  <dt className="text-slate-500">Hiện điểm sau khi nộp</dt>
-                  <dd className="font-bold text-slate-800">
-                    {exam.settings.showScoreImmediately ? "Có" : "Không"}
-                  </dd>
-                </div>
-              </dl>
-
-              {!exam.published ? (
-                <Button
-                  className="mt-4 w-full"
-                  onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}
-                >
-                  <Edit3 className="size-4" /> Chỉnh sửa bản nháp
-                </Button>
-              ) : (
-                <Button
-                  className="mt-4 w-full"
-                  variant="secondary"
-                  onClick={() =>
-                    router.push(`/teacher/exams/${exam.id}/submissions`)
-                  }
-                >
-                  <FileCheck2 className="size-4" /> Xem bài nộp
-                </Button>
-              )}
-            </section>
-          </aside>
-        </div>
       </div>
     </AssessmentShell>
   );

@@ -81,7 +81,7 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
               ? "Đăng nhập Admin"
               : role === "TEACHER"
                 ? "Đăng nhập Giảng viên"
-                : "Đăng nhập Sinh viên"}
+                : "Đăng nhập cho học sinh"}
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
             {role === "ADMIN"
