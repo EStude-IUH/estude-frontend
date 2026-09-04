@@ -268,7 +268,7 @@ export function StudentReviewPage() {
                     <TableCell className="text-center text-slate-500">
                       {index + 1}
                     </TableCell>
-                    <TableCell className="!px-3">
+                    <TableCell>
                       <p className="font-bold text-slate-950">{item.title}</p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
                         <CalendarDays className="size-3.5" /> Đã nộp {formatDate(item.submittedAt)}
@@ -311,7 +311,7 @@ export function StudentReviewPage() {
                         {priority.label}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="!px-3">
                       <div className="flex justify-end">
                         <Button
                           size="sm"
