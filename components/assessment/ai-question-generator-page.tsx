@@ -468,7 +468,7 @@ export function AiQuestionGeneratorPage() {
                 aria-label="Sinh lời giải chi tiết"
               />
             </div>
-            <Button
+            <Button permission="ai_questions.create"
               type="submit"
               disabled={generating || !materials.length}
               className="w-full"
@@ -863,7 +863,7 @@ function GeneratedQuestionCard({
               <X className="size-4" />
               Hủy
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => void save()}>
+            <Button permission="ai_questions.update" size="sm" disabled={busy} onClick={() => void save()}>
               <Save className="size-4" />
               Lưu
             </Button>
@@ -892,7 +892,7 @@ function GeneratedQuestionCard({
           ) : null}
           <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
             {pending ? (
-              <Button
+              <Button permission="ai_questions.update"
                 variant="ghost"
                 size="sm"
                 disabled={busy}
@@ -903,7 +903,7 @@ function GeneratedQuestionCard({
               </Button>
             ) : null}
             {pending ? (
-              <Button
+              <Button permission="ai_questions.create"
                 variant="secondary"
                 size="sm"
                 disabled={busy}
@@ -916,7 +916,7 @@ function GeneratedQuestionCard({
               </Button>
             ) : null}
             {pending ? (
-              <Button
+              <Button permission="ai_questions.approve"
                 variant="danger"
                 size="sm"
                 disabled={busy}
@@ -929,7 +929,7 @@ function GeneratedQuestionCard({
               </Button>
             ) : null}
             {pending ? (
-              <Button size="sm" disabled={busy} onClick={() => void approve()}>
+              <Button permission="ai_questions.approve" size="sm" disabled={busy} onClick={() => void approve()}>
                 <Check className="size-4" />
                 Duyệt vào ngân hàng
               </Button>

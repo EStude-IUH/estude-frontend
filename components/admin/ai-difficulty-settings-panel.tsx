@@ -117,7 +117,7 @@ export function AiDifficultySettingsPanel() {
   return (
     <div className="w-full pb-8">
       <div className="mb-3 flex justify-end">
-        <Button
+        <Button permission="ai_settings.update"
           onClick={() => void save()}
           disabled={saving || loading}
           className="w-fit !rounded-lg"

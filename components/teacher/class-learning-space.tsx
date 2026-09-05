@@ -184,14 +184,14 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
             <div className="mt-2 flex flex-wrap gap-1.5">{schoolClass?.subjects.map((subject) => <span key={subject.id} className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-brand-700">{subject.code} · {getVietnameseSubjectName(subject)}</span>)}</div>
           </div>
         </div>
-        <Button className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
+        <Button permission="teaching.create" className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
       </section>
 
       {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
 
       {topics.length === 0 ? (
         <section className="grid min-h-[320px] place-items-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <div><BookOpenCheck className="mx-auto size-10 text-slate-300" /><h3 className="mt-4 font-black text-slate-800">Chưa có chủ đề học tập</h3><p className="mt-2 text-sm text-slate-500">Tạo chủ đề đầu tiên để tải tài liệu cho lớp.</p><Button className="mt-5" onClick={openCreateTopic}><Plus className="size-4" />Tạo chủ đề</Button></div>
+          <div><BookOpenCheck className="mx-auto size-10 text-slate-300" /><h3 className="mt-4 font-black text-slate-800">Chưa có chủ đề học tập</h3><p className="mt-2 text-sm text-slate-500">Tạo chủ đề đầu tiên để tải tài liệu cho lớp.</p><Button permission="teaching.create" className="mt-5" onClick={openCreateTopic}><Plus className="size-4" />Tạo chủ đề</Button></div>
         </section>
       ) : (
         <div className="space-y-3">
@@ -204,8 +204,8 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
                     {uploadingTopicId === topic.id ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}Tải tài liệu
                     <input type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(topic, event.target.files); event.currentTarget.value = ""; }} />
                   </label>
-                  <Button variant="ghost" size="sm" aria-label={`Sửa ${topic.name}`} onClick={() => openEditTopic(topic)}><Edit3 className="size-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${topic.name}`} onClick={() => setDeletingTopic(topic)}><Trash2 className="size-4" /></Button>
+                  <Button permission="teaching.update" variant="ghost" size="sm" aria-label={`Sửa ${topic.name}`} onClick={() => openEditTopic(topic)}><Edit3 className="size-4" /></Button>
+                  <Button permission="teaching.delete" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${topic.name}`} onClick={() => setDeletingTopic(topic)}><Trash2 className="size-4" /></Button>
                 </div>
               </header>
               <div className="divide-y divide-slate-100">
@@ -213,8 +213,8 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
                   <article key={material.id} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-slate-50/70">
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-600"><FileText className="size-5" /></span>
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-900">{material.originalName}</p><p className="mt-1 text-xs text-slate-400">{formatFileSize(material.size)} · {new Date(material.createdAt).toLocaleString("vi-VN")}</p></div>
-                    <Button variant="ghost" size="sm" aria-label={`Tải ${material.originalName}`} onClick={() => void downloadMaterial(material)}><Download className="size-4" /></Button>
-                    <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Gỡ ${material.originalName} khỏi chủ đề`} disabled={deletingMaterialId === material.id} onClick={() => void deleteMaterial(topic.id, material)}>{deletingMaterialId === material.id ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button>
+                    <Button permission="materials.download" variant="ghost" size="sm" aria-label={`Tải ${material.originalName}`} onClick={() => void downloadMaterial(material)}><Download className="size-4" /></Button>
+                    <Button permission="materials.assign" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Gỡ ${material.originalName} khỏi chủ đề`} disabled={deletingMaterialId === material.id} onClick={() => void deleteMaterial(topic.id, material)}>{deletingMaterialId === material.id ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button>
                   </article>
                 ))}
               </div>
@@ -223,7 +223,7 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
         </div>
       )}
 
-      <Modal open={isTopicModalOpen} title={editingTopic ? "Chỉnh sửa chủ đề" : "Tạo chủ đề"} description="Chủ đề được quản lý riêng theo lớp và môn học được phân công." onClose={() => setIsTopicModalOpen(false)} footer={<Button type="submit" form="class-topic-form" disabled={saving || !form.subjectId || !form.name.trim()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editingTopic ? "Lưu thay đổi" : "Tạo chủ đề"}</Button>}>
+      <Modal open={isTopicModalOpen} title={editingTopic ? "Chỉnh sửa chủ đề" : "Tạo chủ đề"} description="Chủ đề được quản lý riêng theo lớp và môn học được phân công." onClose={() => setIsTopicModalOpen(false)} footer={<Button permission={editingTopic ? "teaching.update" : "teaching.create"} type="submit" form="class-topic-form" disabled={saving || !form.subjectId || !form.name.trim()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editingTopic ? "Lưu thay đổi" : "Tạo chủ đề"}</Button>}>
         <form id="class-topic-form" onSubmit={(event) => void saveTopic(event)} className="grid gap-4">
           <label className="grid gap-2 text-sm font-bold text-slate-700">Môn học<select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} disabled={Boolean(editingTopic)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-normal outline-none focus:border-brand-500 disabled:bg-slate-50">{schoolClass?.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {getVietnameseSubjectName(subject)}</option>)}</select></label>
           <label className="grid gap-2 text-sm font-bold text-slate-700">Tên chủ đề<input required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ví dụ: React Hooks" className="h-11 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" /></label>

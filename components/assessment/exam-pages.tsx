@@ -334,7 +334,7 @@ export function TeacherExamsPage() {
               />
             </div>
             <div className="flex shrink-0 flex-nowrap justify-end gap-2">
-              <Button
+              <Button permission="exams.create"
                 className="!h-[42px] !rounded-lg"
                 onClick={() => router.push("/teacher/exams/new")}
               >
@@ -459,7 +459,7 @@ export function TeacherExamsPage() {
                           {(!exam.published ||
                             (exam.status === "SCHEDULED" &&
                               (exam.attemptedCount ?? 0) === 0)) ? (
-                            <Button
+                            <Button permission="exams.update"
                               size="sm"
                               variant="ghost"
                               onClick={() => openEditor(exam.id)}
@@ -470,7 +470,7 @@ export function TeacherExamsPage() {
                             </Button>
                           ) : null}
                           {!exam.published ? (
-                              <Button
+                              <Button permission="exams.publish"
                                 size="sm"
                                 variant="ghost"
                                 className="text-brand-700"
@@ -482,7 +482,7 @@ export function TeacherExamsPage() {
                                 <Send size={18} strokeWidth={2.5} />
                               </Button>
                           ) : (
-                            <Button
+                            <Button permission="exams.submissions"
                               size="sm"
                               variant="ghost"
                               className="text-brand-700"
@@ -493,7 +493,7 @@ export function TeacherExamsPage() {
                               <FileCheck2 size={18} strokeWidth={2.5} />
                             </Button>
                           )}
-                          <Button
+                          <Button permission="exams.delete"
                             size="sm"
                             variant="ghost"
                             className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
@@ -1758,7 +1758,7 @@ export function ExamWizardPage({
                           ? "Lưu thay đổi"
                           : "Lưu bản nháp"}
                     </Button>
-                    <Button
+                    <Button permission="exams.publish"
                       onClick={() => void save(true)}
                       disabled={saving}
                     >
@@ -2138,11 +2138,11 @@ export function ExamDetailPage() {
                 </div>
               </dl>
               {!exam.published ? (
-                <Button className="mt-4 w-full" onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}>
+                <Button permission="exams.update" className="mt-4 w-full" onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}>
                   <Edit3 className="size-4" /> Chỉnh sửa bản nháp
                 </Button>
               ) : (
-                <Button className="mt-4 w-full" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>
+                <Button permission="exams.submissions" className="mt-4 w-full" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>
                   <FileCheck2 className="size-4" /> Xem bài nộp
                 </Button>
               )}

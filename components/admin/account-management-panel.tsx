@@ -36,6 +36,7 @@ import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { usePermissions } from "@/context/permissions-context";
 import { useActionNotification } from "@/components/ui/action-notification";
 import {
   ApiError,
@@ -46,12 +47,14 @@ import {
 import type { User, UserRole, UserStatus } from "@/types/auth";
 import type { ImportUsersResult, UsersPage } from "@/types/users";
 
-type ImportRole = Extract<UserRole, "TEACHER" | "STUDENT">;
+type ImportRole = Extract<UserRole, "TEACHER" | "STUDENT" | "PARENT">;
+type CreateRole = Extract<UserRole, "TEACHER" | "STUDENT" | "PARENT">;
 
 const roleLabels: Record<UserRole, string> = {
   ADMIN: "Quản trị viên",
   TEACHER: "Giáo viên",
   STUDENT: "Sinh viên",
+  PARENT: "Phụ huynh",
 };
 
 const roleFilterOptions = [
@@ -59,6 +62,7 @@ const roleFilterOptions = [
   { value: "TEACHER", label: "Giáo viên" },
   { value: "STUDENT", label: "Sinh viên" },
   { value: "ADMIN", label: "Quản trị viên" },
+  { value: "PARENT", label: "Phụ huynh" },
 ];
 
 const statusFilterOptions = [
@@ -69,9 +73,15 @@ const statusFilterOptions = [
   { value: "INACTIVE", label: "Ngừng hoạt động" },
 ];
 
-const managedRoleOptions = [
+const importRoleOptions = [
   { value: "TEACHER", label: "Giáo viên" },
   { value: "STUDENT", label: "Sinh viên" },
+  { value: "PARENT", label: "Phụ huynh" },
+];
+
+const createRoleOptions = [
+  ...importRoleOptions,
+  { value: "PARENT", label: "Phụ huynh" },
 ];
 
 function formatDate(value: string | null): string {
@@ -91,6 +101,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function AccountManagementPanel() {
+  const { can } = usePermissions();
   const { notify } = useActionNotification();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -119,6 +130,11 @@ export function AccountManagementPanel() {
   const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const [parentChildren, setParentChildren] = useState<User[]>([]);
+  const [studentCandidates, setStudentCandidates] = useState<User[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [loadingParentLinks, setLoadingParentLinks] = useState(false);
+  const [updatingParentLinkId, setUpdatingParentLinkId] = useState("");
 
   const [importRole, setImportRole] = useState<ImportRole>("TEACHER");
   const [file, setFile] = useState<File | null>(null);
@@ -134,7 +150,7 @@ export function AccountManagementPanel() {
   const [newFullName, setNewFullName] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<ImportRole>("TEACHER");
+  const [newRole, setNewRole] = useState<CreateRole>("TEACHER");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -283,7 +299,11 @@ export function AccountManagementPanel() {
       );
       downloadBlob(
         blob,
-        importRole === "TEACHER" ? "mau-giao-vien.xlsx" : "mau-sinh-vien.xlsx",
+        importRole === "TEACHER"
+          ? "mau-giao-vien.xlsx"
+          : importRole === "PARENT"
+            ? "mau-phu-huynh.xlsx"
+            : "mau-sinh-vien.xlsx",
       );
     } catch (error) {
       setImportError(getErrorMessage(error, "Không thể tải tệp mẫu"));
@@ -352,6 +372,70 @@ export function AccountManagementPanel() {
     setEditAccountName(user.accountName);
     setEditAvatarUrl(user.avatarUrl ?? "");
     setEditError("");
+    setParentChildren([]);
+    setStudentCandidates([]);
+    setSelectedStudentId("");
+    if (user.role === "PARENT" && can('parent_links.read')) void loadParentLinks(user.id);
+  }
+
+  async function loadParentLinks(parentId: string) {
+    setLoadingParentLinks(true);
+    setEditError("");
+    try {
+      const [linked, studentsPage] = await Promise.all([
+        authenticatedRequest<User[]>(`/users/${encodeURIComponent(parentId)}/children`),
+        authenticatedRequest<UsersPage>("/users?role=STUDENT&status=ACTIVE&page=1&limit=100"),
+      ]);
+      setParentChildren(linked);
+      setStudentCandidates(studentsPage.items);
+      const linkedIds = new Set(linked.map((student) => student.id));
+      setSelectedStudentId(studentsPage.items.find((student) => !linkedIds.has(student.id))?.id ?? "");
+    } catch (error) {
+      setEditError(getErrorMessage(error, "Không thể tải quan hệ phụ huynh - học sinh"));
+    } finally {
+      setLoadingParentLinks(false);
+    }
+  }
+
+  async function linkStudent() {
+    if (!editingUser || !selectedStudentId) return;
+    setUpdatingParentLinkId(selectedStudentId);
+    setEditError("");
+    try {
+      const linked = await authenticatedRequest<User[]>(
+        `/users/${encodeURIComponent(editingUser.id)}/children/${encodeURIComponent(selectedStudentId)}`,
+        { method: "POST" },
+      );
+      setParentChildren(linked);
+      const linkedIds = new Set(linked.map((student) => student.id));
+      setSelectedStudentId(studentCandidates.find((student) => !linkedIds.has(student.id))?.id ?? "");
+      notify("Đã liên kết học sinh với phụ huynh", { key: "parent-student-linked" });
+    } catch (error) {
+      setEditError(getErrorMessage(error, "Không thể liên kết học sinh"));
+    } finally {
+      setUpdatingParentLinkId("");
+    }
+  }
+
+  async function unlinkStudent(studentId: string) {
+    if (!editingUser) return;
+    setUpdatingParentLinkId(studentId);
+    setEditError("");
+    try {
+      await authenticatedRequest<Record<string, never>>(
+        `/users/${encodeURIComponent(editingUser.id)}/children/${encodeURIComponent(studentId)}`,
+        { method: "DELETE" },
+      );
+      const linked = parentChildren.filter((student) => student.id !== studentId);
+      setParentChildren(linked);
+      const linkedIds = new Set(linked.map((student) => student.id));
+      setSelectedStudentId(studentCandidates.find((student) => !linkedIds.has(student.id))?.id ?? "");
+      notify("Đã hủy liên kết học sinh", { key: "parent-student-unlinked" });
+    } catch (error) {
+      setEditError(getErrorMessage(error, "Không thể hủy liên kết học sinh"));
+    } finally {
+      setUpdatingParentLinkId("");
+    }
   }
 
   function closeEditor() {
@@ -481,7 +565,7 @@ export function AccountManagementPanel() {
             />
           </div>
           <div className="flex shrink-0 flex-nowrap justify-end gap-2">
-            <Button
+            <Button permission="accounts.export"
               variant="outline"
               className="!h-[42px] !rounded-lg"
               disabled={isExporting}
@@ -494,7 +578,7 @@ export function AccountManagementPanel() {
               )}
               Export
             </Button>
-            <Button
+            <Button permission="accounts.create"
               className="!h-[42px] !rounded-lg"
               onClick={() => setIsCreateOpen(true)}
             >
@@ -563,6 +647,7 @@ export function AccountManagementPanel() {
                     </TableCell>
                     <TableCell>
                       <ToggleSwitch
+                        permission="accounts.status"
                         checked={user.status === "ACTIVE"}
                         aria-label={
                           user.status === "ACTIVE"
@@ -586,7 +671,7 @@ export function AccountManagementPanel() {
                       />
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
+                      <Button permission="accounts.update"
                         variant="ghost"
                         size="sm"
                         onClick={() => openEditor(user)}
@@ -646,7 +731,7 @@ export function AccountManagementPanel() {
         title="Chỉnh sửa tài khoản"
         description="Cập nhật thông tin đăng nhập và thông tin hiển thị của tài khoản."
         onClose={closeEditor}
-        width="max-w-xl"
+        width={editingUser?.role === "PARENT" ? "max-w-2xl" : "max-w-xl"}
       >
         <form
           className="space-y-4"
@@ -710,6 +795,54 @@ export function AccountManagementPanel() {
             </div>
           ) : null}
 
+          {editingUser?.role === "PARENT" && can('parent_links.read') ? (
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <div>
+                <p className="text-sm font-bold text-slate-800">Học sinh liên kết</p>
+                <p className="mt-1 text-xs text-slate-500">Phụ huynh chỉ xem được hồ sơ học sinh đã liên kết tại đây.</p>
+              </div>
+              {loadingParentLinks ? (
+                <p className="flex items-center gap-2 py-3 text-sm text-slate-500"><LoaderCircle className="size-4 animate-spin" /> Đang tải danh sách...</p>
+              ) : (
+                <>
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CustomSelect
+                        label="Chọn học sinh"
+                        value={selectedStudentId}
+                        options={studentCandidates
+                          .filter((student) => !parentChildren.some((linked) => linked.id === student.id))
+                          .map((student) => ({ value: student.id, label: `${student.fullName} · ${student.accountName}` }))}
+                        disabled={!studentCandidates.some((student) => !parentChildren.some((linked) => linked.id === student.id))}
+                        onValueChange={setSelectedStudentId}
+                      />
+                    </div>
+                    <Button permission="parent_links.assign" variant="secondary" className="shrink-0" disabled={!selectedStudentId || Boolean(updatingParentLinkId)} onClick={() => void linkStudent()}>
+                      {updatingParentLinkId === selectedStudentId ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />} Liên kết
+                    </Button>
+                  </div>
+                  {parentChildren.length ? (
+                    <div className="space-y-2">
+                      {parentChildren.map((student) => (
+                        <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-slate-800">{student.fullName}</p>
+                            <p className="truncate text-xs text-slate-500">{student.accountName}{student.assignedClass ? ` · ${student.assignedClass.code}` : ""}</p>
+                          </div>
+                          <Button permission="parent_links.assign" variant="ghost" size="sm" className="shrink-0 text-rose-600 hover:bg-rose-50" disabled={Boolean(updatingParentLinkId)} onClick={() => void unlinkStudent(student.id)}>
+                            {updatingParentLinkId === student.id ? <LoaderCircle className="size-4 animate-spin" /> : <XCircle className="size-4" />} Hủy liên kết
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-center text-sm text-slate-500">Chưa liên kết học sinh nào.</p>
+                  )}
+                </>
+              )}
+            </div>
+          ) : null}
+
           {editError ? (
             <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
               {editError}
@@ -717,7 +850,7 @@ export function AccountManagementPanel() {
           ) : null}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
+            <Button permission="accounts.update"
               variant="outline"
               className="!rounded-lg"
               disabled={isSavingEdit}
@@ -725,7 +858,7 @@ export function AccountManagementPanel() {
             >
               Hủy
             </Button>
-            <Button
+            <Button permission="accounts.update"
               type="submit"
               className="!rounded-lg"
               disabled={isSavingEdit}
@@ -744,7 +877,7 @@ export function AccountManagementPanel() {
       <Modal
         open={isImportOpen}
         title="Import danh sách tài khoản"
-        description="Import tối đa 10.000 giáo viên hoặc học sinh từ một tệp Excel .xlsx."
+        description="Import tối đa 10.000 giáo viên, học sinh hoặc phụ huynh từ một tệp Excel .xlsx."
         onClose={() => {
           if (!isImporting) setIsImportOpen(false);
         }}
@@ -756,10 +889,10 @@ export function AccountManagementPanel() {
           <CustomSelect
             label="Loại tài khoản"
             value={importRole}
-            options={managedRoleOptions}
+            options={importRoleOptions}
             onValueChange={(value) => setImportRole(value as ImportRole)}
           />
-          <Button
+          <Button permission="accounts.import"
             className="w-full"
             variant="secondary"
             disabled={isDownloading}
@@ -823,7 +956,7 @@ export function AccountManagementPanel() {
             <Button variant="outline" onClick={() => setIsImportOpen(false)}>
               Hủy
             </Button>
-            <Button type="submit" disabled={isImporting}>
+            <Button permission="accounts.import" type="submit" disabled={isImporting}>
               {isImporting ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : (
@@ -865,14 +998,14 @@ export function AccountManagementPanel() {
             onChange={(event) =>
               setNewAccountName(event.target.value.toLowerCase())
             }
-            placeholder="Mã giáo viên hoặc mã sinh viên"
+            placeholder="Nhập tên đăng nhập"
           />
           <CustomSelect
             label="Vai trò"
             buttonClassName="!rounded-lg"
             value={newRole}
-            options={managedRoleOptions}
-            onValueChange={(value) => setNewRole(value as ImportRole)}
+            options={createRoleOptions}
+            onValueChange={(value) => setNewRole(value as CreateRole)}
           />
           <Input
             icon={KeyRound}
@@ -893,7 +1026,7 @@ export function AccountManagementPanel() {
             </p>
           ) : null}
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
+            <Button permission="accounts.import"
               variant="secondary"
               className="!rounded-lg"
               onClick={() => {
@@ -911,7 +1044,7 @@ export function AccountManagementPanel() {
               >
                 Hủy
               </Button>
-              <Button
+              <Button permission="accounts.create"
                 type="submit"
                 className="!rounded-lg"
                 disabled={isCreating}

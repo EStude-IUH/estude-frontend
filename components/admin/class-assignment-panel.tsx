@@ -209,7 +209,7 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
                   aria-label="Tìm học sinh trong lớp"
                   className="sm:w-64"
                 />
-                <Button size="sm" onClick={openStudentPicker} disabled={Boolean(saving)}><Plus className="size-4" />Thêm học sinh</Button>
+                <Button permission="classes.assign" size="sm" onClick={openStudentPicker} disabled={Boolean(saving)}><Plus className="size-4" />Thêm học sinh</Button>
               </div>
             </div>
             <div className="max-h-72 overflow-auto">
@@ -222,7 +222,7 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
                       <TableCell className="font-bold text-slate-900">{item.fullName}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-brand-700">{item.accountName}</TableCell>
                       <TableCell><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></TableCell>
-                      <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${item.fullName} khỏi lớp`} onClick={() => void removeStudent(item.id)} disabled={Boolean(saving)}>{saving === `student-${item.id}` ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button></TableCell>
+                      <TableCell className="text-right"><Button permission="classes.assign" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${item.fullName} khỏi lớp`} onClick={() => void removeStudent(item.id)} disabled={Boolean(saving)}>{saving === `student-${item.id}` ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button></TableCell>
                     </tr>
                   )) : <TableEmptyRow colSpan={5} message={normalizedRosterSearch ? "Không tìm thấy học sinh phù hợp" : "Lớp chưa có học sinh"} />}
                 </TableBody>
@@ -243,7 +243,7 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
           <>
             <span className="mr-auto text-sm font-semibold text-slate-500">Đã chọn {selectedStudentIds.length} học sinh</span>
             <Button variant="outline" onClick={() => setIsStudentPickerOpen(false)} disabled={saving === "students"}>Hủy</Button>
-            <Button onClick={() => void assignSelectedStudents()} disabled={selectedStudentIds.length === 0 || saving === "students"}>
+            <Button permission="classes.assign" onClick={() => void assignSelectedStudents()} disabled={selectedStudentIds.length === 0 || saving === "students"}>
               {saving === "students" ? <LoaderCircle className="size-4 animate-spin" /> : null}
               Thêm {selectedStudentIds.length > 0 ? selectedStudentIds.length : ""} học sinh
             </Button>

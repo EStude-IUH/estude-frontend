@@ -1,22 +1,24 @@
 import type { UserRole } from "@/types/auth";
 
-export type AuthPortal = "admin" | "teacher" | "student";
+export type AuthPortal = "admin" | "teacher" | "student" | "parent";
 
 const PORTAL_ROLES: Record<AuthPortal, UserRole> = {
   admin: "ADMIN",
   teacher: "TEACHER",
   student: "STUDENT",
+  parent: "PARENT",
 };
 
 const LOCAL_PORTALS: Record<string, AuthPortal> = {
   "3000": "admin",
   "3001": "teacher",
   "3002": "student",
+  "3003": "parent",
 };
 
 function parsePortal(value: string | null | undefined): AuthPortal | null {
   const portal = value?.trim().toLowerCase();
-  return portal === "admin" || portal === "teacher" || portal === "student"
+  return portal === "admin" || portal === "teacher" || portal === "student" || portal === "parent"
     ? portal
     : null;
 }
@@ -49,7 +51,7 @@ export function getPortalFromHost(host: string | null): AuthPortal | null {
       (process.env.NODE_ENV === "development" && url.hostname.endsWith(".localhost"))
     ) {
       const subdomain = url.hostname.split(".", 1)[0];
-      if (subdomain === "admin" || subdomain === "teacher" || subdomain === "student") {
+      if (subdomain === "admin" || subdomain === "teacher" || subdomain === "student" || subdomain === "parent") {
         return subdomain;
       }
     }
@@ -66,6 +68,7 @@ export function getPortalFromPathname(pathname: string): AuthPortal | null {
     firstSegment === "admin" ||
     firstSegment === "teacher" ||
     firstSegment === "student"
+    || firstSegment === "parent"
   ) {
     return firstSegment;
   }

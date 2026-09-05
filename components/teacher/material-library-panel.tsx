@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/context/permissions-context";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
   Table,
@@ -113,6 +114,7 @@ function MaterialPreview({
 }
 
 export function TeacherMaterialLibraryPanel() {
+  const { can } = usePermissions();
   const { notify } = useActionNotification();
   const [materials, setMaterials] = useState<LearningMaterial[]>([]);
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
@@ -338,7 +340,7 @@ export function TeacherMaterialLibraryPanel() {
             />
           </div>
           <div className="flex shrink-0 flex-nowrap justify-end gap-2">
-            <Button
+            <Button permission="materials.assign"
               variant="outline"
               className="!h-[42px] !rounded-lg"
               disabled={!selectedIds.length || isLoading}
@@ -347,10 +349,10 @@ export function TeacherMaterialLibraryPanel() {
               <FolderInput className="size-4" />
               Gán {selectedIds.length ? `${selectedIds.length} tài liệu` : "vào lớp"}
             </Button>
-            <label className={`inline-flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 ${isUploading ? "pointer-events-none opacity-60" : ""}`}>
+            <label className={`inline-flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 ${isUploading || !can('materials.create') ? "pointer-events-none opacity-60" : ""}`}>
               {isUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
               {isUploading ? "Đang tải lên..." : "Tải tài liệu"}
-              <input type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(event.target.files); event.currentTarget.value = ""; }} />
+              <input type="file" disabled={!can('materials.create')} multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(event.target.files); event.currentTarget.value = ""; }} />
             </label>
           </div>
         </div>
@@ -437,7 +439,7 @@ export function TeacherMaterialLibraryPanel() {
                       >
                         <Eye size={18} strokeWidth={2.5} />
                       </Button>
-                      <Button
+                      <Button permission="materials.download"
                         variant="ghost"
                         size="sm"
                         title="Tải tài liệu"
@@ -446,7 +448,7 @@ export function TeacherMaterialLibraryPanel() {
                       >
                         <Download size={18} strokeWidth={2.5} />
                       </Button>
-                      <Button
+                      <Button permission="materials.delete"
                         variant="ghost"
                         size="sm"
                         className="text-rose-600 hover:bg-rose-50"
@@ -506,7 +508,7 @@ export function TeacherMaterialLibraryPanel() {
         ) : null}
       </Modal>
 
-      <Modal open={isAssignModalOpen} title={`Gán ${selectedIds.length} tài liệu vào lớp`} description="Chọn nhiều lớp; mỗi lớp có thể dùng chủ đề sẵn có hoặc tạo chủ đề mới." width="max-w-4xl" bodyClassName="max-h-[68vh] overflow-y-auto" onClose={() => !isAssigning && setIsAssignModalOpen(false)} footer={<><Button variant="outline" disabled={isAssigning} onClick={() => setIsAssignModalOpen(false)}>Hủy</Button><Button disabled={isAssigning || !Object.values(targets).some((target) => target.selected)} onClick={() => void assignMaterials()}>{isAssigning ? <LoaderCircle className="size-4 animate-spin" /> : <FolderInput className="size-4" />}Gán tài liệu</Button></>}>
+      <Modal open={isAssignModalOpen} title={`Gán ${selectedIds.length} tài liệu vào lớp`} description="Chọn nhiều lớp; mỗi lớp có thể dùng chủ đề sẵn có hoặc tạo chủ đề mới." width="max-w-4xl" bodyClassName="max-h-[68vh] overflow-y-auto" onClose={() => !isAssigning && setIsAssignModalOpen(false)} footer={<><Button variant="outline" disabled={isAssigning} onClick={() => setIsAssignModalOpen(false)}>Hủy</Button><Button permission="materials.assign" disabled={isAssigning || !Object.values(targets).some((target) => target.selected)} onClick={() => void assignMaterials()}>{isAssigning ? <LoaderCircle className="size-4 animate-spin" /> : <FolderInput className="size-4" />}Gán tài liệu</Button></>}>
         {error ? <p className="mb-3 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
         {classes.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Bạn chưa được phân công lớp học nào.</p> : <div className="space-y-3">
           {classes.map((schoolClass) => {

@@ -26,5 +26,6 @@ export interface ImportUsersResult {
 export interface DefaultPasswordSettings {
   teacherConfigured: boolean;
   studentConfigured: boolean;
+  parentConfigured: boolean;
   updatedAt: string | null;
 }

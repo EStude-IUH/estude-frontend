@@ -7,6 +7,7 @@ export default async function HomePage() {
     ADMIN: '/admin/login',
     TEACHER: '/teacher/login',
     STUDENT: '/login',
+    PARENT: '/parent/login',
   } as const;
   const requestHeaders = await headers();
   const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');

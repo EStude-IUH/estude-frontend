@@ -129,6 +129,7 @@ export function SystemSettingsPanel({
   });
   const [teacherDefaultPassword, setTeacherDefaultPassword] = useState("");
   const [studentDefaultPassword, setStudentDefaultPassword] = useState("");
+  const [parentDefaultPassword, setParentDefaultPassword] = useState("");
   const [passwordSettings, setPasswordSettings] =
     useState<DefaultPasswordSettings | null>(null);
   const [passwordSettingsError, setPasswordSettingsError] = useState("");
@@ -165,7 +166,11 @@ export function SystemSettingsPanel({
 
   async function handleSave() {
     if (section === "default-passwords") {
-      if (!teacherDefaultPassword && !studentDefaultPassword) {
+      if (
+        !teacherDefaultPassword &&
+        !studentDefaultPassword &&
+        !parentDefaultPassword
+      ) {
         setPasswordSettingsError(
           "Vui lòng nhập ít nhất một mật khẩu cần cập nhật.",
         );
@@ -181,12 +186,14 @@ export function SystemSettingsPanel({
             body: JSON.stringify({
               ...(teacherDefaultPassword ? { teacherDefaultPassword } : {}),
               ...(studentDefaultPassword ? { studentDefaultPassword } : {}),
+              ...(parentDefaultPassword ? { parentDefaultPassword } : {}),
             }),
           },
         );
         setPasswordSettings(settings);
         setTeacherDefaultPassword("");
         setStudentDefaultPassword("");
+        setParentDefaultPassword("");
         notify("Đã cập nhật mật khẩu mặc định", {
           key: "default-passwords-saved",
         });
@@ -208,7 +215,7 @@ export function SystemSettingsPanel({
     <div className="w-full pb-8">
       {section !== "default-passwords" ? (
         <div className="mb-3 flex justify-end">
-          <Button
+          <Button permission="system_settings.update"
             className="w-fit !rounded-lg"
             onClick={() => void handleSave()}
           >
@@ -416,7 +423,7 @@ export function SystemSettingsPanel({
           <SectionHeader
             icon={KeyRound}
             title="Mật khẩu mặc định"
-            description="Thiết lập riêng mật khẩu ban đầu cho tài khoản giáo viên và học sinh được tạo bằng Excel."
+            description="Thiết lập riêng mật khẩu ban đầu cho tài khoản giáo viên, học sinh và phụ huynh được tạo bằng Excel."
             tone="bg-indigo-50 text-indigo-600"
           />
 
@@ -426,7 +433,7 @@ export function SystemSettingsPanel({
               hình...
             </p>
           ) : (
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
@@ -512,6 +519,49 @@ export function SystemSettingsPanel({
                   autoComplete="new-password"
                 />
               </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900">
+                      Tài khoản phụ huynh
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Áp dụng khi import danh sách phụ huynh.
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                      passwordSettings?.parentConfigured
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {passwordSettings?.parentConfigured
+                      ? "Đã cấu hình"
+                      : "Chưa cấu hình"}
+                  </span>
+                </div>
+                <Input
+                  icon={KeyRound}
+                  type="password"
+                  showPasswordToggle
+                  label="Mật khẩu mới"
+                  minLength={1}
+                  maxLength={128}
+                  value={parentDefaultPassword}
+                  onChange={(event) =>
+                    setParentDefaultPassword(event.target.value)
+                  }
+                  placeholder={
+                    passwordSettings?.parentConfigured
+                      ? "Nhập để thay đổi"
+                      : "Ví dụ: Parent@123"
+                  }
+                  hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
           )}
 
@@ -529,6 +579,7 @@ export function SystemSettingsPanel({
             <Button
               className="shrink-0 !rounded-lg"
               disabled={savingPasswordSettings || loadingPasswordSettings}
+              permission="password_settings.update"
               onClick={() => void handleSave()}
             >
               {savingPasswordSettings ? (

@@ -5,6 +5,7 @@ const target = "http://127.0.0.1:3000";
 const rolePorts = [
   { port: 3001, role: "TEACHER" },
   { port: 3002, role: "STUDENT" },
+  { port: 3003, role: "PARENT" },
 ];
 
 const proxy = httpProxy.createProxyServer({

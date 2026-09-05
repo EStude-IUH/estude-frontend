@@ -8,6 +8,8 @@ export function getRoleHome(role: UserRole): string {
       return "/teacher/dashboard";
     case "STUDENT":
       return "/student/dashboard";
+    case "PARENT":
+      return "/parent/dashboard";
   }
 }
 
@@ -19,6 +21,8 @@ export function getRoleSessionSettings(role: UserRole): string {
       return "/teacher/settings/sessions";
     case "STUDENT":
       return "/student/settings/sessions";
+    case "PARENT":
+      return "/parent/settings/sessions";
   }
 }
 

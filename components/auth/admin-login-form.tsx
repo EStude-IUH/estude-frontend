@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { AuthNotice } from "@/components/auth/auth-notice";
 import { FormField } from "@/components/auth/form-field";
-import { PasswordRecoveryModal } from "@/components/auth/password-recovery-modal";
 import { BrandLogo } from "@/components/brand-logo";
 import { useAuth } from "@/context/auth-context";
 import { ApiError } from "@/lib/auth-api";
@@ -25,7 +24,13 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
   const [errors, setErrors] = useState<LoginErrors>({});
   const [apiError, setApiError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
+  const roleName = role === "ADMIN"
+    ? "quản trị viên"
+    : role === "TEACHER"
+      ? "giảng viên"
+      : role === "PARENT"
+        ? "phụ huynh"
+        : "sinh viên";
 
   useEffect(() => {
     if (!isInitializing && user) {
@@ -60,7 +65,7 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
         error instanceof ApiError && error.status === 403
           ? role === "ADMIN"
             ? "Tài khoản không có quyền quản trị hệ thống."
-            : `Tài khoản không có quyền truy cập khu vực ${role === "TEACHER" ? "giảng viên" : "sinh viên"}.`
+            : `Tài khoản không có quyền truy cập khu vực ${roleName}.`
           : error instanceof ApiError
             ? error.message
             : "Đã có lỗi xảy ra. Vui lòng thử lại.",
@@ -81,12 +86,14 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
               ? "Đăng nhập Admin"
               : role === "TEACHER"
                 ? "Đăng nhập Giảng viên"
-                : "Đăng nhập cho học sinh"}
+                : role === "PARENT"
+                  ? "Đăng nhập Phụ huynh"
+                  : "Đăng nhập cho học sinh"}
           </h1>
           <p className="mt-2 text-sm leading-6 text-slate-500">
             {role === "ADMIN"
               ? "Sử dụng tài khoản quản trị để tiếp tục."
-              : `Sử dụng tài khoản ${role === "TEACHER" ? "giảng viên" : "sinh viên"} để tiếp tục.`}
+              : `Sử dụng tài khoản ${roleName} để tiếp tục.`}
           </p>
         </div>
 
@@ -102,7 +109,7 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
             placeholder={
               role === "ADMIN"
                 ? "Nhập tên tài khoản admin"
-                : `Nhập tên tài khoản ${role === "TEACHER" ? "giảng viên" : "sinh viên"}`
+                : `Nhập tên tài khoản ${roleName}`
             }
             autoComplete="username"
             autoFocus
@@ -136,7 +143,7 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
             <div className="-mt-2 text-right">
               <button
                 type="button"
-                onClick={() => setIsRecoveryOpen(true)}
+                onClick={() => router.push(`/${role.toLowerCase()}/forgot-password`)}
                 className="text-sm font-semibold text-brand-600 transition hover:text-brand-800"
               >
                 Quên mật khẩu?
@@ -162,18 +169,10 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
         <p className="mt-6 text-center text-xs leading-5 text-slate-400">
           {role === "ADMIN"
             ? "Chỉ dành cho quản trị viên được cấp quyền."
-            : `Chỉ dành cho ${role === "TEACHER" ? "giảng viên" : "sinh viên"} được cấp tài khoản.`}
+            : `Chỉ dành cho ${roleName} được cấp tài khoản.`}
         </p>
       </section>
 
-      {role !== "ADMIN" ? (
-        <PasswordRecoveryModal
-          key={accountName}
-          open={isRecoveryOpen}
-          initialAccountName={accountName}
-          onClose={() => setIsRecoveryOpen(false)}
-        />
-      ) : null}
     </main>
   );
 }

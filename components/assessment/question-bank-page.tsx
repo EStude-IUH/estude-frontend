@@ -32,6 +32,7 @@ import { DebouncedSearchInput } from "@/components/ui/debounced-search-input";
 import { CustomSelect, Input } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { usePermissions } from "@/context/permissions-context";
 import { academicDataService, questionBankService } from "@/lib/assessment-api";
 import {
   getVietnameseSubjectName,
@@ -55,6 +56,7 @@ const difficultyTone: Record<Difficulty, string> = {
 };
 
 export function QuestionBankPage() {
+  const { can } = usePermissions();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
@@ -334,7 +336,7 @@ export function QuestionBankPage() {
 
             <div className="flex shrink-0 flex-nowrap justify-end gap-2">
               {selectedIds.length ? (
-                <Button
+                <Button permission="questions.update"
                   variant="outline"
                   className="!h-[42px] !rounded-lg"
                   onClick={() => void openMoveModal()}
@@ -344,13 +346,13 @@ export function QuestionBankPage() {
                 </Button>
               ) : null}
               <Link href="/teacher/question-bank/generate">
-                <Button variant="secondary" className="!h-[42px] !rounded-lg">
+                <Button permission="ai_questions.create" variant="secondary" className="!h-[42px] !rounded-lg">
                   <Sparkles className="size-4" />
                   Tạo bằng AI
                 </Button>
               </Link>
               <Link href="/teacher/question-bank/new">
-                <Button className="!h-[42px] !rounded-lg">
+                <Button permission="questions.create" className="!h-[42px] !rounded-lg">
                   <Plus className="size-4" />
                   Tạo câu hỏi
                 </Button>
@@ -405,7 +407,7 @@ export function QuestionBankPage() {
                             ? "bg-blue-50/60"
                             : ""
                         }`}
-                        onClick={() => setEditingQuestion(question)}
+                        onClick={() => { if (can('questions.update')) setEditingQuestion(question); }}
                       >
                         <TableCell
                           className="text-center"
@@ -453,6 +455,7 @@ export function QuestionBankPage() {
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <ToggleSwitch
+                            permission="questions.update"
                             checked={!question.disabled}
                             loading={updatingStatusId === question.id}
                             aria-label={
@@ -472,7 +475,7 @@ export function QuestionBankPage() {
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <div className="flex justify-end gap-1">
-                            <Button
+                            <Button permission="questions.update"
                               variant="ghost"
                               size="sm"
                               title="Chỉnh sửa"
@@ -481,7 +484,7 @@ export function QuestionBankPage() {
                             >
                               <Pencil size={18} strokeWidth={2.5} />
                             </Button>
-                            <Button
+                            <Button permission="questions.delete"
                               variant="ghost"
                               size="sm"
                               className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
@@ -556,7 +559,7 @@ export function QuestionBankPage() {
             >
               Hủy
             </Button>
-            <Button
+            <Button permission="questions.update"
               disabled={
                 movingQuestions ||
                 loadingMoveTopics ||

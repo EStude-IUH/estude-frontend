@@ -378,7 +378,7 @@ export function SubjectTeacherAssignmentPanel() {
             <CustomSelect searchable isSearching={isSubjectSearching} onSearchChange={(value) => void searchSubjectOptions(value)} searchPlaceholder="Tìm môn học..." value={subjectFilter} options={[{ value: "", label: "Tất cả môn học" }, ...subjectOptions]} buttonClassName="!h-[42px] !rounded-lg !ring-0" onValueChange={(value) => { setSubjectFilter(value); setPage(1); }} ariaLabel="Lọc theo môn học" />
             <CustomSelect searchable isSearching={isTeacherSearching} onSearchChange={(value) => void searchTeacherOptions(value)} searchPlaceholder="Tìm giáo viên..." value={teacherFilter} options={[{ value: "", label: "Tất cả giáo viên" }, ...teacherOptions]} buttonClassName="!h-[42px] !rounded-lg !ring-0" onValueChange={(value) => { setTeacherFilter(value); setPage(1); }} ariaLabel="Lọc theo giáo viên" />
           </div>
-          <Button className="!h-[42px] !rounded-lg" onClick={openCreate}><Plus className="size-4" />Tạo phân công</Button>
+          <Button permission="assignments.create" className="!h-[42px] !rounded-lg" onClick={openCreate}><Plus className="size-4" />Tạo phân công</Button>
         </div>
       </div>
 
@@ -397,7 +397,7 @@ export function SubjectTeacherAssignmentPanel() {
                   <TableCell><p className="font-bold text-slate-800">{getVietnameseSubjectName(item.subject)}</p><p className="mt-0.5 text-xs font-semibold text-brand-600">{item.subject.code}</p></TableCell>
                   <TableCell><p className="font-bold text-slate-800">{item.schoolClass.name}</p><p className="mt-0.5 text-xs text-slate-400">{item.schoolClass.code}</p></TableCell>
                   <TableCell><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></TableCell>
-                  <TableCell><div className="flex justify-end gap-1"><Button variant="ghost" size="sm" aria-label="Chỉnh sửa phân công" onClick={() => openEdit(item)}><Edit3 className="size-4" /></Button><Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label="Xóa phân công" onClick={() => setDeleting(item)}><Trash2 className="size-4" /></Button></div></TableCell>
+                  <TableCell><div className="flex justify-end gap-1"><Button permission="assignments.update" variant="ghost" size="sm" aria-label="Chỉnh sửa phân công" onClick={() => openEdit(item)}><Edit3 className="size-4" /></Button><Button permission="assignments.delete" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label="Xóa phân công" onClick={() => setDeleting(item)}><Trash2 className="size-4" /></Button></div></TableCell>
                 </tr>
               )) : null}
             </TableBody>
@@ -414,7 +414,7 @@ export function SubjectTeacherAssignmentPanel() {
         bodyClassName="min-h-[460px] px-6 py-6 sm:px-7"
         footerClassName="px-6 py-5 sm:px-7"
         onClose={closeAssignmentModal}
-        footer={<Button className="!h-11 !px-5" type="submit" form="subject-assignment-form" disabled={saving || !form.teacherId || !form.subjectId || !form.classId}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editing ? "Lưu thay đổi" : "Tạo phân công"}</Button>}
+        footer={<Button permission={editing ? "assignments.update" : "assignments.create"} className="!h-11 !px-5" type="submit" form="subject-assignment-form" disabled={saving || !form.teacherId || !form.subjectId || !form.classId}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editing ? "Lưu thay đổi" : "Tạo phân công"}</Button>}
       >
         <form id="subject-assignment-form" onSubmit={(event) => void handleSubmit(event)} className="grid gap-5">
           <PickerField label="Giáo viên bộ môn" value={form.teacherId} options={teacherOptions} placeholder="Chọn giáo viên bộ môn" onOpen={() => openPicker("teacher")} />

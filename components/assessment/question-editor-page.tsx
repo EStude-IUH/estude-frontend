@@ -409,7 +409,7 @@ export function QuestionEditorForm({
               >
                 Hủy
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button permission={questionId ? 'questions.update' : 'questions.create'} type="submit" disabled={saving}>
                 <Save className="size-4" />
                 {saving ? "Đang lưu..." : "Lưu câu hỏi"}
               </Button>

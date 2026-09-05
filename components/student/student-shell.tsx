@@ -10,13 +10,16 @@ import {
   BrainCircuit,
   ChevronDown,
   CircleHelp,
+  CircleUserRound,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
   Settings,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { ProfileModal } from "@/components/auth/profile-modal";
 import { useAuth } from "@/context/auth-context";
+import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
 
 interface StudentNavItem {
@@ -79,7 +82,9 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { canVisit } = usePermissions();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
@@ -123,7 +128,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
             className="hidden h-full items-center gap-1 lg:flex"
             aria-label="Điều hướng sinh viên"
           >
-            {studentNavItems.map(({ icon: Icon, label, href }) => {
+            {studentNavItems.filter((item) => !item.href || canVisit(item.href)).map(({ icon: Icon, label, href }) => {
               const active = isNavItemActive(pathname, href);
 
               return (
@@ -164,8 +169,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
                 aria-expanded={isAccountMenuOpen}
                 aria-haspopup="menu"
               >
-                <span className="grid size-9 place-items-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
-                  {initials}
+                <span className="relative grid size-9 overflow-hidden place-items-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
+                  {user.avatarUrl ? (
+                    <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
+                  ) : initials}
                 </span>
                 <span className="hidden min-w-0 text-left sm:block">
                   <span className="block max-w-40 truncate text-sm font-bold leading-5 text-slate-800">
@@ -185,6 +192,17 @@ export function StudentShell({ children }: { children: ReactNode }) {
                   role="menu"
                   className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15"
                 >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    <CircleUserRound className="size-4" /> Hồ sơ cá nhân
+                  </button>
                   <button
                     type="button"
                     role="menuitem"
@@ -234,7 +252,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
         aria-label="Điều hướng nhanh"
       >
         {studentNavItems
-          .filter((item) => item.href)
+          .filter((item) => item.href && canVisit(item.href))
           .map(({ icon: Icon, label, href }) => {
           const active = isNavItemActive(pathname, href);
 
@@ -250,6 +268,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
           );
         })}
       </nav>
+      <ProfileModal
+        open={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </div>
   );
 }

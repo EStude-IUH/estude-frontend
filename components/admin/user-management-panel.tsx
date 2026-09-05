@@ -24,11 +24,12 @@ import { useActionNotification } from "@/components/ui/action-notification";
 import type { User, UserRole, UserStatus } from "@/types/auth";
 import type { UsersPage } from "@/types/users";
 
-type ManagedRole = Extract<UserRole, "TEACHER" | "STUDENT">;
+type ManagedRole = Extract<UserRole, "TEACHER" | "STUDENT" | "PARENT">;
 
 const roleLabels: Record<ManagedRole, string> = {
   TEACHER: "Giáo viên",
   STUDENT: "Học sinh",
+  PARENT: "Phụ huynh",
 };
 
 const statusFilterOptions = [
@@ -64,6 +65,12 @@ function formatDateOnly(value?: string | null): string {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatBirthYear(value?: string | null): string {
+  if (!value) return "--";
+  const year = new Date(value).getFullYear();
+  return Number.isNaN(year) ? "--" : String(year);
 }
 
 function displayValue(value?: string | null): string {
@@ -140,6 +147,10 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
   const [fullName, setFullName] = useState("");
   const [accountName, setAccountName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [gender, setGender] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -198,6 +209,10 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
     setFullName(user.fullName);
     setAccountName(user.accountName);
     setAvatarUrl(user.avatarUrl ?? "");
+    setPhoneNumber(user.phoneNumber ?? "");
+    setEmail(user.email ?? "");
+    setGender(user.gender ?? "");
+    setBirthday(user.birthday?.slice(0, 10) ?? "");
     setEditError("");
   }
 
@@ -230,6 +245,10 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             fullName: fullName.trim(),
             accountName: accountName.trim().toLowerCase(),
             avatarUrl: avatarUrl.trim() || null,
+            phoneNumber: phoneNumber.trim() || null,
+            email: email.trim().toLowerCase() || null,
+            gender: gender || null,
+            birthday: birthday || null,
           }),
         },
       );
@@ -294,7 +313,11 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
         <div className="min-h-0 shrink overflow-auto">
           <Table
             className={`${
-              role === "STUDENT" ? "min-w-[2390px]" : "min-w-[2330px]"
+              role === "STUDENT"
+                ? "min-w-[2390px]"
+                : role === "PARENT"
+                  ? "min-w-[1850px]"
+                  : "min-w-[2330px]"
             } [&_td]:whitespace-nowrap`}
           >
             <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
@@ -302,9 +325,13 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                 <TableHead className="w-14 text-center">#</TableHead>
                 <TableHead className="min-w-[260px]">Họ và tên</TableHead>
                 <TableHead className="min-w-[170px]">Mã người dùng</TableHead>
-                <TableHead className="min-w-[130px]">Ngày sinh</TableHead>
+                <TableHead className="min-w-[130px]">
+                  {role === "PARENT" ? "Năm sinh" : "Ngày sinh"}
+                </TableHead>
                 <TableHead className="min-w-[110px]">Giới tính</TableHead>
-                <TableHead className="min-w-[180px]">Tỉnh/Thành phố</TableHead>
+                {role !== "PARENT" ? (
+                  <TableHead className="min-w-[180px]">Tỉnh/Thành phố</TableHead>
+                ) : null}
                 {role !== "STUDENT" ? (
                   <TableHead className="min-w-[240px]">Email</TableHead>
                 ) : null}
@@ -315,7 +342,9 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                     <TableHead className="min-w-[150px]">Lớp</TableHead>
                   </>
                 ) : null}
-                <TableHead className="min-w-[270px]">Lớp học phân công</TableHead>
+                {role !== "PARENT" ? (
+                  <TableHead className="min-w-[270px]">Lớp học phân công</TableHead>
+                ) : null}
                 <TableHead className="min-w-[170px]">Trạng thái</TableHead>
                 <TableHead className="min-w-[190px]">
                   Lần đăng nhập cuối
@@ -328,11 +357,13 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableLoadingBarRow colSpan={role === "STUDENT" ? 14 : 13} />
+                <TableLoadingBarRow
+                  colSpan={role === "STUDENT" ? 14 : role === "PARENT" ? 11 : 13}
+                />
               ) : null}
               {!isLoading && users.length === 0 ? (
                 <TableEmptyRow
-                  colSpan={role === "STUDENT" ? 14 : 13}
+                  colSpan={role === "STUDENT" ? 14 : role === "PARENT" ? 11 : 13}
                   message={`Không có ${roleLabels[role].toLowerCase()} phù hợp.`}
                 />
               ) : (
@@ -366,14 +397,18 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                       {user.accountName}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-slate-700">
-                      {formatDateOnly(user.birthday)}
+                      {role === "PARENT"
+                        ? formatBirthYear(user.birthday)
+                        : formatDateOnly(user.birthday)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-slate-700">
                       {formatGender(user.gender)}
                     </TableCell>
-                    <TableCell className="min-w-36 text-slate-700">
-                      {displayValue(user.provinceCity)}
-                    </TableCell>
+                    {role !== "PARENT" ? (
+                      <TableCell className="min-w-36 text-slate-700">
+                        {displayValue(user.provinceCity)}
+                      </TableCell>
+                    ) : null}
                     {role !== "STUDENT" ? (
                       <TableCell className="min-w-52 text-slate-700">
                         {displayValue(user.email)}
@@ -392,9 +427,11 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                         </TableCell>
                       </>
                     ) : null}
-                    <TableCell className="!whitespace-normal align-top">
-                      <AssignedClassesCell user={user} />
-                    </TableCell>
+                    {role !== "PARENT" ? (
+                      <TableCell className="!whitespace-normal align-top">
+                        <AssignedClassesCell user={user} />
+                      </TableCell>
+                    ) : null}
                     <TableCell>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${getStatusClass(user.status)}`}
@@ -423,7 +460,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
                         >
                           <Eye className="size-4" />
                         </Button>
-                        <Button
+                        <Button permission="accounts.update"
                           variant="ghost"
                           size="sm"
                           className="size-9 !rounded-lg px-0 text-brand-700 hover:bg-blue-50"
@@ -449,7 +486,13 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
           className="shrink-0 bg-white"
           rowCount={users.length}
           totalItems={totalUsers}
-          itemLabel={role === "TEACHER" ? "giáo viên" : "học sinh"}
+          itemLabel={
+            role === "TEACHER"
+              ? "giáo viên"
+              : role === "PARENT"
+                ? "phụ huynh"
+                : "học sinh"
+          }
           page={page}
           totalPages={totalPages}
           pageSize={limit}
@@ -621,7 +664,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
               >
                 Đóng
               </Button>
-              <Button
+              <Button permission="accounts.update"
                 className="!rounded-lg"
                 onClick={() => openEditor(viewedUser)}
               >
@@ -635,7 +678,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
       <Modal
         open={selectedUser !== null}
         title="Cập nhật thông tin người dùng"
-        description="Chỉnh sửa thông tin cơ bản của giáo viên hoặc học sinh."
+        description={`Chỉnh sửa thông tin cơ bản của ${roleLabels[role].toLowerCase()}.`}
         onClose={closeEditor}
         width="max-w-xl"
       >
@@ -678,6 +721,44 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             hint="Có thể để trống nếu chưa có ảnh đại diện."
           />
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              className="!rounded-lg"
+              label="Số điện thoại"
+              type="tel"
+              maxLength={20}
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              placeholder="Nhập số điện thoại"
+            />
+            <Input
+              className="!rounded-lg"
+              label="Email"
+              type="email"
+              maxLength={254}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Nhập email"
+            />
+            <CustomSelect
+              label="Giới tính"
+              value={gender}
+              options={[
+                { value: "", label: "Chưa cập nhật" },
+                { value: "M", label: "Nam" },
+                { value: "F", label: "Nữ" },
+              ]}
+              onValueChange={setGender}
+            />
+            <Input
+              className="!rounded-lg"
+              label="Ngày sinh"
+              type="date"
+              value={birthday}
+              onChange={(event) => setBirthday(event.target.value)}
+            />
+          </div>
+
           {selectedUser ? (
             <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
               <div>
@@ -711,7 +792,7 @@ export function UserManagementPanel({ role }: { role: ManagedRole }) {
             >
               Hủy
             </Button>
-            <Button type="submit" className="!rounded-lg" disabled={isSaving}>
+            <Button permission="accounts.update" type="submit" className="!rounded-lg" disabled={isSaving}>
               {isSaving ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : null}

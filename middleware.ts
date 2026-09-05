@@ -10,6 +10,8 @@ function withPortalHeader(request: NextRequest, portal: AuthPortal): Headers {
 }
 
 function isPortalPath(pathname: string, portal: AuthPortal): boolean {
+  // Login identity stays portal-specific. Feature access is resolved by RBAC, not the host.
+  if (/^\/(admin|teacher|student|parent)\//.test(pathname) && !pathname.endsWith('/login') && !pathname.endsWith('/forgot-password')) return true;
   if (pathname === "/dashboard") return true;
 
   if (portal === "student") {

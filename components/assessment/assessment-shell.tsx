@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  CircleUserRound,
   ClipboardCheck,
   FilePlus2,
   Library,
@@ -23,8 +24,10 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand-logo";
+import { ProfileModal } from "@/components/auth/profile-modal";
 import { StudentShell } from "@/components/student/student-shell";
 import { useAuth } from "@/context/auth-context";
+import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
 
 interface WorkspaceLink {
@@ -49,9 +52,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { canVisit } = usePermissions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,8 +181,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
               aria-haspopup="menu"
               aria-expanded={isAccountMenuOpen}
             >
-              <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
-                {initials}
+              <span className="relative grid size-10 overflow-hidden place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
+                {user?.avatarUrl ? (
+                  <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
+                ) : initials}
               </span>
               {user ? (
                 <span className="hidden md:block">
@@ -198,6 +205,17 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 role="menu"
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"
               >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    setIsProfileModalOpen(true);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <CircleUserRound className="size-4" /> Hồ sơ cá nhân
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -270,7 +288,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="mt-4 space-y-1.5" aria-label="Điều hướng khu vực">
-          {links.map(({ href, label, icon: Icon }, index) => {
+          {links.filter((link) => !link.href || canVisit(link.href)).map(({ href, label, icon: Icon }, index) => {
             const active = Boolean(href && pathname.startsWith(href));
             return (
               <div key={`${label}-${index}`}>
@@ -308,6 +326,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
+      <ProfileModal
+        open={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </div>
   );
 }

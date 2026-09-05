@@ -238,7 +238,7 @@ export function SubjectManagementPanel() {
             />
           </div>
           <div className="flex shrink-0 justify-end gap-2">
-            <Button className="!h-[42px] !rounded-lg" onClick={openCreate}>
+            <Button permission="subjects.create" className="!h-[42px] !rounded-lg" onClick={openCreate}>
               <Plus className="size-4" />
               Thêm môn học
             </Button>
@@ -307,7 +307,7 @@ export function SubjectManagementPanel() {
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
-                          <Button
+                          <Button permission="subjects.update"
                             variant="ghost"
                             size="sm"
                             aria-label={`Sửa ${getVietnameseSubjectName(subject)}`}
@@ -315,7 +315,7 @@ export function SubjectManagementPanel() {
                           >
                             <Edit3 className="size-4" />
                           </Button>
-                          <Button
+                          <Button permission="subjects.delete"
                             variant="ghost"
                             size="sm"
                             className="text-rose-600 hover:bg-rose-50"
@@ -356,7 +356,7 @@ export function SubjectManagementPanel() {
         }}
       >
         <form className="space-y-4" onSubmit={(event) => void handleImport(event)}>
-          <Button
+          <Button permission="subjects.import"
             className="w-full"
             variant="secondary"
             disabled={isDownloadingTemplate || isImporting}
@@ -435,14 +435,14 @@ export function SubjectManagementPanel() {
           ) : null}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button
+            <Button permission="subjects.import"
               variant="outline"
               disabled={isImporting}
               onClick={() => setIsImportOpen(false)}
             >
               Hủy
             </Button>
-            <Button type="submit" disabled={isImporting || !importFile}>
+            <Button permission="subjects.import" type="submit" disabled={isImporting || !importFile}>
               {isImporting ? (
                 <LoaderCircle className="size-4 animate-spin" />
               ) : (
@@ -534,6 +534,7 @@ export function SubjectManagementPanel() {
               </Button>
               <Button
                 type="submit"
+                permission={editingSubject ? 'subjects.update' : 'subjects.create'}
                 className="!rounded-lg"
                 disabled={saving}
               >

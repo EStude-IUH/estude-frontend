@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "TEACHER" | "STUDENT";
+export type UserRole = "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
 export type UserStatus = "PENDING" | "ACTIVE" | "INACTIVE" | "LOCKED";
 
 export interface AssignedClassSummary {
@@ -65,6 +65,11 @@ export interface LoginPayload {
 export interface RegisterPayload extends LoginPayload {
   fullName: string;
   confirmPassword: string;
+}
+
+export interface UpdateProfilePayload {
+  email: string | null;
+  phoneNumber: string | null;
 }
 
 export interface ApiEnvelope<T> {

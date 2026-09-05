@@ -1,4 +1,6 @@
+"use client";
 import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { usePermissions } from "@/context/permissions-context";
 import { cn } from "@/lib/cn";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -20,13 +22,16 @@ const sizes: Record<ButtonSize, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  permission?: string;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { className, variant = "primary", size = "md", type = "button", ...props },
+    { className, variant = "primary", size = "md", type = "button", permission, ...props },
     ref,
   ) {
+    const { can } = usePermissions();
+    if (permission && !can(permission)) return null;
     return (
       <button
         ref={ref}

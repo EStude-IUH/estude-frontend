@@ -6,6 +6,7 @@ import type {
   LoginPayload,
   LoginSessionInfo,
   RegisterPayload,
+  UpdateProfilePayload,
   User,
 } from "@/types/auth";
 import { getCurrentPortal } from "@/lib/portal";
@@ -269,6 +270,29 @@ export const authApi = {
 
   me(): Promise<User> {
     return authenticatedRequest<User>("/auth/me");
+  },
+
+  updateProfile(payload: UpdateProfilePayload): Promise<User> {
+    return authenticatedRequest<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateAvatar(file: File): Promise<User> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return authenticatedUploadRequest<User>(
+      "/auth/profile/avatar",
+      formData,
+      () => undefined,
+    );
+  },
+
+  removeAvatar(): Promise<User> {
+    return authenticatedRequest<User>("/auth/profile/avatar", {
+      method: "DELETE",
+    });
   },
 
   async logout(): Promise<Record<string, never>> {

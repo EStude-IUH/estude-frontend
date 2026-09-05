@@ -49,6 +49,9 @@ import { TeacherClassLearningSpace } from "@/components/teacher/class-learning-s
 import { TeacherMaterialLibraryPanel } from "@/components/teacher/material-library-panel";
 import { TeacherStudentsPanel } from "@/components/teacher/students-panel";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
+import { ProfileModal } from "@/components/auth/profile-modal";
+import { PermissionsPanel } from "@/components/admin/permissions-panel";
+import { usePermissions } from "@/context/permissions-context";
 import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
@@ -70,6 +73,7 @@ const staffNavItems = [
 ];
 
 const settingsSubItems = [
+  { label: "Phân quyền động", href: "/admin/settings/permissions", section: "permissions" },
   {
     label: "Điểm danh GPS/QR",
     href: "/admin/settings/attendance",
@@ -103,7 +107,7 @@ const settingsSubItems = [
 ] satisfies Array<{
   label: string;
   href: string;
-  section: SystemSettingsSection;
+  section: SystemSettingsSection | "permissions";
 }>;
 
 const managedCourses = [
@@ -136,6 +140,7 @@ const managedCourses = [
 const userSubItems = [
   { label: "Giáo viên", href: "/admin/users/teachers", role: "TEACHER" },
   { label: "Học sinh", href: "/admin/users/students", role: "STUDENT" },
+  { label: "Phụ huynh", href: "/admin/users/parents", role: "PARENT" },
 ] as const;
 
 const upcomingWork = [
@@ -184,6 +189,7 @@ export function StaffDashboardView() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { canVisit } = usePermissions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(
@@ -193,6 +199,7 @@ export function StaffDashboardView() {
     pathname.startsWith("/admin/users"),
   );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [studentDetailName, setStudentDetailName] = useState("");
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -257,8 +264,7 @@ export function StaffDashboardView() {
       label: user.role === "TEACHER" ? "Lịch học" : "Tổng quan",
       href: dashboardPath,
     },
-    ...(user.role === "ADMIN"
-      ? [
+    ...[
           {
             icon: CircleUserRound,
             label: "Tài khoản",
@@ -289,10 +295,9 @@ export function StaffDashboardView() {
             label: "Phân công giáo viên môn học",
             href: "/admin/subject-assignments",
           },
-        ]
-      : []),
-    ...(user.role === "TEACHER" ? staffNavItems : []),
-  ];
+        ],
+    ...staffNavItems,
+  ].filter((item) => canVisit(item.href));
   const isAccountsPage = pathname === "/admin/accounts";
   const isUsersPage = pathname.startsWith("/admin/users");
   const adminStudentDetailId =
@@ -304,9 +309,11 @@ export function StaffDashboardView() {
   const studentDetailBackHref = isTeacherStudentDetailPage
     ? "/teacher/students"
     : "/admin/users/students";
-  const usersRole = pathname.startsWith("/admin/users/students")
-    ? "STUDENT"
-    : "TEACHER";
+  const usersRole = pathname.startsWith("/admin/users/parents")
+    ? "PARENT"
+    : pathname.startsWith("/admin/users/students")
+      ? "STUDENT"
+      : "TEACHER";
   const isAcademicDataPage = pathname === "/admin/academic-data";
   const isSubjectsPage = pathname === "/admin/subjects";
   const isClassesPage = pathname === "/admin/classes";
@@ -407,8 +414,10 @@ export function StaffDashboardView() {
                 aria-haspopup="menu"
                 aria-expanded={isAccountMenuOpen}
               >
-                <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
-                  {initials}
+                <span className="relative grid size-10 overflow-hidden place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
+                  {user.avatarUrl ? (
+                    <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
+                  ) : initials}
                 </span>
                 <span className="hidden md:block">
                   <span className="block max-w-44 truncate text-sm font-bold text-slate-900">
@@ -430,6 +439,17 @@ export function StaffDashboardView() {
                   role="menu"
                   className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/15"
                 >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
+                  >
+                    <CircleUserRound className="size-4" /> Hồ sơ cá nhân
+                  </button>
                   <button
                     type="button"
                     role="menuitem"
@@ -561,7 +581,7 @@ export function StaffDashboardView() {
                     </button>
                     {isUsersMenuOpen && !isSidebarCollapsed ? (
                       <div className="relative ml-5 mt-1 space-y-1 pl-3 before:absolute before:bottom-3 before:left-0 before:top-0 before:w-px before:rounded-full before:bg-blue-100">
-                        {userSubItems.map((item) => {
+                        {userSubItems.filter((item) => canVisit(item.href)).map((item) => {
                           const active = pathname.startsWith(item.href);
                           return (
                             <button
@@ -612,13 +632,13 @@ export function StaffDashboardView() {
                 </button>
               );
             })}
-            {user.role === "ADMIN" ? (
+            {settingsSubItems.some((item) => canVisit(item.href)) ? (
               <div>
                 <button
                   type="button"
                   onClick={() => {
                     if (!isSettingsPage) {
-                      router.push("/admin/settings/attendance");
+                      router.push(settingsSubItems.find((item) => canVisit(item.href))!.href);
                     } else {
                       setIsSettingsMenuOpen((current) => !current);
                     }
@@ -641,7 +661,7 @@ export function StaffDashboardView() {
                 </button>
                 {isSettingsMenuOpen && !isSidebarCollapsed ? (
                   <div className="relative ml-5 mt-1 space-y-1 pl-3 before:absolute before:bottom-3 before:left-0 before:top-0 before:w-px before:rounded-full before:bg-blue-100">
-                    {settingsSubItems.map((item) => {
+                    {settingsSubItems.filter((item) => canVisit(item.href)).map((item) => {
                       const active = pathname === item.href;
                       return (
                         <button
@@ -708,10 +728,12 @@ export function StaffDashboardView() {
               <TeacherMaterialLibraryPanel />
             ) : isSubjectAssignmentsPage ? (
               <SubjectTeacherAssignmentPanel />
-            ) : settingsSection === "ai-question" ? (
+            ) : isSettingsPage && settingsSection === "permissions" ? (
+              <PermissionsPanel />
+            ) : isSettingsPage && settingsSection === "ai-question" ? (
               <AiDifficultySettingsPanel />
             ) : isSettingsPage ? (
-              <SystemSettingsPanel section={settingsSection} />
+              <SystemSettingsPanel section={settingsSection as SystemSettingsSection} />
             ) : isSubjectsPage ? (
               <SubjectManagementPanel />
             ) : isClassesPage ? (
@@ -732,7 +754,7 @@ export function StaffDashboardView() {
                 <UserManagementPanel role={usersRole} />
               )
             ) : pathname.endsWith("/dashboard") ? (
-              user.role === "TEACHER" ? (
+              pathname === "/teacher/dashboard" ? (
                 <WeeklyTimetable />
               ) : (
                 <OverviewDashboard user={user} />
@@ -979,6 +1001,10 @@ export function StaffDashboardView() {
             )}
           </div>
         </main>
+        <ProfileModal
+          open={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
       </div>
     </ActionNotificationProvider>
   );

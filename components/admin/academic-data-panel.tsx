@@ -278,7 +278,7 @@ export function AcademicDataPanel() {
         title={editingYear ? "Chỉnh sửa năm học" : "Thêm năm học"}
         onClose={() => setYearModalOpen(false)}
         footer={
-          <Button type="submit" form="year-form" disabled={saving}>
+          <Button permission={editingYear ? 'academic.update' : 'academic.create'} type="submit" form="year-form" disabled={saving}>
             {editingYear ? "Lưu thay đổi" : "Thêm năm học"}
           </Button>
         }
@@ -340,6 +340,7 @@ export function AcademicDataPanel() {
           <Button
             type="submit"
             form="term-form"
+            permission={editingTerm ? 'academic.update' : 'academic.create'}
             disabled={saving || editingTerm?.status === "LOCKED"}
           >
             {editingTerm ? "Lưu thay đổi" : "Thêm học kỳ"}
@@ -618,7 +619,7 @@ function GradeComponentConfiguration({
           </b>
         </span>
         <div className="flex gap-2">
-          <Button
+          <Button permission="academic.update"
             variant="outline"
             size="sm"
             disabled={!subjectId || saving}
@@ -626,7 +627,7 @@ function GradeComponentConfiguration({
           >
             Kiểm tra 100%
           </Button>
-          <Button
+          <Button permission="academic.create"
             size="sm"
             disabled={!subjectId}
             onClick={() => {
@@ -701,14 +702,14 @@ function GradeComponentConfiguration({
                       )}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <Button
+                      <Button permission="academic.update"
                         variant="ghost"
                         size="sm"
                         onClick={() => edit(item)}
                       >
                         <Edit3 className="size-4" />
                       </Button>
-                      <Button
+                      <Button permission="academic.delete"
                         variant="ghost"
                         size="sm"
                         className="text-rose-600 hover:bg-rose-50"
@@ -730,7 +731,7 @@ function GradeComponentConfiguration({
         onClose={() => setModalOpen(false)}
         width="max-w-2xl"
         footer={
-          <Button type="submit" form="component-form" disabled={saving}>
+          <Button permission={editing ? 'academic.update' : 'academic.create'} type="submit" form="component-form" disabled={saving}>
             {editing ? "Lưu thay đổi" : "Thêm thành phần"}
           </Button>
         }
@@ -851,7 +852,7 @@ function Header({
         <h2 className="font-black">{title}</h2>
         <p className="mt-1 text-xs text-slate-500">{description}</p>
       </div>
-      <Button size="sm" onClick={onAdd}>
+      <Button permission="academic.create" size="sm" onClick={onAdd}>
         <Plus className="size-4" />
         Thêm
       </Button>
@@ -867,10 +868,10 @@ function Actions({
 }) {
   return (
     <div className="flex gap-1">
-      <Button variant="ghost" size="sm" aria-label="Chỉnh sửa" onClick={onEdit}>
+      <Button permission="academic.update" variant="ghost" size="sm" aria-label="Chỉnh sửa" onClick={onEdit}>
         <Edit3 className="size-4" />
       </Button>
-      <Button
+      <Button permission="academic.delete"
         variant="ghost"
         size="sm"
         className="text-rose-600 hover:bg-rose-50"
