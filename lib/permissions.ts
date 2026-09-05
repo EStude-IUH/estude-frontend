@@ -21,6 +21,11 @@ export const MODULE_LINKS = [
     permission: "accounts.read",
   },
   {
+    href: "/admin/parent-student-links",
+    label: "Liên kết phụ huynh – học sinh",
+    permission: "parent_links.read",
+  },
+  {
     href: "/admin/academic-data",
     label: "Dữ liệu học vụ",
     permission: "academic.read",

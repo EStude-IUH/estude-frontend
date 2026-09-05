@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link2, LoaderCircle, Search, Unlink, UserRoundCheck, UsersRound } from "lucide-react";
+import { Link2, LoaderCircle, Search, Unlink, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { DataTableFooter } from "@/components/ui/data-table-footer";
@@ -10,19 +10,7 @@ import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader, Tab
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
 import { useActionNotification } from "@/components/ui/action-notification";
 import type { User } from "@/types/auth";
-import type { UsersPage } from "@/types/users";
-
-interface ParentStudentLink {
-  id: string;
-  parent: User;
-  student: User;
-  createdAt: string;
-}
-
-interface ParentStudentLinksPage {
-  items: ParentStudentLink[];
-  meta: { page: number; limit: number; total: number; totalPages: number };
-}
+import type { ParentStudentLink, ParentStudentLinksPage, UsersPage } from "@/types/users";
 
 function errorMessage(error: unknown, fallback: string) {
   if (!(error instanceof ApiError)) return fallback;
@@ -55,6 +43,25 @@ function UserLookup({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const requestId = useRef(0);
+  const lookupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!lookupRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -76,7 +83,7 @@ function UserLookup({
   }, [open, query, role]);
 
   return (
-    <div className="relative">
+    <div ref={lookupRef} className="relative">
       <label className="mb-2 block text-sm font-bold text-slate-700">{label}</label>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
@@ -87,7 +94,7 @@ function UserLookup({
           placeholder={`Tìm ${role === "PARENT" ? "phụ huynh" : "học sinh"} theo tên hoặc tài khoản`}
           className="h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-9 text-sm text-slate-800 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-blue-100"
         />
-        {value ? <button type="button" aria-label={`Bỏ chọn ${label.toLowerCase()}`} onClick={() => { onChange(null); setQuery(""); }} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button> : null}
+        {value ? <button type="button" aria-label={`Bỏ chọn ${label.toLowerCase()}`} onClick={() => { onChange(null); setQuery(""); setOpen(false); }} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button> : null}
       </div>
       {open ? (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
@@ -148,9 +155,9 @@ export function ParentStudentLinksPanel() {
     try {
       await authenticatedRequest<User[]>(`/users/${encodeURIComponent(parent.id)}/children/${encodeURIComponent(student.id)}`, { method: "POST" });
       notify("Đã liên kết phụ huynh với học sinh", { key: "parent-student-link-created" });
-      setPage(1);
       setStudent(null);
-      await loadLinks();
+      if (page === 1) await loadLinks();
+      else setPage(1);
     } catch (cause) {
       setError(errorMessage(cause, "Không thể tạo liên kết"));
     } finally {
@@ -176,30 +183,127 @@ export function ParentStudentLinksPanel() {
   }
 
   return (
-    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3"><span className="grid size-11 place-items-center rounded-xl bg-blue-50 text-brand-700"><Link2 className="size-5" /></span><div><h1 className="text-xl font-black text-slate-950">Liên kết phụ huynh – học sinh</h1><p className="mt-1 text-sm leading-6 text-slate-500">Quản lý quan hệ để phụ huynh chỉ xem được thông tin của học sinh đã được nhà trường xác nhận.</p></div></div>
-          <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600"><UsersRound className="size-4" /> {total} liên kết</span>
+    <div className="w-full">
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+          <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-2">
+            <UserLookup label="Phụ huynh" role="PARENT" value={parent} onChange={setParent} />
+            <UserLookup label="Học sinh" role="STUDENT" value={student} onChange={setStudent} />
+          </div>
+          <Button
+            permission="parent_links.assign"
+            className="h-[42px] shrink-0 !rounded-lg"
+            disabled={!parent || !student || linking}
+            onClick={() => void createLink()}
+          >
+            <Link2 className="size-4" />
+            {linking ? "Đang liên kết" : "Tạo liên kết"}
+          </Button>
         </div>
-        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
-          <UserLookup label="Phụ huynh" role="PARENT" value={parent} onChange={setParent} />
-          <UserLookup label="Học sinh" role="STUDENT" value={student} onChange={setStudent} />
-          <Button permission="parent_links.assign" disabled={!parent || !student || linking} onClick={() => void createLink()} className="h-11"><Link2 className="size-4" /> {linking ? "Đang liên kết" : "Tạo liên kết"}</Button>
-        </div>
-        {error ? <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p> : null}
-      </section>
+        {error ? (
+          <p className="mt-2 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
+            {error}
+          </p>
+        ) : null}
+      </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
-        <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-black">Danh sách liên kết</h2><p className="mt-1 text-sm text-slate-500">Tìm theo tên hoặc tên tài khoản của phụ huynh, học sinh.</p></div><DebouncedSearchInput value={search} onValueChange={setSearch} onSearch={(value) => { setSubmittedSearch(value); setPage(1); }} placeholder="Tìm phụ huynh hoặc học sinh" className="w-full sm:w-80" /></div>
-        <div className="overflow-x-auto"><Table><TableHeader><tr><TableHead>Phụ huynh</TableHead><TableHead>Học sinh</TableHead><TableHead>Lớp học</TableHead><TableHead>Ngày liên kết</TableHead><TableHead className="text-right">Thao tác</TableHead></tr></TableHeader><TableBody>
-          {loading ? <TableLoadingBarRow colSpan={5} /> : null}
-          {!loading && !links.length ? <TableEmptyRow colSpan={5} message="Chưa có liên kết phù hợp." /> : null}
-          {!loading && links.map((link) => <tr key={link.id}><TableCell><p className="font-bold text-slate-800">{link.parent.fullName}</p><p className="mt-0.5 text-xs text-slate-500">{link.parent.accountName}</p></TableCell><TableCell><p className="font-bold text-slate-800">{link.student.fullName}</p><p className="mt-0.5 text-xs text-slate-500">{link.student.accountName}</p></TableCell><TableCell className="text-sm text-slate-600">{classLabel(link.student)}</TableCell><TableCell className="text-sm text-slate-600">{formatDate(link.createdAt)}</TableCell><TableCell className="text-right"><Button permission="parent_links.delete" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" disabled={Boolean(removingId)} onClick={() => setRemoving(link)}>{removingId === link.id ? <LoaderCircle className="size-4 animate-spin" /> : <Unlink className="size-4" />} Hủy liên kết</Button></TableCell></tr>)}
-        </TableBody></Table></div>
-        <DataTableFooter rowCount={links.length} totalItems={total} itemLabel="liên kết" page={page} totalPages={totalPages} pageSize={limit} onPageChange={setPage} onPageSizeChange={(value) => { setLimit(value); setPage(1); }} />
+      <section className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 place-items-center rounded-lg bg-blue-50 text-brand-700">
+              <UsersRound className="size-5" />
+            </span>
+            <div>
+              <h1 className="font-black text-slate-950">Danh sách liên kết phụ huynh – học sinh</h1>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Quản lý quan hệ đã được nhà trường xác nhận · {total} liên kết
+              </p>
+            </div>
+          </div>
+          <DebouncedSearchInput
+            value={search}
+            onValueChange={setSearch}
+            onSearch={(value) => {
+              setSubmittedSearch(value);
+              setPage(1);
+            }}
+            placeholder="Tìm phụ huynh hoặc học sinh"
+            className="w-full lg:w-80"
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[880px]">
+            <TableHeader className="!bg-brand-600 !text-white">
+              <tr>
+                <TableHead>Phụ huynh</TableHead>
+                <TableHead>Học sinh</TableHead>
+                <TableHead>Lớp học</TableHead>
+                <TableHead>Ngày liên kết</TableHead>
+                <TableHead className="text-right">Thao tác</TableHead>
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {loading ? <TableLoadingBarRow colSpan={5} /> : null}
+              {!loading && !links.length ? (
+                <TableEmptyRow colSpan={5} message="Chưa có liên kết phù hợp." />
+              ) : null}
+              {!loading
+                ? links.map((link) => (
+                    <tr key={link.id} className="transition hover:bg-slate-50/70">
+                      <TableCell>
+                        <p className="font-bold text-slate-900">{link.parent.fullName}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{link.parent.accountName}</p>
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-bold text-slate-900">{link.student.fullName}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{link.student.accountName}</p>
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-600">{classLabel(link.student)}</TableCell>
+                      <TableCell className="text-sm text-slate-600">{formatDate(link.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          permission="parent_links.delete"
+                          variant="ghost"
+                          size="sm"
+                          className="text-rose-600 hover:bg-rose-50"
+                          disabled={Boolean(removingId)}
+                          onClick={() => setRemoving(link)}
+                        >
+                          {removingId === link.id ? <LoaderCircle className="size-4 animate-spin" /> : <Unlink className="size-4" />}
+                          Hủy liên kết
+                        </Button>
+                      </TableCell>
+                    </tr>
+                  ))
+                : null}
+            </TableBody>
+          </Table>
+        </div>
+        <DataTableFooter
+          rowCount={links.length}
+          totalItems={total}
+          itemLabel="liên kết"
+          page={page}
+          totalPages={totalPages}
+          pageSize={limit}
+          onPageChange={setPage}
+          onPageSizeChange={(value) => {
+            setLimit(value);
+            setPage(1);
+          }}
+        />
       </section>
-      <ConfirmationDialog open={Boolean(removing)} title="Hủy liên kết phụ huynh – học sinh?" confirmLabel="Hủy liên kết" tone="danger" loading={Boolean(removingId)} onClose={() => !removingId && setRemoving(null)} onConfirm={() => void removeLink()}>Phụ huynh <strong>{removing?.parent.fullName}</strong> sẽ không còn xem được thông tin của học sinh <strong>{removing?.student.fullName}</strong>.</ConfirmationDialog>
+      <ConfirmationDialog
+        open={Boolean(removing)}
+        title="Hủy liên kết phụ huynh – học sinh?"
+        confirmLabel="Hủy liên kết"
+        confirmVariant="danger"
+        loading={Boolean(removingId)}
+        onClose={() => !removingId && setRemoving(null)}
+        onConfirm={() => void removeLink()}
+      >
+        Phụ huynh <strong>{removing?.parent.fullName}</strong> sẽ không còn xem được thông tin của học sinh <strong>{removing?.student.fullName}</strong>.
+      </ConfirmationDialog>
     </div>
   );
 }

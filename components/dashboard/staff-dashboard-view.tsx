@@ -44,6 +44,7 @@ import {
   type SystemSettingsSection,
 } from "@/components/admin/system-settings-panel";
 import { SubjectTeacherAssignmentPanel } from "@/components/admin/subject-teacher-assignment-panel";
+import { ParentStudentLinksPanel } from "@/components/admin/parent-student-links-panel";
 import { TeacherAssignedClassesPanel } from "@/components/teacher/assigned-classes-panel";
 import { TeacherClassLearningSpace } from "@/components/teacher/class-learning-space";
 import { TeacherMaterialLibraryPanel } from "@/components/teacher/material-library-panel";
@@ -276,6 +277,11 @@ export function StaffDashboardView() {
             href: "/admin/users",
           },
           {
+            icon: UserRoundPlus,
+            label: "Liên kết phụ huynh",
+            href: "/admin/parent-student-links",
+          },
+          {
             icon: BookOpenCheck,
             label: "Dữ liệu học vụ",
             href: "/admin/academic-data",
@@ -318,6 +324,7 @@ export function StaffDashboardView() {
   const isSubjectsPage = pathname === "/admin/subjects";
   const isClassesPage = pathname === "/admin/classes";
   const isSubjectAssignmentsPage = pathname === "/admin/subject-assignments";
+  const isParentStudentLinksPage = pathname === "/admin/parent-student-links";
   const isTeacherDashboard =
     user.role === "TEACHER" && pathname === "/teacher/dashboard";
   const isTeacherClassesPage = pathname === "/teacher/classes";
@@ -700,6 +707,7 @@ export function StaffDashboardView() {
               isSubjectsPage ||
               isClassesPage ||
               isSubjectAssignmentsPage ||
+              isParentStudentLinksPage ||
               isSettingsPage ||
               isTeacherDashboard ||
               isTeacherClassesPage ||
@@ -728,6 +736,8 @@ export function StaffDashboardView() {
               <TeacherMaterialLibraryPanel />
             ) : isSubjectAssignmentsPage ? (
               <SubjectTeacherAssignmentPanel />
+            ) : isParentStudentLinksPage ? (
+              <ParentStudentLinksPanel />
             ) : isSettingsPage && settingsSection === "permissions" ? (
               <PermissionsPanel />
             ) : isSettingsPage && settingsSection === "ai-question" ? (
