@@ -10,6 +10,18 @@ export interface UsersPage {
   };
 }
 
+export interface ParentStudentLink {
+  id: string;
+  parent: User;
+  student: User;
+  createdAt: string;
+}
+
+export interface ParentStudentLinksPage {
+  items: ParentStudentLink[];
+  meta: UsersPage["meta"];
+}
+
 export interface ImportUserError {
   row: number;
   accountName?: string;

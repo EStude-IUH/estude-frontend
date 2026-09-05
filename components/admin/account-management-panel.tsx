@@ -79,10 +79,7 @@ const importRoleOptions = [
   { value: "PARENT", label: "Phụ huynh" },
 ];
 
-const createRoleOptions = [
-  ...importRoleOptions,
-  { value: "PARENT", label: "Phụ huynh" },
-];
+const createRoleOptions = importRoleOptions;
 
 function formatDate(value: string | null): string {
   if (!value) return "--";
@@ -127,7 +124,6 @@ export function AccountManagementPanel() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editFullName, setEditFullName] = useState("");
   const [editAccountName, setEditAccountName] = useState("");
-  const [editAvatarUrl, setEditAvatarUrl] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
   const [parentChildren, setParentChildren] = useState<User[]>([]);
@@ -149,7 +145,6 @@ export function AccountManagementPanel() {
 
   const [newFullName, setNewFullName] = useState("");
   const [newAccountName, setNewAccountName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<CreateRole>("TEACHER");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -322,14 +317,11 @@ export function AccountManagementPanel() {
         body: JSON.stringify({
           fullName: newFullName,
           accountName: newAccountName,
-          password: newPassword,
-          confirmPassword: newPassword,
           role: newRole,
         }),
       });
       setNewFullName("");
       setNewAccountName("");
-      setNewPassword("");
       setIsCreateOpen(false);
       notify("Đã tạo tài khoản mới", { key: "account-created" });
       setPage(1);
@@ -370,7 +362,6 @@ export function AccountManagementPanel() {
     setEditingUser(user);
     setEditFullName(user.fullName);
     setEditAccountName(user.accountName);
-    setEditAvatarUrl(user.avatarUrl ?? "");
     setEditError("");
     setParentChildren([]);
     setStudentCandidates([]);
@@ -458,7 +449,6 @@ export function AccountManagementPanel() {
           body: JSON.stringify({
             fullName: editFullName.trim(),
             accountName: editAccountName.trim().toLowerCase(),
-            avatarUrl: editAvatarUrl.trim() || null,
           }),
         },
       );
@@ -765,16 +755,6 @@ export function AccountManagementPanel() {
             />
           </div>
 
-          <Input
-            className="!rounded-lg"
-            label="Ảnh đại diện"
-            type="url"
-            maxLength={2048}
-            value={editAvatarUrl}
-            onChange={(event) => setEditAvatarUrl(event.target.value)}
-            placeholder="https://..."
-            hint="Có thể để trống nếu tài khoản chưa có ảnh đại diện."
-          />
 
           {editingUser ? (
             <div className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
@@ -1007,19 +987,12 @@ export function AccountManagementPanel() {
             options={createRoleOptions}
             onValueChange={(value) => setNewRole(value as CreateRole)}
           />
-          <Input
-            icon={KeyRound}
-            className="!rounded-lg"
-            label="Mật khẩu mặc định"
-            hint="Tạm thời không yêu cầu độ mạnh, chỉ cần không để trống."
-            type="password"
-            required
-            minLength={1}
-            maxLength={128}
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            autoComplete="new-password"
-          />
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+            <p className="flex items-center gap-2 font-semibold"><KeyRound className="size-4" /> Mật khẩu mặc định</p>
+            <p className="mt-1" aria-live="polite">
+              Tự động sử dụng mật khẩu mặc định của vai trò {roleLabels[newRole].toLowerCase()} đã thiết lập trong Cấu hình hệ thống. Bạn không cần nhập mật khẩu tại đây.
+            </p>
+          </div>
           {createError ? (
             <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">
               {createError}

@@ -472,8 +472,8 @@ export const examAttemptService = {
   getStudyPracticeHint(
     practiceSetId: string,
     questionId: string,
-  ): Promise<{ questionId: string; optionLabel: string; message: string }> {
-    return authenticatedRequest<{ questionId: string; optionLabel: string; message: string }>(
+  ): Promise<{ questionId: string; message: string }> {
+    return authenticatedRequest<{ questionId: string; message: string }>(
       `/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`,
     );
   },

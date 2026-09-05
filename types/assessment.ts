@@ -32,6 +32,9 @@ export interface Question {
 export interface QuestionSource {
   documentName: string;
   page: number;
+  excerpt?: string;
+  learningObjective?: string;
+  verification?: "AI_REVIEWED" | "TEACHER_EDITED";
 }
 
 export type GeneratedQuestionStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -52,6 +55,7 @@ export interface GenerateAiQuestionsInput {
   subjectId?: string;
   topicId?: string;
   sourceFocus?: string;
+  learningObjective?: string;
   questionType: Extract<QuestionType, "SINGLE_CHOICE" | "TRUE_FALSE">;
   difficulty: Difficulty;
   quantity: number;
@@ -494,7 +498,19 @@ export interface ExamAttempt {
   examCode: string | null;
 }
 
-export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE";
+export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
+
+export interface StudyLearningProfile {
+  topicName: string;
+  masteryEstimate: number;
+  sampleSize: number;
+  previousAccuracy: number | null;
+  trend: "INSUFFICIENT_DATA" | "IMPROVING" | "DECLINING" | "STABLE";
+  evidenceLevel: "LIMITED" | "DEVELOPING" | "ESTABLISHED";
+  recurringMistakes: number;
+  recommendedDifficulty: Difficulty;
+  recommendation: string;
+}
 
 export interface StudyTopicPerformance {
   topicName: string;
@@ -540,6 +556,9 @@ export interface StudyLearningPath {
 }
 
 export interface StudyAnalysisReport {
+  version?: number;
+  learningProfile?: StudyLearningProfile[];
+  historyAnalysisCount?: number;
   aiStatus: "READY" | "FALLBACK";
   summary: string;
   exam: {
@@ -579,6 +598,15 @@ export interface StudyPracticeQuestion {
 }
 
 export interface StudyPracticeSet {
+  feedback?: Array<{
+    topicName: string;
+    accuracy: number;
+    correctCount: number;
+    totalQuestions: number;
+    reviewAfterDays: number;
+    reviewAt: string;
+    recommendation: string;
+  }>;
   id: string;
   analysisId: string;
   status: "READY" | "SUBMITTED";

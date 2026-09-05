@@ -39,6 +39,11 @@ const sourceMeta: Record<
   StudySourceType,
   { label: string; description: string; tone: string }
 > = {
+  SOURCE_UNAVAILABLE: {
+    label: "Chưa kiểm tra được nguồn",
+    description: "Tài liệu chưa truy xuất được; chưa đủ căn cứ để kết luận nội dung nằm ngoài tài liệu.",
+    tone: "bg-slate-100 text-slate-700",
+  },
   COURSE_MATERIAL: {
     label: "Trong tài liệu môn học",
     description: "Được đối chiếu với tài liệu giáo viên đã gán cho lớp.",
@@ -191,7 +196,22 @@ export function StudentStudyAnalysisPage() {
       );
       setHints((current) => ({ ...current, [questionId]: hint.message }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể lấy gợi ý đáp án");
+      setError(cause instanceof Error ? cause.message : "Không thể lấy gợi ý cách giải");
+    }
+  }
+
+  async function retryAnalysis() {
+    setGenerating(true);
+    setError("");
+    try {
+      const updated = await examAttemptService.createStudyAnalysis(params.id);
+      setAnalysis(updated);
+      setAnswers({});
+      setHints({});
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Chưa thể tạo lại nội dung ôn tập");
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -319,14 +339,33 @@ export function StudentStudyAnalysisPage() {
           <CircleAlert className="mt-0.5 size-5 shrink-0" />
           <p>
             Hiện AI chưa tạo được phần tổng hợp chi tiết. Thống kê chủ đề và
-            nguồn tài liệu vẫn được giữ nguyên; bộ câu hỏi ôn tập sẽ xuất hiện
-            khi dịch vụ AI hoạt động lại.
+            dữ liệu đã thu thập vẫn được giữ nguyên. Bạn có thể ôn theo lộ trình
+            và các nguồn đã đối chiếu; chưa có bộ câu hỏi AI đạt kiểm tra chất lượng.
           </p>
+          <Button variant="ghost" disabled={generating} onClick={() => void retryAnalysis()}>
+            {generating ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} Thử lại AI
+          </Button>
         </div>
       ) : null}
 
       {activeTab === "theory" ? (
         <>
+          {report.learningProfile?.length ? (
+            <section className="mt-5 rounded-2xl border border-blue-100 bg-white p-5 shadow-card">
+              <h2 className="font-black">Hồ sơ học tập cá nhân</h2>
+              <p className="mt-1 text-sm text-slate-500">Dựa trên bài này và {report.historyAnalysisCount ?? 0} bài đã được phân tích trước đó cùng môn/lớp. Mức nắm vững là ước lượng để chọn bài ôn, không phải điểm kiểm tra.</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {report.learningProfile.map((topic) => (
+                  <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
+                    <div className="flex justify-between gap-3"><h3 className="font-bold">{topic.topicName}</h3><span className="font-bold text-blue-700">{topic.masteryEstimate}%</span></div>
+                    <p className="mt-2 text-xs text-slate-500">{topic.sampleSize} câu quan sát · {topic.evidenceLevel === "LIMITED" ? "Cần thêm dữ liệu" : topic.trend === "IMPROVING" ? "Đang tiến bộ" : topic.trend === "DECLINING" ? "Cần củng cố lại" : topic.trend === "STABLE" ? "Tương đối ổn định" : "Chưa đủ dữ liệu so sánh"}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{topic.recommendation}</p>
+                    <p className="mt-2 text-xs font-semibold text-blue-700">Mức luyện đề xuất: {topic.recommendedDifficulty === "EASY" ? "Nền tảng" : topic.recommendedDifficulty === "MEDIUM" ? "Vận dụng" : "Nâng cao"}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           <LearningPathSection learningPath={report.learningPath} />
 
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
@@ -594,6 +633,17 @@ function PracticeSection({
   const currentQuestion = practice.questions[index];
   return (
     <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
+      {submitted && practice.feedback?.length ? (
+        <div className="mb-5 space-y-3 rounded-xl bg-emerald-50 p-4">
+          <h3 className="font-black text-emerald-900">Bước học tiếp theo</h3>
+          {practice.feedback.map((item) => (
+            <div key={item.topicName} className="text-sm leading-6 text-emerald-900">
+              <p className="font-bold">{item.topicName}: {item.correctCount}/{item.totalQuestions} câu đúng · Ôn lại ngày {new Date(item.reviewAt).toLocaleDateString("vi-VN")}</p>
+              <p>{item.recommendation}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-violet-700">
@@ -661,7 +711,7 @@ function PracticeSection({
                 <CircleHelp className="size-5" /> Dễ · học có hướng dẫn
               </div>
               <p className="mt-1.5 text-sm leading-5 text-slate-600">
-                Có nút gợi ý đáp án. Bạn có thể làm lại đến khi trả lời đúng tất cả câu hỏi.
+                Có gợi ý cách giải để bạn tự suy luận. Bạn có thể làm lại để củng cố kiến thức.
               </p>
             </button>
             <button
@@ -787,7 +837,7 @@ function PracticeSection({
                     className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
                     onClick={() => onGetHint(question.id)}
                   >
-                    <Lightbulb className="size-3.5" /> Gợi ý đáp án
+                    <Lightbulb className="size-3.5" /> Gợi ý cách giải
                   </Button>
                 )}
               </div>
@@ -901,7 +951,7 @@ function PracticeQuestionRunner({
                   className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
                   onClick={() => onGetHint(question.id)}
                 >
-                  <Lightbulb className="size-3.5" /> Gợi ý đáp án
+                  <Lightbulb className="size-3.5" /> Gợi ý cách giải
                 </Button>
               )}
             </div>

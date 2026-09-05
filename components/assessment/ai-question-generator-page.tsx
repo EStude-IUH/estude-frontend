@@ -331,6 +331,16 @@ export function AiQuestionGeneratorPage() {
                 placeholder="Ví dụ: Chuẩn hóa dữ liệu, chương 3, Linked List..."
               />
             </Field>
+            <Field label="Mục tiêu học tập (không bắt buộc)">
+              <Textarea
+                value={form.learningObjective ?? ""}
+                onChange={(event) => update("learningObjective", event.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="Ví dụ: Sinh viên phân biệt các dạng chuẩn và áp dụng chuẩn hóa vào một bảng dữ liệu thực tế."
+              />
+              <p className="mt-1 text-xs leading-5 text-slate-500">AI kiểm tra dẫn chứng, đáp án và câu trùng trước khi trả kết quả. Giáo viên duyệt trước khi đưa vào ngân hàng.</p>
+            </Field>
             <div className="grid gap-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Môn học (không bắt buộc)">
@@ -792,6 +802,14 @@ function GeneratedQuestionCard({
           {statusLabel}
         </span>
       </header>
+      {question.source.excerpt ? (
+        <details className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-sm">
+          <summary className="cursor-pointer font-semibold text-blue-800">Căn cứ trong tài liệu · {question.source.verification === "TEACHER_EDITED" ? "Đã chỉnh sửa, cần đối chiếu lại" : "Đã qua kiểm tra AI"}</summary>
+          {question.source.learningObjective ? <p className="mt-2 text-slate-700">Mục tiêu: {question.source.learningObjective}</p> : null}
+          <blockquote className="mt-2 border-l-2 border-blue-300 pl-3 leading-6 text-slate-600">{question.source.excerpt}</blockquote>
+          <p className="mt-2 text-xs text-slate-500">Kiểm tra AI hỗ trợ rà soát; giáo viên vẫn cần xác nhận tính chính xác và sự phù hợp.</p>
+        </details>
+      ) : null}
       {editing ? (
         <div className="mt-3 grid gap-3">
           <Textarea
