@@ -17,12 +17,14 @@ import {
   Search,
   SlidersHorizontal,
   UserRound,
+  MessagesSquare,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-shell";
 import { StudentExamList } from "@/components/assessment/student-exam-pages";
 import { StudentShell } from "@/components/student/student-shell";
+import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -205,7 +207,7 @@ export function StudentCoursesPage() {
   );
 }
 
-type CourseSection = "overview" | "materials" | "exams" | "review";
+type CourseSection = "overview" | "materials" | "exams" | "review" | "chat";
 
 export function StudentCourseDetailPage() {
   const params = useParams<{ classId: string; subjectId: string }>();
@@ -316,6 +318,7 @@ export function StudentCourseDetailPage() {
               <CourseTab active={activeSection === "materials"} icon={FileText} label="Tài liệu" count={materials.length} onClick={() => setActiveSection("materials")} />
               <CourseTab active={activeSection === "exams"} icon={ClipboardCheck} label="Bài kiểm tra" count={exams.length} onClick={() => setActiveSection("exams")} />
               <CourseTab active={activeSection === "review"} icon={BrainCircuit} label="Ôn tập" onClick={() => setActiveSection("review")} />
+              <CourseTab active={activeSection === "chat"} icon={MessagesSquare} label="Trao đổi lớp" onClick={() => setActiveSection("chat")} />
             </nav>
           </section>
 
@@ -329,7 +332,7 @@ export function StudentCourseDetailPage() {
                 <div className="mb-4"><h2 className="text-xl font-black text-slate-950">Bài kiểm tra</h2><p className="mt-1 text-sm text-slate-500">Các bài kiểm tra của môn học và lớp này.</p></div>
                 <StudentExamList classId={course.classId} subjectId={course.subjectId} />
               </section>
-            ) : <StudentReviewList classId={course.classId} subjectId={course.subjectId} />}
+            ) : activeSection === "chat" ? <ClassChatPanel classId={course.classId} className={course.schoolClass.name} /> : <StudentReviewList classId={course.classId} subjectId={course.subjectId} />}
           </div>
 
           <Modal open={previewMaterial !== null} title={previewMaterial?.originalName ?? "Xem trước tài liệu"} width="max-w-[1600px]" bodyClassName="max-h-[calc(100dvh-5rem)] overflow-y-auto !p-2" compact onClose={() => { setPreviewMaterial(null); setPreviewUrl(""); setMaterialError(""); }}>

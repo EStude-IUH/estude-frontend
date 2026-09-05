@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
+import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
 import { academicDataService } from "@/lib/assessment-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { ClassTopic, ClassTopicInput, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
@@ -186,6 +187,8 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
         </div>
         <Button permission="teaching.create" className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
       </section>
+
+      <ClassChatPanel classId={classId} className={schoolClass?.name} />
 
       {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
 

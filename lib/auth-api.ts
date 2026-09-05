@@ -128,6 +128,12 @@ export function authenticatedRequest<T>(
   return request<T>(path, init, { authenticated: true });
 }
 
+export async function getRealtimeAccessToken(): Promise<string> {
+  if (!accessToken) await refreshAccessToken();
+  if (!accessToken) throw new ApiError("Phiên đăng nhập không hợp lệ hoặc đã hết hạn", 401);
+  return accessToken;
+}
+
 export type UploadProgressPhase = "uploading" | "processing";
 
 export function authenticatedUploadRequest<T>(
