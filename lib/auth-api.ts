@@ -16,6 +16,18 @@ const API_URL = (
 ).replace(/\/$/, "");
 
 let accessToken: string | null = null;
+const accessTokenListeners = new Set<(token: string | null) => void>();
+
+function setAccessToken(token: string | null): void {
+  if (accessToken === token) return;
+  accessToken = token;
+  for (const listener of accessTokenListeners) listener(token);
+}
+
+export function subscribeAccessToken(listener: (token: string | null) => void): () => void {
+  accessTokenListeners.add(listener);
+  return () => { accessTokenListeners.delete(listener); };
+}
 let refreshPromise: Promise<AccessTokenResponse> | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -62,6 +74,7 @@ async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const { authenticated = false, retryOnUnauthorized = true } = options;
+  const requestToken = accessToken;
   const headers = new Headers(init.headers);
 
   if (
@@ -71,8 +84,8 @@ async function request<T>(
   ) {
     headers.set("Content-Type", "application/json");
   }
-  if (authenticated && accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
+  if (authenticated && requestToken) {
+    headers.set("Authorization", `Bearer ${requestToken}`);
   }
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -82,15 +95,15 @@ async function request<T>(
   });
 
   if (response.status === 401 && authenticated && retryOnUnauthorized) {
-    await refreshAccessToken();
+    if (!accessToken || accessToken === requestToken) await refreshAccessToken();
     return request<T>(path, init, {
       authenticated: true,
       retryOnUnauthorized: false,
     });
   }
 
-  if (response.status === 401 && authenticated) {
-    accessToken = null;
+  if (response.status === 401 && authenticated && accessToken === requestToken) {
+    setAccessToken(null);
     unauthorizedHandler?.();
   }
 
@@ -105,11 +118,11 @@ async function refreshAccessToken(): Promise<AccessTokenResponse> {
       { retryOnUnauthorized: false },
     )
       .then((tokens) => {
-        accessToken = tokens.accessToken;
+        setAccessToken(tokens.accessToken);
         return tokens;
       })
       .catch((error: unknown) => {
-        accessToken = null;
+        setAccessToken(null);
         unauthorizedHandler?.();
         throw error;
       })
@@ -128,8 +141,19 @@ export function authenticatedRequest<T>(
   return request<T>(path, init, { authenticated: true });
 }
 
-export async function getRealtimeAccessToken(): Promise<string> {
-  if (!accessToken) await refreshAccessToken();
+export async function getRealtimeAccessToken(forceRefresh = false): Promise<string> {
+  if (refreshPromise) {
+    await refreshPromise;
+    forceRefresh = false;
+  }
+  let expiresSoon = true;
+  if (accessToken) {
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
+      expiresSoon = !payload.exp || payload.exp * 1000 <= Date.now() + 30_000;
+    } catch { /* Refresh malformed or expired credentials before connecting. */ }
+  }
+  if (forceRefresh || !accessToken || expiresSoon) await refreshAccessToken();
   if (!accessToken) throw new ApiError("Phiên đăng nhập không hợp lệ hoặc đã hết hạn", 401);
   return accessToken;
 }
@@ -142,12 +166,13 @@ export function authenticatedUploadRequest<T>(
   onProgress: (percent: number, phase: UploadProgressPhase) => void,
 ): Promise<T> {
   function send(retryOnUnauthorized: boolean): Promise<T> {
+    const requestToken = accessToken;
     return new Promise<T>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `${API_URL}${path}`);
       xhr.withCredentials = true;
-      if (accessToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+      if (requestToken) {
+        xhr.setRequestHeader("Authorization", `Bearer ${requestToken}`);
       }
 
       xhr.upload.addEventListener("progress", (event) => {
@@ -166,15 +191,15 @@ export function authenticatedUploadRequest<T>(
         void (async () => {
           if (xhr.status === 401 && retryOnUnauthorized) {
             try {
-              await refreshAccessToken();
+              if (!accessToken || accessToken === requestToken) await refreshAccessToken();
               resolve(await send(false));
             } catch (error) {
               reject(error);
             }
             return;
           }
-          if (xhr.status === 401) {
-            accessToken = null;
+          if (xhr.status === 401 && accessToken === requestToken) {
+            setAccessToken(null);
             unauthorizedHandler?.();
           }
 
@@ -219,9 +244,10 @@ async function requestBlob(
   init: RequestInit = {},
   retryOnUnauthorized = true,
 ): Promise<Blob> {
+  const requestToken = accessToken;
   const headers = new Headers(init.headers);
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
+  if (requestToken) {
+    headers.set("Authorization", `Bearer ${requestToken}`);
   }
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -231,11 +257,11 @@ async function requestBlob(
   });
 
   if (response.status === 401 && retryOnUnauthorized) {
-    await refreshAccessToken();
+    if (!accessToken || accessToken === requestToken) await refreshAccessToken();
     return requestBlob(path, init, false);
   }
-  if (response.status === 401) {
-    accessToken = null;
+  if (response.status === 401 && accessToken === requestToken) {
+    setAccessToken(null);
     unauthorizedHandler?.();
   }
   if (!response.ok) {
@@ -257,7 +283,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    accessToken = session.accessToken;
+    setAccessToken(session.accessToken);
     return session;
   },
 
@@ -266,7 +292,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    accessToken = session.accessToken;
+    setAccessToken(session.accessToken);
     return session;
   },
 
@@ -308,7 +334,7 @@ export const authApi = {
         { method: "POST" },
       );
     } finally {
-      accessToken = null;
+      setAccessToken(null);
     }
   },
 
@@ -321,7 +347,7 @@ export const authApi = {
         },
       );
     } finally {
-      accessToken = null;
+      setAccessToken(null);
     }
   },
 
@@ -337,7 +363,7 @@ export const authApi = {
   },
 
   clearAccessToken(): void {
-    accessToken = null;
+    setAccessToken(null);
   },
 
   setUnauthorizedHandler(handler: (() => void) | null): void {

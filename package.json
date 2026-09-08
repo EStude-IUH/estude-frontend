@@ -17,7 +17,8 @@
     "serve:roles": "node scripts/serve-role-proxies.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:chat": "node tests/class-chat.test.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -38,6 +39,7 @@
     "eslint-config-next": "^15.5.21",
     "http-proxy": "^1.18.1",
     "postcss": "^8.4.49",
+    "react-test-renderer": "^19.0.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"
   }
