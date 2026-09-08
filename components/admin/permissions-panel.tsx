@@ -24,6 +24,10 @@ interface Group {
 }
 interface Snapshot {
   revision: number;
+  automaticNotification?: {
+    recipientCount: number;
+    delivered: boolean;
+  };
   policy: {
     groups: Group[];
     assignments: Record<string, string[]>;
@@ -170,8 +174,13 @@ export function PermissionsPanel() {
       );
       if (saved) setDraft(saved);
       else setDraft(result.policy.groups[0] ?? emptyGroup());
+      const delivery = result.automaticNotification;
       setNotice(
-        "Đã lưu thay đổi. Quyền mới áp dụng ngay cho các yêu cầu tiếp theo.",
+        delivery?.delivered === false
+          ? "Đã lưu quyền, nhưng thông báo tự động chưa thể gửi. Hệ thống đã ghi nhận sự cố để kiểm tra."
+          : delivery?.recipientCount
+            ? `Đã lưu và tự động thông báo đến ${delivery.recipientCount} tài khoản bị ảnh hưởng.`
+            : "Đã lưu thay đổi. Không có tài khoản nào bị thay đổi quyền tính năng nên không phát sinh thông báo.",
       );
       await refresh();
     } catch (cause) {

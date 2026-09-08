@@ -51,12 +51,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
+    const sequenceRef = requestSequence;
     void refresh();
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
     const interval = window.setInterval(onFocus, 30000);
     return () => {
-      requestSequence.current++;
+      sequenceRef.current++;
       window.removeEventListener("focus", onFocus);
       window.clearInterval(interval);
     };

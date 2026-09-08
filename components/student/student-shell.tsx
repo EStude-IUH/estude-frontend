@@ -11,6 +11,7 @@ import {
   ChevronDown,
   CircleHelp,
   CircleUserRound,
+  ClipboardCheck,
   LayoutDashboard,
   LoaderCircle,
   LogOut,
@@ -21,6 +22,7 @@ import { ProfileModal } from "@/components/auth/profile-modal";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
+import { NOTIFICATIONS_CHANGED_EVENT, notificationService } from "@/lib/engagement-api";
 
 interface StudentNavItem {
   icon: ComponentType<{ className?: string }>;
@@ -35,8 +37,10 @@ const studentNavItems: StudentNavItem[] = [
     href: "/student/dashboard",
   },
   { icon: BookOpen, label: "Môn học", href: "/student/courses" },
+  { icon: ClipboardCheck, label: "Bài thi", href: "/student/exams" },
   { icon: BrainCircuit, label: "Ôn tập", href: "/student/review" },
   { icon: BarChart3, label: "Điểm số", href: "/student/grades" },
+  { icon: Bell, label: "Hoạt động", href: "/student/activity" },
 ];
 
 function isNavItemActive(pathname: string, href?: string): boolean {
@@ -53,10 +57,13 @@ function isNavItemActive(pathname: string, href?: string): boolean {
   if (href === "/student/courses") {
     return (
       pathname === href ||
-      pathname.startsWith(`${href}/`) ||
-      pathname.startsWith("/student/exams/") ||
-      (pathname.startsWith("/student/attempts/") && !isStudyRoute)
+      pathname.startsWith(`${href}/`)
     );
+  }
+
+  if (href === "/student/exams") {
+    return pathname === href || pathname.startsWith(`${href}/`) ||
+      (pathname.startsWith("/student/attempts/") && !isStudyRoute);
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -86,6 +93,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -98,6 +106,21 @@ export function StudentShell({ children }: { children: ReactNode }) {
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshUnreadCount = () => {
+      void notificationService.getMine().then((items) => {
+        if (active) setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
+      }).catch(() => undefined);
+    };
+    refreshUnreadCount();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshUnreadCount);
+    return () => {
+      active = false;
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshUnreadCount);
+    };
+  }, [pathname]);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -154,11 +177,12 @@ export function StudentShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <button
               type="button"
+              onClick={() => router.push("/student/activity")}
               className="relative grid size-10 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-              aria-label="Thông báo"
+              aria-label={unreadNotificationCount ? `Thông báo, ${unreadNotificationCount} chưa đọc` : "Thông báo"}
             >
               <Bell className="size-4.5" />
-              <span className="absolute right-2 top-2 size-2 rounded-full bg-rose-500 ring-2 ring-white" />
+              {unreadNotificationCount ? <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-4 text-white ring-2 ring-white">{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</span> : null}
             </button>
 
             <div ref={accountMenuRef} className="relative">
@@ -206,6 +230,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
                   <button
                     type="button"
                     role="menuitem"
+                    onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     <CircleHelp className="size-4" /> Trợ giúp
@@ -248,7 +273,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       </main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 border-t border-slate-200 bg-white px-2 lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-6 border-t border-slate-200 bg-white px-1 lg:hidden"
         aria-label="Điều hướng nhanh"
       >
         {studentNavItems

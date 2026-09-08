@@ -23,6 +23,7 @@ export function Modal({
   footerClassName,
   layerClassName,
   compact = false,
+  mobileSheet = false,
 }: {
   open: boolean;
   title: string;
@@ -36,6 +37,7 @@ export function Modal({
   footerClassName?: string;
   layerClassName?: string;
   compact?: boolean;
+  mobileSheet?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const titleId = useId();
@@ -81,7 +83,7 @@ export function Modal({
 
   if (!open || !mounted) return null;
   return createPortal(
-    <div className={cn("modal-backdrop-enter fixed inset-0 grid place-items-center overflow-y-auto bg-slate-950/10 p-4 backdrop-blur-[1px]", layerClassName ?? "z-[100]")}>
+    <div className={cn("modal-backdrop-enter fixed inset-0 grid overflow-y-auto bg-slate-950/10 backdrop-blur-[1px]", mobileSheet ? "items-end p-0 sm:place-items-center sm:p-4" : "place-items-center p-4", layerClassName ?? "z-[100]")}>
       <button
         className="absolute inset-0"
         type="button"
@@ -93,7 +95,8 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "modal-panel-enter relative my-auto w-full rounded-2xl border border-slate-200 bg-white shadow-2xl",
+          "modal-panel-enter relative w-full border border-slate-200 bg-white shadow-2xl",
+          mobileSheet ? "max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:my-auto sm:rounded-2xl" : "my-auto rounded-2xl",
           width,
         )}
       >

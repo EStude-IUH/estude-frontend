@@ -14,6 +14,8 @@ export interface Question {
   topicId: string | null;
   topicName: string;
   content: string;
+  imageEnabled?: boolean;
+  imageUrl?: string | null;
   keyword?: string | null;
   type: QuestionType;
   difficulty: Difficulty;
@@ -398,6 +400,8 @@ export interface ExamQuestion {
     topicId?: string;
     topicName?: string;
     content: string;
+    imageUrl?: string | null;
+    imageEnabled?: boolean;
     type: QuestionType;
     options: QuestionOption[];
     correctOptionIds?: string[];
@@ -453,6 +457,7 @@ export interface Exam {
   canStart?: boolean;
   status: ExamStatus;
   published: boolean;
+  requiresAccessCode: boolean;
   questions: ExamQuestion[];
   totalPoints: number;
   settings: ExamSettings;
@@ -468,6 +473,8 @@ export interface ExamInput {
   className: string;
   topicName: string;
   description: string;
+  requiresAccessCode: boolean;
+  accessCode?: string;
   questions: ExamQuestion[];
   settings: ExamSettings;
 }

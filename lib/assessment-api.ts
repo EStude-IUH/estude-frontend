@@ -315,6 +315,17 @@ export const questionBankService = {
   deleteQuestion(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/question-bank/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
+  uploadQuestionImage(id: string, file: Blob): Promise<Question> {
+    const formData = new FormData();
+    formData.append("file", file, `question-${id}.png`);
+    return authenticatedUploadRequest<Question>(`/question-bank/${encodeURIComponent(id)}/image`, formData, () => undefined);
+  },
+  getQuestionImage(id: string): Promise<{ url: string }> {
+    return authenticatedRequest<{ url: string }>(`/question-bank/${encodeURIComponent(id)}/image`);
+  },
+  removeQuestionImage(id: string): Promise<Record<string, never>> {
+    return authenticatedRequest<Record<string, never>>(`/question-bank/${encodeURIComponent(id)}/image`, { method: "DELETE" });
+  },
   moveQuestionsToTopic(payload: BulkMoveQuestionsInput): Promise<BulkMoveQuestionsResult> {
     return authenticatedRequest<BulkMoveQuestionsResult>("/question-bank/move-topic", {
       method: "POST",
@@ -431,11 +442,17 @@ export const examService = {
 };
 
 export const examAttemptService = {
-  startExam(examId: string): Promise<ExamAttempt> {
-    return authenticatedRequest<ExamAttempt>(`/exams/${encodeURIComponent(examId)}/attempts`, { method: "POST" });
+  startExam(examId: string, accessCode?: string): Promise<ExamAttempt> {
+    return authenticatedRequest<ExamAttempt>(`/exams/${encodeURIComponent(examId)}/attempts`, { method: "POST", body: JSON.stringify(accessCode ? { accessCode } : {}) });
   },
   getAttempt(id: string): Promise<ExamAttempt & { exam: Exam }> {
     return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}`);
+  },
+  saveAnswer(id: string, answer: ExamAnswer): Promise<ExamAttempt> {
+    return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/answer`, {
+      method: "PATCH",
+      body: JSON.stringify(answer),
+    });
   },
   submitExam(id: string, answers: ExamAnswer[]): Promise<ExamAttempt> {
     return authenticatedRequest<ExamAttempt>(`/exam-attempts/${encodeURIComponent(id)}/submit`, {

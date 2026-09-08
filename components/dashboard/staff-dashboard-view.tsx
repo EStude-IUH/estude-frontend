@@ -39,6 +39,7 @@ import { AcademicDataPanel } from "@/components/admin/academic-data-panel";
 import { SubjectManagementPanel } from "@/components/admin/subject-management-panel";
 import { ClassManagementPanel } from "@/components/admin/class-management-panel";
 import { AiDifficultySettingsPanel } from "@/components/admin/ai-difficulty-settings-panel";
+import { AutomaticFeatureNotificationPanel } from "@/components/admin/automatic-feature-notification-panel";
 import {
   SystemSettingsPanel,
   type SystemSettingsSection,
@@ -66,6 +67,8 @@ const staffNavItems = [
     href: "/teacher/question-bank",
   },
   { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
+  { icon: CheckCircle2, label: "Điểm danh", href: "/teacher/attendance" },
+  { icon: Bell, label: "Gửi thông báo", href: "/teacher/notifications" },
   {
     icon: Settings,
     label: "Cấu hình",
@@ -81,7 +84,7 @@ const settingsSubItems = [
     section: "attendance",
   },
   {
-    label: "Thông báo",
+    label: "Thông báo tự động",
     href: "/admin/settings/notifications",
     section: "notifications",
   },
@@ -460,7 +463,7 @@ export function StaffDashboardView() {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => setIsAccountMenuOpen(false)}
+                    onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950"
                   >
                     <CircleHelp className="size-4" /> Trợ giúp
@@ -742,6 +745,8 @@ export function StaffDashboardView() {
               <PermissionsPanel />
             ) : isSettingsPage && settingsSection === "ai-question" ? (
               <AiDifficultySettingsPanel />
+            ) : isSettingsPage && settingsSection === "notifications" ? (
+              <AutomaticFeatureNotificationPanel />
             ) : isSettingsPage ? (
               <SystemSettingsPanel section={settingsSection as SystemSettingsSection} />
             ) : isSubjectsPage ? (
