@@ -21,6 +21,7 @@ import { useAuth } from "@/context/auth-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
 import { authenticatedRequest } from "@/lib/auth-api";
 import type { User } from "@/types/auth";
+import { ParentOverviewPanels } from "@/components/parent/parent-overview-panels";
 
 export function ParentDashboard() {
   const router = useRouter();
@@ -133,6 +134,8 @@ export function ParentDashboard() {
             </span>
           </div>
         </section>
+
+        <ParentOverviewPanels />
 
         <div className="mt-6 grid gap-5 md:grid-cols-3">
           {[

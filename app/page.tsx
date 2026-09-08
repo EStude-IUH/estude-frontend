@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { getPortalFromHost } from '@/lib/portal';
+import { LandingPage } from '@/components/marketing/landing-page';
 
 export default async function HomePage() {
   const roleHome = {
@@ -14,5 +15,6 @@ export default async function HomePage() {
   const portal = getPortalFromHost(host);
   const role = portal?.toUpperCase() ?? process.env.ESTUDE_APP_ROLE;
 
+  if (!role) return <LandingPage />;
   redirect(roleHome[role as keyof typeof roleHome] ?? '/login');
 }

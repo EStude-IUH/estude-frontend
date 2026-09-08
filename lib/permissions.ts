@@ -82,6 +82,8 @@ export const MODULE_LINKS = [
     label: "Cấu hình bài kiểm tra",
     permission: "teacher_settings.read",
   },
+  { href: "/teacher/attendance", label: "Điểm danh", permission: "attendance.read" },
+  { href: "/teacher/notifications", label: "Gửi thông báo", permission: "notifications.send" },
   {
     href: "/student/courses",
     label: "Môn học của tôi",
@@ -93,6 +95,7 @@ export const MODULE_LINKS = [
     permission: "learning.read",
   },
   { href: "/student/review", label: "Ôn tập", permission: "study.read" },
+  { href: "/student/activity", label: "Điểm danh & thông báo", permission: "notifications.read" },
   {
     href: "/parent/dashboard",
     label: "Học sinh liên kết",
@@ -101,6 +104,7 @@ export const MODULE_LINKS = [
 ] as const;
 
 export function routePermission(path: string): string | null {
+  if (path === "/help") return null;
   if (path.endsWith("/settings/sessions")) return null;
   if (path === "/admin/users") return "accounts.read";
   if (/^\/(admin\/users|teacher)\/students\/[^/]+$/.test(path))

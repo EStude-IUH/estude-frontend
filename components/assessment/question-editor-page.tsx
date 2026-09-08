@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
 import { academicDataService, questionBankService } from "@/lib/assessment-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
+import { TextToImageConverter } from "@/components/assessment/text-to-image-converter";
 import type {
   Difficulty,
   Question,
@@ -59,6 +60,9 @@ export function QuestionEditorForm({
   const [loading, setLoading] = useState(Boolean(questionId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [pendingImage, setPendingImage] = useState<Blob | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [removeImage, setRemoveImage] = useState(false);
 
   useEffect(() => {
     void academicDataService
@@ -98,7 +102,7 @@ export function QuestionEditorForm({
     if (!questionId) return;
     void questionBankService
       .getQuestionById(questionId)
-      .then((question) =>
+      .then((question) => {
         setForm({
           subjectId: question.subjectId,
           subjectName: question.subjectName,
@@ -111,8 +115,11 @@ export function QuestionEditorForm({
           correctOptionIds: question.correctOptionIds,
           explanation: question.explanation,
           disabled: question.disabled,
-        }),
-      )
+        });
+        if (question.imageEnabled) {
+          void questionBankService.getQuestionImage(question.id).then(({ url }) => setImagePreviewUrl(url)).catch(() => setImagePreviewUrl(""));
+        }
+      })
       .catch((cause) =>
         setError(
           cause instanceof Error ? cause.message : "Không thể tải câu hỏi",
@@ -211,9 +218,11 @@ export function QuestionEditorForm({
         throw new Error("Vui lòng nhập nội dung câu hỏi");
       if (payload.type !== "ESSAY" && payload.correctOptionIds.length === 0)
         throw new Error("Vui lòng chọn đáp án đúng");
-      const savedQuestion = questionId
+      let savedQuestion = questionId
         ? await questionBankService.updateQuestion(questionId, payload)
         : await questionBankService.createQuestion(payload);
+      if (removeImage && questionId) await questionBankService.removeQuestionImage(questionId);
+      if (pendingImage) savedQuestion = await questionBankService.uploadQuestionImage(savedQuestion.id, pendingImage);
       onSaved(savedQuestion);
     } catch (cause) {
       setError(
@@ -254,6 +263,12 @@ export function QuestionEditorForm({
               onChange={(event) => update("content", event.target.value)}
               rows={embedded ? 3 : 5}
               placeholder="Nhập nội dung câu hỏi..."
+            />
+            <TextToImageConverter
+              text={form.content}
+              existingImageUrl={imagePreviewUrl}
+              onApply={(image, previewUrl) => { setPendingImage(image); setImagePreviewUrl(previewUrl); setRemoveImage(false); }}
+              onRemove={() => { setPendingImage(null); setImagePreviewUrl(""); setRemoveImage(true); }}
             />
 
             <div

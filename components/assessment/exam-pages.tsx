@@ -17,6 +17,7 @@ import {
   ListChecks,
   Plus,
   Search,
+  ShieldCheck,
   Settings2,
   Send,
   Trash2,
@@ -80,6 +81,7 @@ const wizardSteps = [
   { label: "Thông tin", description: "Môn học và lớp", icon: BookOpen },
   { label: "Câu hỏi", description: "Xây dựng nội dung", icon: ListChecks },
   { label: "Cấu hình", description: "Thời gian làm bài", icon: Settings2 },
+  { label: "Bảo mật", description: "Mật khẩu / PIN", icon: ShieldCheck },
   { label: "Kiểm tra", description: "Xác nhận và lưu", icon: FileCheck2 },
 ];
 
@@ -249,7 +251,7 @@ export function TeacherExamsPage() {
   async function publish(exam: Exam) {
     if (
       !window.confirm(
-        `Công bố bài kiểm tra “${exam.title}”? Sinh viên sẽ nhìn thấy bài theo lịch đã cấu hình.`,
+        `Công bố bài kiểm tra “${exam.title}”? Hệ thống sẽ tự động thông báo cho học sinh và phụ huynh của lớp.`,
       )
     )
       return;
@@ -596,6 +598,9 @@ export function ExamWizardPage({
     description: "",
   });
   const [settings, setSettings] = useState<ExamSettings>(createBlankSettings);
+  const [requiresAccessCode, setRequiresAccessCode] = useState(false);
+  const [hadAccessCode, setHadAccessCode] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
   const reportError = useCallback(
     (message: string) =>
       notify(message, {
@@ -654,6 +659,8 @@ export function ExamWizardPage({
             startsAt: toDateTimeLocal(exam.settings.startsAt),
             endsAt: toDateTimeLocal(exam.settings.endsAt),
           });
+          setRequiresAccessCode(exam.requiresAccessCode);
+          setHadAccessCode(exam.requiresAccessCode);
           const examQuestions = [...exam.questions].sort(
             (left, right) => left.order - right.order,
           );
@@ -997,6 +1004,10 @@ export function ExamWizardPage({
         return false;
       }
     }
+    if (step === 4 && requiresAccessCode && !hadAccessCode && accessCode.trim().length < 4) {
+      reportError("Mật khẩu hoặc mã PIN phải có ít nhất 4 ký tự");
+      return false;
+    }
     return true;
   }
 
@@ -1008,6 +1019,8 @@ export function ExamWizardPage({
     setSaving(true);
     const payload: ExamInput = {
       ...info,
+      requiresAccessCode,
+      ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}),
       questions: normalizeOrder(selected),
       settings: {
         ...settings,
@@ -1074,7 +1087,7 @@ export function ExamWizardPage({
         />
       ) : null}
 
-      <div className="mb-5 grid gap-4 pt-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
+      <div className="mb-5 grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-5">
         {wizardSteps.map(({ label, description, icon: Icon }, index) => {
           const stepNumber = index + 1;
           const active = step === stepNumber;
@@ -1587,6 +1600,22 @@ export function ExamWizardPage({
           {step === 4 ? (
             <div>
               <div className="mb-6">
+                <h2 className="text-lg font-black text-slate-950">Thiết lập mật khẩu bài thi</h2>
+                <p className="mt-1 text-sm text-slate-500">Chỉ học sinh có mật khẩu hoặc mã PIN hợp lệ mới có thể bắt đầu bài.</p>
+              </div>
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-violet-700 shadow-sm"><ShieldCheck className="size-5" /></span><div><p className="font-extrabold text-slate-900">Yêu cầu mật khẩu khi vào thi</p><p className="mt-1 text-sm leading-6 text-slate-500">Mật khẩu được mã hóa trên máy chủ và không xuất hiện trong danh sách bài thi.</p></div></div>
+                  <ToggleSwitch checked={requiresAccessCode} onCheckedChange={setRequiresAccessCode} aria-label="Yêu cầu mật khẩu bài thi" />
+                </div>
+                {requiresAccessCode ? <div className="mt-5 border-t border-violet-100 pt-5"><Input label={hadAccessCode ? "Mật khẩu / PIN mới (không bắt buộc)" : "Mật khẩu / PIN"} type="password" minLength={4} maxLength={64} autoComplete="new-password" showPasswordToggle value={accessCode} onChange={(event) => setAccessCode(event.target.value)} hint={hadAccessCode ? "Để trống để giữ mật khẩu hiện tại. Nhập giá trị mới để thay thế." : "Tối thiểu 4 ký tự. Không dùng lại mật khẩu tài khoản."} /></div> : null}
+              </div>
+              <div className="mt-5 rounded-xl border border-slate-200 p-4 text-sm leading-6 text-slate-600"><strong className="text-slate-900">Lưu ý bảo mật:</strong> Không gửi mật khẩu qua URL, không đưa vào mô tả bài thi và chỉ chia sẻ cho đúng lớp.</div>
+            </div>
+          ) : null}
+          {step === 5 ? (
+            <div>
+              <div className="mb-6">
                 <h2 className="text-lg font-black text-slate-950">
                   Kiểm tra trước khi lưu
                 </h2>
@@ -1645,7 +1674,7 @@ export function ExamWizardPage({
                   </div>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                 <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
                     <CalendarClock className="size-4" />
@@ -1657,6 +1686,7 @@ export function ExamWizardPage({
                     </strong>
                   </p>
                 </div>
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm"><ShieldCheck className="size-5 text-violet-700" /><div><p className="font-extrabold text-slate-900">{requiresAccessCode ? "Có bảo vệ bằng mật khẩu / PIN" : "Không yêu cầu mật khẩu"}</p><p className="text-xs text-slate-500">Mật khẩu không được hiển thị trong bản xem trước.</p></div></div>
                 <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rose-50 text-rose-500">
                     <Clock3 className="size-4" />
@@ -1727,7 +1757,7 @@ export function ExamWizardPage({
             >
               {step === 1 ? "Hủy" : "Quay lại"}
             </Button>
-            {step < 4 ? (
+            {step < 5 ? (
               <Button
                 onClick={() => {
                   if (canNext()) {

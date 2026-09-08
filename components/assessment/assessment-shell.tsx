@@ -4,6 +4,7 @@ import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
   Bell,
+  BellRing,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -11,6 +12,7 @@ import {
   CircleHelp,
   CircleUserRound,
   ClipboardCheck,
+  CheckCircle2,
   FilePlus2,
   Library,
   LoaderCircle,
@@ -91,6 +93,8 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       icon: FilePlus2,
     },
     { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
+    { href: "/teacher/attendance", label: "Điểm danh", icon: CheckCircle2 },
+    { href: "/teacher/notifications", label: "Thông báo", icon: BellRing },
     {
       href: "/teacher/settings/exam-defaults",
       label: "Cấu hình",
@@ -219,6 +223,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
+                  onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   <CircleHelp className="size-4" /> Trợ giúp
