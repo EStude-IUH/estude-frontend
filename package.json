@@ -18,7 +18,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:chat": "node tests/class-chat.test.cjs"
+    "test:chat": "node tests/class-chat.test.cjs",
+    "test:study-coach": "node --test tests/study-coach-flashcards.test.cjs tests/study-coach-quiz.test.cjs tests/study-coach-ui.test.cjs tests/study-coach-materials.test.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

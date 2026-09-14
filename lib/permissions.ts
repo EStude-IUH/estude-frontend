@@ -106,6 +106,11 @@ export const MODULE_LINKS = [
 export function routePermission(path: string): string | null {
   if (path === "/help") return null;
   if (path.endsWith("/settings/sessions")) return null;
+  if (
+    path === "/student/study-coach" ||
+    path.startsWith("/student/study-coach/")
+  )
+    return "study.read";
   if (path === "/admin/users") return "accounts.read";
   if (/^\/(admin\/users|teacher)\/students\/[^/]+$/.test(path))
     return "student_reports.read";
