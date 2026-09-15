@@ -182,6 +182,39 @@ export function StudentReviewPage() {
         </div>
       </section>
 
+      <section className="mt-4 flex flex-col gap-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
+            <BrainCircuit className="size-5" />
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">AI Study Coach</p>
+            <h2 className="mt-1 text-lg font-black text-slate-950">Ôn tập bằng Flashcards</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Học thẻ mới, ôn thẻ đến hạn và tự đánh giá mức độ ghi nhớ theo lịch lặp lại ngắt quãng.
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="h-11 px-5"
+            onClick={() => router.push("/student/study-coach")}
+          >
+            Tải tài liệu
+          </Button>
+          <Button className="h-11 px-5" onClick={() => router.push("/student/review/flashcards")}>
+            Mở Flashcards
+          </Button>
+        </div>
+      </section>
+
+      <section className="mt-3 flex justify-end">
+        <Button className="h-11 px-5" onClick={() => router.push("/student/review/quiz")}>
+          Làm Quiz Study Coach
+        </Button>
+      </section>
+
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <SummaryCard
           icon={BrainCircuit}

@@ -39,7 +39,9 @@ export function RoleGate({
   const pathname = usePathname();
   const { user, isInitializing, signOut } = useAuth();
   const { canVisit, loading } = usePermissions();
-  const isAllowed = Boolean(user && canVisit(pathname));
+  const isAllowed = Boolean(
+    user && user.role === allowedRole && canVisit(pathname),
+  );
 
   useEffect(() => {
     if (isInitializing) return;
