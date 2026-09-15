@@ -190,6 +190,21 @@ export interface StudyCoachQuizSummary {
   activeAttemptId: string | null;
 }
 
+export interface StudyCoachQuizHistoryItem {
+  attemptId: string;
+  examId: string;
+  title: string;
+  document: { id: string; name: string };
+  submittedAt: string;
+  totalQuestions: number;
+  answeredCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  percentage: number;
+  durationSeconds: number;
+}
+
 export interface StudyCoachQuizQuestion {
   questionId: string;
   order: number;
@@ -289,6 +304,9 @@ export interface ConceptMasteryView {
 export interface StudyCoachLearningActivity {
   flashcardReviewCount: number;
   quizAnswerCount: number;
+  flashcardSessionCount: number;
+  quizCompletionCount: number;
+  totalCompletedSessions: number;
   totalActivityCount: number;
 }
 

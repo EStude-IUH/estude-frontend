@@ -116,7 +116,7 @@ test("material detail consumes readyForStudy and capability gates study navigati
   assert.match(ui.text(), /Sẵn sàng học/);
   assert.equal(ui.button("Xem phân tích học tập"), undefined);
   await act(async () => { ui.button("Ôn thẻ ghi nhớ").props.onClick(); });
-  assert.equal(pushes.at(-1), "/student/review/flashcards?documentId=material-ready");
+  assert.equal(pushes.at(-1), "/student/study-coach/materials/material-ready/flashcards");
   await act(async () => { ui.button("Xem tiến độ").props.onClick(); });
   assert.equal(pushes.at(-1), "/student/study-coach/materials/material-ready/mastery");
 });

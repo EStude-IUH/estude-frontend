@@ -4,6 +4,7 @@ import type {
   FlashcardReviewResult,
   StudyCoachFlashcard,
   StudyCoachQuizAnswerResult,
+  StudyCoachQuizHistoryItem,
   StudyCoachQuizResult,
   StudyCoachQuizState,
   StudyCoachQuizSummary,
@@ -158,9 +159,26 @@ export const studyCoachService = {
     });
   },
 
+  completeFlashcardSession(input: {
+    documentId: string;
+    reviewedCardCount: number;
+    mode: "DUE" | "ALL";
+    clientEventId: string;
+  }): Promise<{ eventId: string; completedAt: string; idempotentReplay: boolean }> {
+    return authenticatedRequest("/study-coach/flashcards/sessions/complete", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
   getQuizzes(documentId?: string): Promise<{ items: StudyCoachQuizSummary[]; total: number }> {
     const query = documentId ? `?documentId=${encodeURIComponent(documentId)}` : "";
     return authenticatedRequest(`/study-coach/quizzes${query}`);
+  },
+
+  getQuizHistory(documentId?: string): Promise<{ items: StudyCoachQuizHistoryItem[]; total: number }> {
+    const query = documentId ? `?documentId=${encodeURIComponent(documentId)}` : "";
+    return authenticatedRequest(`/study-coach/quizzes/history${query}`, { cache: "no-store" });
   },
 
   startQuiz(
@@ -226,9 +244,8 @@ export const studyCoachService = {
   getInsights(filters: {
     scope: InsightScope;
     documentId?: string;
-    language: "vi" | "en";
   }): Promise<{ items: LearningInsight[]; total: number }> {
-    const params = new URLSearchParams({ scope: filters.scope, language: filters.language });
+    const params = new URLSearchParams({ scope: filters.scope, language: "vi" });
     if (filters.documentId) params.set("documentId", filters.documentId);
     return authenticatedRequest(`/study-coach/insights?${params.toString()}`);
   },
@@ -236,11 +253,10 @@ export const studyCoachService = {
   generateInsight(input: {
     scope: InsightScope;
     documentId?: string;
-    language: "vi" | "en";
   }): Promise<LearningInsight> {
     return authenticatedRequest("/study-coach/insights/generate", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, language: "vi" }),
     });
   },
 

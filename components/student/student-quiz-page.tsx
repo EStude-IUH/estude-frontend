@@ -1,14 +1,14 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, CircleHelp, LoaderCircle, RotateCcw, XCircle } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, CalendarClock, CheckCircle2, CircleHelp, Eye, LoaderCircle, RotateCcw, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { studyCoachService } from "@/lib/study-coach-api";
-import type { StudyCoachQuizAnswer, StudyCoachQuizAttempt, StudyCoachQuizQuestion, StudyCoachQuizResult, StudyCoachQuizState, StudyCoachQuizSummary } from "@/types/study-coach";
+import type { StudyCoachQuizAnswer, StudyCoachQuizAttempt, StudyCoachQuizHistoryItem, StudyCoachQuizQuestion, StudyCoachQuizResult, StudyCoachQuizState, StudyCoachQuizSummary } from "@/types/study-coach";
 
-const ATTEMPT_KEY = "estude:study-coach:quiz-attempt:v1";
+const MARKED_KEY = "estude:study-coach:quiz-marked:v1";
 interface PendingAnswer { questionId: string; selectedOptionIndexes: number[]; clientEventId: string }
 
 const questionTypeLabels: Record<StudyCoachQuizQuestion["type"], string> = {
@@ -19,48 +19,46 @@ const questionTypeLabels: Record<StudyCoachQuizQuestion["type"], string> = {
 
 export function StudentQuizPage() {
   const router = useRouter();
-  const [documentId] = useState(() => typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search).get("documentId") || undefined);
+  const params = useParams<{ materialId?: string }>();
+  const [legacyDocumentId] = useState(() => typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search).get("documentId") || undefined);
+  const documentId = typeof params.materialId === "string" ? params.materialId : legacyDocumentId;
   const answerSubmittingRef = useRef(false);
   const quizSubmittingRef = useRef(false);
   const [quizzes, setQuizzes] = useState<StudyCoachQuizSummary[]>([]);
+  const [history, setHistory] = useState<StudyCoachQuizHistoryItem[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<StudyCoachQuizSummary | null>(null);
   const [state, setState] = useState<StudyCoachQuizState | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selection, setSelection] = useState<number[]>([]);
+  const [draftSelections, setDraftSelections] = useState<Record<string, number[]>>({});
   const [pendingAnswer, setPendingAnswer] = useState<PendingAnswer | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<string | null>(null);
+  const [markedQuestionIds, setMarkedQuestionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const rememberAttempt = useCallback((attemptId: string | null) => {
-    try { if (attemptId) localStorage.setItem(ATTEMPT_KEY, attemptId); else localStorage.removeItem(ATTEMPT_KEY); } catch { /* Server state is authoritative. */ }
-  }, []);
   const applyState = useCallback((next: StudyCoachQuizState) => {
-    setState(next); setSelection([]); setPendingAnswer(null); setPendingSubmitId(null);
-    if (next.status === "IN_PROGRESS") setQuestionIndex(next.currentQuestionIndex);
+    setState(next); setSelection([]); setDraftSelections({}); setPendingAnswer(null); setPendingSubmitId(null);
+    if (next.status === "IN_PROGRESS") {
+      setQuestionIndex(next.currentQuestionIndex);
+      setMarkedQuestionIds(readMarkedQuestions(next.attemptId));
+    } else {
+      clearMarkedQuestions(next.attemptId);
+      setMarkedQuestionIds([]);
+    }
   }, []);
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setQuizzes([]); setHistory([]); setSelectedQuiz(null); setState(null); setSelection([]); setDraftSelections({}); setMarkedQuestionIds([]); setQuestionIndex(0);
     try {
-      const list = await studyCoachService.getQuizzes(documentId); setQuizzes(list.items);
-      let attemptId = "";
-      try { attemptId = localStorage.getItem(ATTEMPT_KEY) ?? ""; } catch { attemptId = ""; }
-      if (attemptId) {
-        try {
-          const restored = await studyCoachService.getQuizAttempt(attemptId);
-          const matchingQuiz = list.items.find((quiz) => quiz.id === restored.examId);
-          if (matchingQuiz && (!documentId || matchingQuiz.document.id === documentId)) { applyState(restored); setSelectedQuiz(matchingQuiz); return; }
-        } catch { rememberAttempt(null); }
-      }
-      const active = list.items.find((quiz) => quiz.activeAttemptId);
-      if (active?.activeAttemptId) {
-        const restored = await studyCoachService.getQuizAttempt(active.activeAttemptId);
-        setSelectedQuiz(active); applyState(restored); rememberAttempt(restored.attemptId);
-      }
+      const [list, completed] = await Promise.all([
+        studyCoachService.getQuizzes(documentId),
+        studyCoachService.getQuizHistory(documentId),
+      ]);
+      setQuizzes(list.items); setHistory(completed.items);
     } catch (cause) { setError(messageOf(cause, "Không thể tải Quiz Study Coach.")); }
     finally { setLoading(false); }
-  }, [applyState, documentId, rememberAttempt]);
+  }, [documentId]);
   useEffect(() => { void load(); }, [load]);
 
   async function startQuiz(quiz: StudyCoachQuizSummary) {
@@ -68,7 +66,7 @@ export function StudentQuizPage() {
     quizSubmittingRef.current = true; setSubmitting(true); setError("");
     try {
       const started = await studyCoachService.startQuiz(quiz.id, createClientEventId("quiz-start"));
-      setSelectedQuiz(quiz); applyState(started); rememberAttempt(started.attemptId);
+      setSelectedQuiz(quiz); applyState(started);
     } catch (cause) { setError(messageOf(cause, "Không thể bắt đầu quiz.")); }
     finally { quizSubmittingRef.current = false; setSubmitting(false); }
   }
@@ -78,8 +76,18 @@ export function StudentQuizPage() {
   const answer = current ? active?.answers.find((item) => item.questionId === current.questionId) : undefined;
   function toggleOption(question: StudyCoachQuizQuestion, optionIndex: number) {
     if (answer || submitting) return;
-    if (question.type === "MULTIPLE_CHOICE") setSelection((selected) => selected.includes(optionIndex) ? selected.filter((index) => index !== optionIndex) : [...selected, optionIndex]);
-    else setSelection([optionIndex]);
+    if (question.type !== "MULTIPLE_CHOICE") {
+      const selectedOptionIndexes = [optionIndex];
+      setSelection(selectedOptionIndexes);
+      setError("");
+      void submitAnswer({ questionId: question.questionId, selectedOptionIndexes, clientEventId: createClientEventId("quiz-answer") });
+      return;
+    }
+    setSelection((selected) => {
+      const next = selected.includes(optionIndex) ? selected.filter((index) => index !== optionIndex) : [...selected, optionIndex];
+      setDraftSelections((drafts) => ({ ...drafts, [question.questionId]: next }));
+      return next;
+    });
     setError("");
   }
   async function submitAnswer(existing?: PendingAnswer) {
@@ -91,6 +99,14 @@ export function StudentQuizPage() {
       const result = await studyCoachService.submitQuizAnswer(active.attemptId, request.questionId, request.selectedOptionIndexes, request.clientEventId);
       const nextAnswer: StudyCoachQuizAnswer = result;
       setState({ ...active, answeredCount: result.progress.answeredCount, unansweredCount: result.progress.totalQuestions - result.progress.answeredCount, questions: active.questions.map((question) => question.questionId === result.questionId ? { ...question, answerState: "ANSWERED" } : question), answers: [...active.answers.filter((item) => item.questionId !== result.questionId), nextAnswer] });
+      setDraftSelections((drafts) => { const next = { ...drafts }; delete next[result.questionId]; return next; });
+      if (questionIndex < active.questions.length - 1) {
+        const nextIndex = questionIndex + 1;
+        setQuestionIndex(nextIndex);
+        setSelection(draftSelections[active.questions[nextIndex].questionId] ?? []);
+      } else {
+        setSelection([]);
+      }
       setPendingAnswer(null);
     } catch (cause) { setError(messageOf(cause, "Không thể gửi câu trả lời.")); }
     finally { answerSubmittingRef.current = false; setSubmitting(false); }
@@ -99,39 +115,122 @@ export function StudentQuizPage() {
     if (!active || quizSubmittingRef.current) return;
     quizSubmittingRef.current = true; setSubmitting(true); setError("");
     const clientEventId = existingEventId ?? createClientEventId("quiz-submit"); setPendingSubmitId(clientEventId);
-    try { const result = await studyCoachService.submitQuiz(active.attemptId, clientEventId); applyState(result); rememberAttempt(result.attemptId); }
+    try { const result = await studyCoachService.submitQuiz(active.attemptId, clientEventId); applyState(result); }
     catch (cause) { setError(messageOf(cause, "Không thể nộp quiz.")); }
     finally { quizSubmittingRef.current = false; setSubmitting(false); }
   }
-  function nextQuestion() { if (!active) return; setSelection([]); setError(""); setQuestionIndex((index) => Math.min(index + 1, active.questions.length - 1)); }
-  function restart() { rememberAttempt(null); setState(null); setSelectedQuiz((currentQuiz) => currentQuiz ? { ...currentQuiz, activeAttemptId: null } : null); setSelection([]); setError(""); setPendingSubmitId(null); }
+
+  async function openHistory(attemptId: string) {
+    if (quizSubmittingRef.current) return;
+    quizSubmittingRef.current = true; setSubmitting(true); setError("");
+    try { applyState(await studyCoachService.getQuizResult(attemptId)); }
+    catch (cause) { setError(messageOf(cause, "Không thể mở kết quả bài luyện.")); }
+    finally { quizSubmittingRef.current = false; setSubmitting(false); }
+  }
+  function goToQuestion(index: number) {
+    if (!active) return;
+    const nextIndex = Math.max(0, Math.min(index, active.questions.length - 1));
+    setSelection(draftSelections[active.questions[nextIndex].questionId] ?? []); setError(""); setQuestionIndex(nextIndex);
+  }
+  function toggleMarkedQuestion() {
+    if (!active || !current) return;
+    setMarkedQuestionIds((marked) => {
+      const next = marked.includes(current.questionId)
+        ? marked.filter((questionId) => questionId !== current.questionId)
+        : [...marked, current.questionId];
+      saveMarkedQuestions(active.attemptId, next);
+      return next;
+    });
+  }
+  function restart() {
+    if (state) clearMarkedQuestions(state.attemptId);
+    setMarkedQuestionIds([]); setDraftSelections({}); setState(null); setSelectedQuiz((currentQuiz) => currentQuiz ? { ...currentQuiz, activeAttemptId: null } : null); setSelection([]); setError(""); setPendingSubmitId(null);
+  }
   const backHref = documentId ? `/student/study-coach/materials/${encodeURIComponent(documentId)}` : "/student/study-coach";
 
   return <StudentShell>
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><button type="button" onClick={() => router.push(backHref)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-500"><ArrowLeft className="size-4" /> {documentId ? "Quay lại tài liệu" : "Quay lại Study Coach"}</button><p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-brand-600">AI Study Coach</p><h1 className="mt-1 text-2xl font-black text-slate-950">Quiz lý thuyết</h1><p className="mt-1 text-sm text-slate-500">Câu trả lời được chấm tự động và cập nhật vào tiến độ theo từng khái niệm.</p></header>
+    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card"><button type="button" onClick={() => router.push(backHref)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-500"><ArrowLeft className="size-4" /> {documentId ? "Quay lại tài liệu" : "Quay lại Study Coach"}</button><p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-brand-600">Luyện tập theo tài liệu</p><h1 className="mt-1 text-2xl font-black text-slate-950">Bài luyện kiến thức</h1><p className="mt-1 text-sm text-slate-500">{selectedQuiz?.document.name ?? quizzes[0]?.document.name ?? "Chọn bài luyện phù hợp để bắt đầu."}</p></header>
     {loading ? <LoadingPanel /> : null}
-    {!loading && error && !state && !selectedQuiz ? <StatePanel title="Không thể tải quiz" detail={error} action="Thử lại" onAction={() => void load()} /> : null}
-    {!loading && !state && !selectedQuiz && !error ? <QuizList quizzes={quizzes} onSelect={setSelectedQuiz} /> : null}
+    {!loading && !state && !selectedQuiz ? <QuizHub quizzes={quizzes} history={history} error={error} submitting={submitting} onSelect={setSelectedQuiz} onOpenHistory={(attemptId) => void openHistory(attemptId)} onRetry={() => void load()} /> : null}
     {!loading && !state && selectedQuiz ? <QuizStart quiz={selectedQuiz} submitting={submitting} error={error} onBack={() => { setSelectedQuiz(null); setError(""); }} onStart={() => void startQuiz(selectedQuiz)} /> : null}
-    {active && current ? <div data-testid="quiz-question"><QuestionPanel attempt={active} question={current} index={questionIndex} selection={selection} answer={answer} submitting={submitting} error={error} pendingAnswer={pendingAnswer} pendingSubmitId={pendingSubmitId} onToggle={toggleOption} onSubmitAnswer={() => void submitAnswer()} onRetryAnswer={() => pendingAnswer && void submitAnswer(pendingAnswer)} onNext={nextQuestion} onPrevious={() => { setSelection([]); setQuestionIndex((index) => Math.max(0, index - 1)); }} onFinalize={() => void finalize()} onRetryFinalize={() => pendingSubmitId && void finalize(pendingSubmitId)} /></div> : null}
-    {state?.status === "SUBMITTED" ? <div data-testid="quiz-result"><ResultPanel result={state} onRestart={restart} /></div> : null}
+    {active && current ? <div data-testid="quiz-question"><QuestionPanel attempt={active} question={current} index={questionIndex} selection={selection} answer={answer} markedQuestionIds={markedQuestionIds} submitting={submitting} error={error} pendingAnswer={pendingAnswer} pendingSubmitId={pendingSubmitId} onToggle={toggleOption} onToggleMarked={toggleMarkedQuestion} onGoTo={goToQuestion} onSubmitAnswer={() => void submitAnswer()} onRetryAnswer={() => pendingAnswer && void submitAnswer(pendingAnswer)} onNext={() => goToQuestion(questionIndex + 1)} onPrevious={() => goToQuestion(questionIndex - 1)} onFinalize={() => void finalize()} onRetryFinalize={() => pendingSubmitId && void finalize(pendingSubmitId)} /></div> : null}
+    {state?.status === "SUBMITTED" ? <div data-testid="quiz-result"><ResultPanel result={state} onBack={() => void load()} onRestart={restart} /></div> : null}
   </StudentShell>;
 }
 
-function QuizList({ quizzes, onSelect }: { quizzes: StudyCoachQuizSummary[]; onSelect: (quiz: StudyCoachQuizSummary) => void }) {
-  if (!quizzes.length) return <StatePanel title="Chưa có quiz" detail="Hãy xử lý tài liệu Study Coach để tạo ngân hàng câu hỏi." />;
-  return <section className="mt-5 space-y-4">{quizzes.map((quiz) => <button key={quiz.id} type="button" onClick={() => onSelect(quiz)} className="block w-full rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-card hover:border-brand-300"><p className="text-xs font-black uppercase tracking-wider text-brand-600">{quiz.subject.name || "Study Coach"}</p><h2 className="mt-1 text-lg font-black text-slate-950">{quiz.title}</h2><p className="mt-2 text-sm text-slate-500">{quiz.document.name} · {quiz.availableQuestionCount} câu hỏi</p>{quiz.activeAttemptId ? <span className="mt-3 inline-block rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Tiếp tục bài đang làm</span> : null}</button>)}</section>;
+function QuizHub({ quizzes, history, error, submitting, onSelect, onOpenHistory, onRetry }: { quizzes: StudyCoachQuizSummary[]; history: StudyCoachQuizHistoryItem[]; error: string; submitting: boolean; onSelect: (quiz: StudyCoachQuizSummary) => void; onOpenHistory: (attemptId: string) => void; onRetry: () => void }) {
+  return <div className="mt-5 space-y-5" data-testid="quiz-hub">
+    {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5" role="alert"><p className="font-semibold text-rose-700">{error}</p><Button variant="outline" className="mt-3" onClick={onRetry}>Thử lại</Button></div> : null}
+    <section className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-card sm:p-6">
+      <p className="text-xs font-black uppercase tracking-wider text-brand-600">Làm bài mới</p>
+      <h2 className="mt-1 text-xl font-black text-slate-950">Kiểm tra kiến thức của bạn</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">Mỗi lượt làm bài sử dụng câu hỏi thuộc đúng tài liệu này và được lưu riêng trong lịch sử.</p>
+      <div className="mt-5 grid gap-3">
+        {quizzes.length ? quizzes.map((quiz) => <button key={quiz.id} type="button" onClick={() => onSelect(quiz)} className="block w-full rounded-2xl border border-blue-100 bg-white p-5 text-left transition hover:border-brand-400 focus:outline-none focus:ring-4 focus:ring-blue-100"><p className="text-xs font-black uppercase tracking-wider text-brand-600">{quiz.subject.name || "Bài luyện"}</p><h3 className="mt-1 text-lg font-black text-slate-950">{quiz.title}</h3><p className="mt-2 text-sm text-slate-500">{quiz.availableQuestionCount} câu hỏi</p>{quiz.activeAttemptId ? <span className="mt-3 inline-block rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">Tiếp tục bài đang làm</span> : <span className="mt-3 inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Sẵn sàng bắt đầu</span>}</button>) : <p className="rounded-2xl bg-white p-5 text-sm text-slate-500">Tài liệu này chưa có câu hỏi luyện tập.</p>}
+      </div>
+    </section>
+    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+      <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-slate-100 text-slate-600"><CalendarClock className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Lịch sử làm bài</p><h2 className="mt-0.5 text-xl font-black text-slate-950">Các lượt đã hoàn thành</h2></div></div>
+      {history.length ? <div className="mt-5 grid gap-3">{history.map((item) => <article key={item.attemptId} className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-black text-slate-950">{item.title}</h3><p className="mt-1 text-sm text-slate-500">{formatDateTime(item.submittedAt)} · {item.correctCount}/{item.totalQuestions} câu đúng</p><p className="mt-2 text-2xl font-black text-brand-700">{item.percentage}%</p></div><Button variant="outline" disabled={submitting} onClick={() => onOpenHistory(item.attemptId)}>{submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Eye className="size-4" />} Xem kết quả</Button></article>)}</div> : <p className="mt-5 rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">Bạn chưa hoàn thành lượt làm bài nào với tài liệu này.</p>}
+    </section>
+  </div>;
 }
 function QuizStart({ quiz, submitting, error, onBack, onStart }: { quiz: StudyCoachQuizSummary; submitting: boolean; error: string; onBack: () => void; onStart: () => void }) {
   const actual = Math.min(quiz.availableQuestionCount, 30);
-  return <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-card"><button type="button" onClick={onBack} className="text-sm font-bold text-slate-500">← Chọn tài liệu khác</button><h2 className="mt-5 text-2xl font-black text-slate-950">{quiz.title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{quiz.description || quiz.document.name}</p><p className="mt-3 text-sm font-semibold text-slate-600">Bài luyện này gồm {actual} câu hỏi.</p>{error ? <ErrorBox message={error} /> : null}<Button className="mt-5 h-12" disabled={!actual || submitting} onClick={onStart}>{submitting ? <LoaderCircle className="size-4 animate-spin" /> : <CircleHelp className="size-4" />} {quiz.activeAttemptId ? "Tiếp tục quiz" : "Bắt đầu quiz"}</Button></section>;
+  return <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-card"><button type="button" onClick={onBack} className="text-sm font-bold text-slate-500">← Quay lại danh sách bài luyện</button><h2 className="mt-5 text-2xl font-black text-slate-950">{quiz.title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{quiz.description || quiz.document.name}</p><p className="mt-3 text-sm font-semibold text-slate-600">Bài luyện này gồm {actual} câu hỏi. Bạn có thể đánh dấu câu cần xem lại trước khi nộp.</p>{error ? <ErrorBox message={error} /> : null}<Button className="mt-5 h-12" disabled={!actual || submitting} onClick={onStart}>{submitting ? <LoaderCircle className="size-4 animate-spin" /> : <CircleHelp className="size-4" />} {quiz.activeAttemptId ? "Tiếp tục bài đang làm" : "Bắt đầu làm bài"}</Button></section>;
 }
-function QuestionPanel({ attempt, question, index, selection, answer, submitting, error, pendingAnswer, pendingSubmitId, onToggle, onSubmitAnswer, onRetryAnswer, onNext, onPrevious, onFinalize, onRetryFinalize }: { attempt: StudyCoachQuizAttempt; question: StudyCoachQuizQuestion; index: number; selection: number[]; answer?: StudyCoachQuizAnswer; submitting: boolean; error: string; pendingAnswer: PendingAnswer | null; pendingSubmitId: string | null; onToggle: (question: StudyCoachQuizQuestion, optionIndex: number) => void; onSubmitAnswer: () => void; onRetryAnswer: () => void; onNext: () => void; onPrevious: () => void; onFinalize: () => void; onRetryFinalize: () => void }) {
+function QuestionPanel({ attempt, question, index, selection, answer, markedQuestionIds, submitting, error, pendingAnswer, pendingSubmitId, onToggle, onToggleMarked, onGoTo, onSubmitAnswer, onRetryAnswer, onNext, onPrevious, onFinalize, onRetryFinalize }: { attempt: StudyCoachQuizAttempt; question: StudyCoachQuizQuestion; index: number; selection: number[]; answer?: StudyCoachQuizAnswer; markedQuestionIds: string[]; submitting: boolean; error: string; pendingAnswer: PendingAnswer | null; pendingSubmitId: string | null; onToggle: (question: StudyCoachQuizQuestion, optionIndex: number) => void; onToggleMarked: () => void; onGoTo: (index: number) => void; onSubmitAnswer: () => void; onRetryAnswer: () => void; onNext: () => void; onPrevious: () => void; onFinalize: () => void; onRetryFinalize: () => void }) {
   const last = index === attempt.questions.length - 1;
-  return <><section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-card"><div className="flex justify-between text-xs font-bold text-slate-500"><span>Câu {index + 1}/{attempt.totalQuestions}</span><span>{attempt.answeredCount} đã trả lời</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-600" style={{ width: `${((index + 1) / attempt.totalQuestions) * 100}%` }} /></div></section><article className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8"><p className="text-xs font-black uppercase tracking-wider text-brand-600">{questionTypeLabels[question.type]}</p><h2 className="mt-4 text-xl font-black leading-8 text-slate-950">{question.content}</h2><div className="mt-6 grid gap-3">{question.options.map((option, optionIndex) => { const checked = answer ? answer.selectedOptionIndexes.includes(optionIndex) : selection.includes(optionIndex); return <button key={option.id} type="button" disabled={Boolean(answer) || submitting} aria-pressed={checked} onClick={() => onToggle(question, optionIndex)} className={`min-h-14 rounded-2xl border p-4 text-left ${checked ? "border-brand-500 bg-blue-50" : "border-slate-200 hover:bg-slate-50"}`}><span className="mr-3 font-black text-brand-700">{option.label}</span>{option.text}</button>; })}</div>{answer ? <div className="mt-5 flex items-center gap-2 rounded-2xl bg-blue-50 p-4 text-sm font-bold text-brand-700"><CheckCircle2 className="size-5" />Đã lưu câu trả lời. Kết quả đúng hoặc sai sẽ hiển thị sau khi nộp bài.</div> : null}{error ? <ErrorBox message={error} /> : null}<div className="mt-6 flex flex-wrap gap-3"><Button variant="outline" disabled={index === 0 || submitting} onClick={onPrevious}>Câu trước</Button>{!answer ? <Button disabled={submitting || !selection.length} onClick={onSubmitAnswer}>{submitting && pendingAnswer ? <LoaderCircle className="size-4 animate-spin" /> : null}Lưu câu trả lời</Button> : null}{!last ? <Button variant="secondary" disabled={submitting} onClick={onNext}>{answer ? "Câu tiếp" : "Bỏ qua / Câu tiếp"}</Button> : null}{last || attempt.answeredCount === attempt.totalQuestions ? <Button disabled={submitting} onClick={onFinalize}>Nộp bài</Button> : null}</div>{error && pendingAnswer ? <Button variant="outline" className="mt-3" onClick={onRetryAnswer}><RotateCcw className="size-4" /> Gửi lại câu trả lời</Button> : null}{error && pendingSubmitId ? <Button variant="outline" className="mt-3" onClick={onRetryFinalize}><RotateCcw className="size-4" /> Thử nộp lại</Button> : null}</article></>;
+  const marked = markedQuestionIds.includes(question.questionId);
+  return <>
+    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500">
+        <span>Câu {index + 1}/{attempt.totalQuestions}</span>
+        <span>{attempt.answeredCount} đã trả lời · {markedQuestionIds.length} đã đánh dấu</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand-600" style={{ width: `${((index + 1) / attempt.totalQuestions) * 100}%` }} /></div>
+      <div className="mt-4 flex flex-wrap gap-2" aria-label="Danh sách câu hỏi">
+        {attempt.questions.map((item, itemIndex) => {
+          const itemMarked = markedQuestionIds.includes(item.questionId);
+          const answered = attempt.answers.some((saved) => saved.questionId === item.questionId);
+          return <button key={item.questionId} type="button" disabled={submitting} onClick={() => onGoTo(itemIndex)} aria-current={itemIndex === index ? "step" : undefined} aria-label={`Câu ${itemIndex + 1}${itemMarked ? ", đã đánh dấu" : ""}${answered ? ", đã trả lời" : ""}`} className={`relative grid size-10 place-items-center rounded-xl border text-sm font-black focus:outline-none focus:ring-4 focus:ring-blue-100 ${itemIndex === index ? "border-brand-600 bg-brand-600 text-white" : answered ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"}`}>
+            {itemIndex + 1}
+            {itemMarked ? <span className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-white bg-amber-500" aria-hidden="true" /> : null}
+          </button>;
+        })}
+      </div>
+      <p className="mt-3 text-xs text-slate-500">Chọn số câu để quay lại câu đã đánh dấu hoặc câu còn bỏ trống.</p>
+    </section>
+
+    <article className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-wider text-brand-600">{questionTypeLabels[question.type]}</p>
+        <Button variant="outline" disabled={submitting} aria-pressed={marked} onClick={onToggleMarked}>
+          {marked ? <BookmarkCheck className="size-4 text-amber-600" /> : <Bookmark className="size-4" />}
+          {marked ? "Đã đánh dấu" : "Đánh dấu câu này"}
+        </Button>
+      </div>
+      <h2 className="mt-4 text-xl font-black leading-8 text-slate-950">{question.content}</h2>
+      <div className="mt-6 grid gap-3">
+        {question.options.map((option, optionIndex) => {
+          const checked = answer ? answer.selectedOptionIndexes.includes(optionIndex) : selection.includes(optionIndex);
+          return <button key={option.id} type="button" disabled={Boolean(answer) || submitting} aria-pressed={checked} onClick={() => onToggle(question, optionIndex)} className={`min-h-14 rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-4 focus:ring-blue-100 ${checked ? "border-brand-500 bg-blue-50 ring-1 ring-brand-200" : "border-slate-200 hover:bg-slate-50"}`}><span className="mr-3 font-black text-brand-700">{option.label}</span>{option.text}</button>;
+        })}
+      </div>
+      {error ? <ErrorBox message={error} /> : null}
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Button variant="outline" disabled={index === 0 || submitting} onClick={onPrevious}>Câu trước</Button>
+        {!answer && question.type === "MULTIPLE_CHOICE" ? <Button disabled={submitting || !selection.length} onClick={onSubmitAnswer}>{submitting && pendingAnswer ? <LoaderCircle className="size-4 animate-spin" /> : null}{last ? "Xác nhận lựa chọn" : "Xác nhận và sang câu tiếp"}</Button> : null}
+        {!last ? <Button variant="secondary" disabled={submitting} onClick={onNext}>{answer ? "Câu tiếp" : "Bỏ qua / Câu tiếp"}</Button> : null}
+        {last || attempt.answeredCount === attempt.totalQuestions ? <Button disabled={submitting} onClick={onFinalize}>Nộp bài</Button> : null}
+      </div>
+      {error && pendingAnswer ? <Button variant="outline" className="mt-3" onClick={onRetryAnswer}><RotateCcw className="size-4" /> Gửi lại câu trả lời</Button> : null}
+      {error && pendingSubmitId ? <Button variant="outline" className="mt-3" onClick={onRetryFinalize}><RotateCcw className="size-4" /> Thử nộp lại</Button> : null}
+    </article>
+  </>;
 }
-function ResultPanel({ result, onRestart }: { result: StudyCoachQuizResult; onRestart: () => void }) {
-  return <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8"><div className="text-center"><CheckCircle2 className="mx-auto size-12 text-emerald-600" /><h2 className="mt-3 text-2xl font-black text-slate-950">Hoàn thành quiz</h2><p className="mt-3 text-4xl font-black text-brand-700">{result.correctCount}/{result.totalQuestions}</p><p className="mt-1 text-lg font-bold text-slate-600">{result.percentage}%</p></div><div className="mt-6 grid grid-cols-3 gap-3 text-center"><Metric label="Đúng" value={result.correctCount} /><Metric label="Sai" value={result.incorrectCount} /><Metric label="Bỏ trống" value={result.unansweredCount} /></div><div className="mt-6 space-y-2">{result.questions.map((question) => <ResultQuestion key={question.questionId} question={question} />)}</div><Button className="mt-6" onClick={onRestart}><RotateCcw className="size-4" /> Làm lượt mới</Button></section>;
+function ResultPanel({ result, onBack, onRestart }: { result: StudyCoachQuizResult; onBack: () => void; onRestart: () => void }) {
+  return <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-card sm:p-8"><div className="text-center"><CheckCircle2 className="mx-auto size-12 text-emerald-600" /><h2 className="mt-3 text-2xl font-black text-slate-950">Hoàn thành bài luyện</h2><p className="mt-3 text-4xl font-black text-brand-700">{result.correctCount}/{result.totalQuestions}</p><p className="mt-1 text-lg font-bold text-slate-600">{result.percentage}%</p></div><div className="mt-6 grid grid-cols-3 gap-3 text-center"><Metric label="Đúng" value={result.correctCount} /><Metric label="Sai" value={result.incorrectCount} /><Metric label="Bỏ trống" value={result.unansweredCount} /></div><div className="mt-6 space-y-2">{result.questions.map((question) => <ResultQuestion key={question.questionId} question={question} />)}</div><div className="mt-6 flex flex-wrap gap-3"><Button variant="outline" onClick={onBack}><ArrowLeft className="size-4" /> Trang bài luyện</Button><Button onClick={onRestart}><RotateCcw className="size-4" /> Làm lượt mới</Button></div></section>;
 }
 function ResultQuestion({ question }: { question: StudyCoachQuizResult["questions"][number] }) {
   const unanswered = question.selectedOptionIndexes.length === 0;
@@ -142,6 +241,21 @@ function ResultQuestion({ question }: { question: StudyCoachQuizResult["question
 function LoadingPanel() { return <div className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-slate-200 bg-white"><LoaderCircle className="size-8 animate-spin text-brand-600" /></div>; }
 function ErrorBox({ message }: { message: string }) { return <p role="alert" className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm font-semibold text-rose-700">{message}</p>; }
 function Metric({ label, value }: { label: string; value: number }) { return <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xl font-black text-slate-950">{value}</p><p className="text-xs font-bold text-slate-500">{label}</p></div>; }
-function StatePanel({ title, detail, action, onAction }: { title: string; detail: string; action?: string; onAction?: () => void }) { return <section className="mt-5 grid min-h-72 place-items-center rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card"><div><CircleHelp className="mx-auto size-10 text-brand-600" /><h2 className="mt-4 text-xl font-black text-slate-950">{title}</h2><p className="mt-2 text-sm text-slate-500">{detail}</p>{action && onAction ? <Button className="mt-5" onClick={onAction}>{action}</Button> : null}</div></section>; }
+function markedStorageKey(attemptId: string) { return `${MARKED_KEY}:${attemptId}`; }
+function readMarkedQuestions(attemptId: string): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(markedStorageKey(attemptId)) ?? "[]") as unknown;
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  } catch { return []; }
+}
+function saveMarkedQuestions(attemptId: string, questionIds: string[]) {
+  try { localStorage.setItem(markedStorageKey(attemptId), JSON.stringify(questionIds)); } catch { /* Marking still works for the current screen. */ }
+}
+function clearMarkedQuestions(attemptId: string) {
+  try { localStorage.removeItem(markedStorageKey(attemptId)); } catch { /* Nothing else to clear. */ }
+}
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
 function createClientEventId(scope: string) { return `${scope}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`; }
 function messageOf(cause: unknown, fallback: string) { return cause instanceof Error ? cause.message : fallback; }

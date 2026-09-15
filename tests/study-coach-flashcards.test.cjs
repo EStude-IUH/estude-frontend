@@ -54,15 +54,16 @@ const childText = (value) => {
   return "";
 };
 
-async function setup(t, { load = () => queue([flashcard("one"), flashcard("two")]), review = () => ({}), storedSession = null } = {}) {
+async function setup(t, { load = () => queue([flashcard("one"), flashcard("two")]), review = () => ({}), storedSession = null, materialId } = {}) {
   const calls = [];
+  const completions = [];
   const storage = new Map();
   global.localStorage = {
     getItem: (key) => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
     removeItem: (key) => storage.delete(key),
   };
-  if (storedSession) storage.set("estude:study-coach:flashcards:v1", JSON.stringify(storedSession));
+  if (storedSession) storage.set(`estude:study-coach:flashcards:v1:${materialId ?? "all"}`, JSON.stringify(storedSession));
   const router = { push: () => undefined };
   const filename = path.resolve("components/student/student-flashcards-page.tsx");
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
@@ -77,7 +78,7 @@ async function setup(t, { load = () => queue([flashcard("one"), flashcard("two")
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
-    if (id === "next/navigation") return { useRouter: () => router };
+    if (id === "next/navigation") return { useRouter: () => router, useParams: () => ({ materialId }) };
     if (id === "lucide-react") {
       return new Proxy({}, { get: (_target, name) => (props) => React.createElement("svg", { ...props, "data-icon": String(name) }) });
     }
@@ -95,6 +96,7 @@ async function setup(t, { load = () => queue([flashcard("one"), flashcard("two")
             calls.push({ cardId, rating, clientEventId });
             return review(cardId, rating, clientEventId);
           },
+          completeFlashcardSession: async (input) => { completions.push(input); return {}; },
         },
       };
     }
@@ -119,7 +121,7 @@ async function setup(t, { load = () => queue([flashcard("one"), flashcard("two")
   const buttons = () => renderer.root.findAllByType("button");
   const button = (label) => buttons().find((item) => childText(item.props.children).includes(label));
   const hasText = (value) => renderer.root.findAll((item) => childText(item.props.children).includes(value)).length > 0;
-  return { renderer, calls, text, button, hasText };
+  return { renderer, calls, completions, text, button, hasText };
 }
 
 test("loads a stable session, reveals the answer, and advances only after review succeeds", async (t) => {
@@ -225,4 +227,27 @@ test("offers all-card practice when no card is due and loads it explicitly", asy
 
   assert.deepEqual(modes, ["DUE", "ALL"]);
   assert.match(ui.text(), /Question one/);
+});
+
+test("scopes the flashcard queue and browser session to the selected material", async (t) => {
+  const requestedDocuments = [];
+  const ui = await setup(t, {
+    materialId: "geography",
+    load: (documentId) => {
+      requestedDocuments.push(documentId);
+      return queue([{ ...flashcard("geo"), document: { id: "geography", name: "Địa lý.pdf" } }]);
+    },
+  });
+
+  assert.deepEqual(requestedDocuments, ["geography"]);
+  assert.match(ui.text(), /Địa lý\.pdf/);
+});
+
+test("counts one completed flashcard session instead of individual cards", async (t) => {
+  const ui = await setup(t, { materialId: "document", load: () => queue([flashcard("one")]) });
+  await act(async () => { ui.button("Hiện đáp án").props.onClick(); });
+  await act(async () => { ui.button("3 · Tốt").props.onClick(); await flush(); });
+  assert.equal(ui.completions.length, 1);
+  assert.equal(ui.completions[0].documentId, "document");
+  assert.equal(ui.completions[0].reviewedCardCount, 1);
 });

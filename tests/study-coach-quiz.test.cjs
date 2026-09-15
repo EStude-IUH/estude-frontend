@@ -21,24 +21,27 @@ const questions = [
 ];
 const attempt = () => ({ attemptId: "attempt", examId: "exam", status: "IN_PROGRESS", title: "Cell Quiz", documentId: "document", startedAt: new Date().toISOString(), totalQuestions: 3, answeredCount: 0, unansweredCount: 3, currentQuestionIndex: 0, questions, answers: [] });
 const result = { attemptId: "attempt", examId: "exam", status: "SUBMITTED", title: "Cell Quiz", submittedAt: new Date().toISOString(), durationSeconds: 12, idempotentReplay: false, totalQuestions: 3, correctCount: 2, incorrectCount: 0, unansweredCount: 1, percentage: 66.67, score: 2, maxScore: 3, questions: questions.map((question, index) => ({ ...question, isCorrect: index < 2, selectedOptionIndexes: index < 2 ? [0] : [], score: index < 2 ? 1 : 0 })) };
+const historyItem = { attemptId: "history-attempt", examId: "exam", title: "Cell Quiz", document: quiz.document, submittedAt: new Date().toISOString(), totalQuestions: 3, answeredCount: 3, correctCount: 2, incorrectCount: 1, unansweredCount: 0, percentage: 66.67, durationSeconds: 12 };
 
 async function setup(t, overrides = {}) {
-  const calls = { start: [], answer: [], submit: [], get: [] };
+  const calls = { list: [], start: [], answer: [], submit: [], get: [] };
   const storage = new Map();
-  if (overrides.storedAttempt) storage.set("estude:study-coach:quiz-attempt:v1", overrides.storedAttempt);
+  if (overrides.storedAttempt) storage.set(`estude:study-coach:quiz-attempt:v1:${overrides.materialId ?? "all"}`, overrides.storedAttempt);
   global.localStorage = { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) };
   const api = {
-    getQuizzes: async () => overrides.list ? overrides.list() : { items: [quiz], total: 1 },
+    getQuizzes: async (documentId) => { calls.list.push(documentId); return overrides.list ? overrides.list(documentId) : { items: [quiz], total: 1 }; },
+    getQuizHistory: async () => overrides.history ? overrides.history() : { items: [], total: 0 },
     getQuizAttempt: async (id) => { calls.get.push(id); return overrides.get ? overrides.get(id) : attempt(); },
     startQuiz: async (...args) => { calls.start.push(args); return overrides.start ? overrides.start(...args) : attempt(); },
     submitQuizAnswer: async (...args) => { calls.answer.push(args); return overrides.answer ? overrides.answer(...args) : { attemptId: "attempt", examId: "exam", questionId: args[1], selectedOptionIndexes: args[2], answeredAt: new Date().toISOString(), responseTimeMs: 50, idempotentReplay: false, progress: { answeredCount: calls.answer.length, totalQuestions: 3 } }; },
     submitQuiz: async (...args) => { calls.submit.push(args); return overrides.submit ? overrides.submit(...args) : result; },
+    getQuizResult: async () => overrides.result ? overrides.result() : result,
   };
   const filename = path.resolve("components/student/student-quiz-page.tsx");
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
-    if (id === "next/navigation") return { useRouter: () => ({ push() {} }) };
+    if (id === "next/navigation") return { useRouter: () => ({ push() {} }), useParams: () => ({ materialId: overrides.materialId }) };
     if (id === "lucide-react") return new Proxy({}, { get: (_target, name) => (props) => React.createElement("svg", { ...props, "data-icon": String(name) }) });
     if (id === "@/components/student/student-shell") return { StudentShell: ({ children }) => React.createElement("main", null, children) };
     if (id === "@/components/ui/button") return { Button: ({ children, ...props }) => React.createElement("button", props, children) };
@@ -61,7 +64,7 @@ test("uses the available question bank, starts once on double click, and renders
   assert.equal(ui.button("10"), undefined); assert.equal(ui.button("20"), undefined); assert.equal(ui.button("30"), undefined);
   await act(async () => { ui.button("Cell Quiz").props.onClick(); });
   assert.match(ui.text(), /Quiz.*3.*3/);
-  await act(async () => { const start = ui.button("Bắt đầu quiz"); start.props.onClick(); start.props.onClick(); await flush(); });
+  await act(async () => { const start = ui.button("Bắt đầu làm bài"); start.props.onClick(); start.props.onClick(); await flush(); });
   assert.equal(ui.calls.start.length, 1);
   assert.equal(ui.calls.start[0].length, 2);
   await act(async () => { pending.resolve(attempt()); await flush(); });
@@ -74,28 +77,24 @@ test("uses the available question bank, starts once on double click, and renders
 test("supports single, multiple and true-false interaction with progress and final result", async (t) => {
   const ui = await setup(t);
   await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
-  await act(async () => { ui.button("Bắt đầu quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
   await act(async () => { ui.button("Alpha").props.onClick(); await flush(); });
-  await act(async () => { ui.button("Lưu câu trả lời").props.onClick(); await flush(); });
-  assert.match(ui.text(), /Kết quả đúng hoặc sai sẽ hiển thị sau khi nộp bài/);
+  assert.match(ui.text(), /Multiple question/);
   assert.doesNotMatch(ui.text(), /Chính xác|Chưa chính xác/);
-  await act(async () => { ui.button("Câu tiếp").props.onClick(); await flush(); });
   await act(async () => { ui.button("One").props.onClick(); await flush(); ui.button("Three").props.onClick(); await flush(); });
   assert.match(ui.text(), /Lựa chọn nhiều đáp án/);
-  await act(async () => { ui.button("Lưu câu trả lời").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Xác nhận và sang câu tiếp").props.onClick(); await flush(); });
   assert.deepEqual(ui.calls.answer[1][2], [0, 2]);
-  await act(async () => { ui.button("Câu tiếp").props.onClick(); await flush(); });
   await act(async () => { ui.button("Đúng").props.onClick(); await flush(); });
   assert.match(ui.text(), /Đúng hoặc sai/);
-  await act(async () => { ui.button("Lưu câu trả lời").props.onClick(); await flush(); });
   await act(async () => { ui.button("Nộp bài").props.onClick(); await flush(); });
-  assert.match(ui.text(), /Hoàn thành quiz/);
+  assert.match(ui.text(), /Hoàn thành bài luyện/);
   assert.match(ui.text(), /66.67/);
   assert.match(ui.text(), /Trả lời đúng/);
   assert.match(ui.text(), /Chưa trả lời/);
   await act(async () => { ui.button("Làm lượt mới").props.onClick(); await flush(); });
-  assert.ok(ui.button("Bắt đầu quiz"));
-  await act(async () => { ui.button("Bắt đầu quiz").props.onClick(); await flush(); });
+  assert.ok(ui.button("Bắt đầu làm bài"));
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
   assert.equal(ui.calls.start.length, 2);
 });
 
@@ -104,9 +103,8 @@ test("retries a failed answer with the same clientEventId and prevents double su
   const pending = deferred();
   const ui = await setup(t, { answer: () => { if (count++ === 0) throw new Error("Network lost"); return pending.promise; } });
   await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
-  await act(async () => { ui.button("Bắt đầu quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
   await act(async () => { ui.button("Alpha").props.onClick(); await flush(); });
-  await act(async () => { ui.button("Lưu câu trả lời").props.onClick(); await flush(); });
   assert.match(ui.text(), /Network lost/);
   await act(async () => { const retry = ui.button("Gửi lại câu trả lời"); retry.props.onClick(); retry.props.onClick(); await flush(); });
   assert.equal(ui.calls.answer.length, 2);
@@ -115,12 +113,13 @@ test("retries a failed answer with the same clientEventId and prevents double su
   await act(async () => { await flush(); });
 });
 
-test("resumes from backend after reload and handles an empty question bank", async (t) => {
+test("always opens the quiz hub instead of restoring an old result and handles an empty question bank", async (t) => {
   const resumed = await setup(t, { storedAttempt: "attempt" });
-  assert.deepEqual(resumed.calls.get, ["attempt"]);
-  assert.match(resumed.text(), /Single question/);
+  assert.deepEqual(resumed.calls.get, []);
+  assert.match(resumed.text(), /Làm bài mới/);
+  assert.match(resumed.text(), /Lịch sử làm bài/);
   const empty = await setup(t, { list: () => ({ items: [], total: 0 }) });
-  assert.match(empty.text(), /Chưa có quiz/);
+  assert.equal(empty.renderer.root.findByProps({ "data-testid": "quiz-hub" }) != null, true);
 });
 
 test("retries final submission with one stable event ID and blocks double click", async (t) => {
@@ -128,7 +127,7 @@ test("retries final submission with one stable event ID and blocks double click"
   const pending = deferred();
   const ui = await setup(t, { submit: () => { if (count++ === 0) throw new Error("Submit timeout"); return pending.promise; } });
   await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
-  await act(async () => { ui.button("Bắt đầu quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
   await act(async () => { ui.button("Bỏ qua / Câu tiếp").props.onClick(); await flush(); });
   await act(async () => { ui.button("Bỏ qua / Câu tiếp").props.onClick(); await flush(); });
   await act(async () => { ui.button("Nộp bài").props.onClick(); await flush(); });
@@ -138,4 +137,31 @@ test("retries final submission with one stable event ID and blocks double click"
   assert.equal(ui.calls.submit[0][1], ui.calls.submit[1][1]);
   pending.resolve(result);
   await act(async () => { await flush(); });
+});
+
+test("keeps quiz content in the selected material and lets students mark questions to revisit", async (t) => {
+  const ui = await setup(t, { materialId: "document" });
+  assert.deepEqual(ui.calls.list, ["document"]);
+  await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bỏ qua \/ Câu tiếp").props.onClick(); await flush(); });
+  await act(async () => { ui.button("One").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Đánh dấu câu này").props.onClick(); await flush(); });
+  assert.match(ui.text(), /Đã đánh dấu/);
+  await act(async () => { ui.button("Bỏ qua \/ Câu tiếp").props.onClick(); await flush(); });
+  const secondQuestion = ui.renderer.root.findAllByType("button").find((item) => item.props["aria-label"]?.startsWith("Câu 2,"));
+  await act(async () => { secondQuestion.props.onClick(); await flush(); });
+  assert.match(ui.text(), /Multiple question/);
+  assert.equal(ui.button("One").props["aria-pressed"], true);
+});
+
+test("shows completed attempts in history and opens a result only on request", async (t) => {
+  const ui = await setup(t, { history: () => ({ items: [historyItem], total: 1 }) });
+  assert.match(ui.text(), /Các lượt đã hoàn thành/);
+  assert.match(ui.text(), /66\.67.*%/s);
+  assert.doesNotMatch(ui.text(), /Hoàn thành bài luyện/);
+  await act(async () => { ui.button("Xem kết quả").props.onClick(); await flush(); });
+  assert.match(ui.text(), /Hoàn thành bài luyện/);
+  await act(async () => { ui.button("Trang bài luyện").props.onClick(); await flush(); });
+  assert.match(ui.text(), /Làm bài mới/);
 });

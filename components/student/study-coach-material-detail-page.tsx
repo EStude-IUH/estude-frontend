@@ -101,7 +101,9 @@ export function StudyCoachMaterialDetailPage() {
     }
   }
 
-  const scoped = material ? `?documentId=${encodeURIComponent(material.id)}` : "";
+  const materialPath = material
+    ? `/student/study-coach/materials/${encodeURIComponent(material.id)}`
+    : "";
   const failure = publicFailureMessage(material?.failureCode ?? null);
   return <StudentShell>
     <button type="button" onClick={() => router.push("/student/study-coach")} className="inline-flex items-center gap-1 text-sm font-bold text-slate-500 focus:outline-none focus:ring-4 focus:ring-blue-100"><ArrowLeft className="size-4" /> Quay lại Study Coach</button>
@@ -115,13 +117,13 @@ export function StudyCoachMaterialDetailPage() {
 
       {error ? <p role="alert" className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</p> : null}
       {!material.readyForStudy ? <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5" aria-live="polite"><h2 className="font-black text-slate-900">Chưa thể bắt đầu học</h2><p className="mt-2 text-sm leading-6 text-slate-500">{materialLifecycleLabels[material.lifecycle]}</p>{failure ? <p className="mt-2 text-sm text-rose-700">{failure}</p> : null}<div className="mt-4 flex flex-wrap gap-2">{(material.lifecycle === "READY_TO_PROCESS" || material.lifecycle === "FAILED" || material.lifecycle === "CANCELLED") && capabilities.processing.enabled ? <Button disabled={processing || deleting} onClick={() => void processAgain()}>{processing ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} {material.lifecycle === "READY_TO_PROCESS" ? "Bắt đầu xử lý" : "Xử lý lại"}</Button> : null}{material.lifecycle === "PROCESSING" ? <Button variant="danger" disabled={cancelling} onClick={() => void cancelProcessing()}>{cancelling ? <LoaderCircle className="size-4 animate-spin" /> : <XCircle className="size-4" />} {cancelling ? "Đang hủy..." : "Hủy xử lý"}</Button> : null}{material.lifecycle === "FAILED" || material.lifecycle === "CANCELLED" ? <Button variant="danger" disabled={processing || deleting} onClick={() => void deleteMaterial()}>{deleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />} {deleting ? "Đang xóa..." : "Xóa tài liệu"}</Button> : null}</div>{!capabilities.processing.enabled ? <p className="mt-3 text-sm font-semibold text-amber-700">Tính năng xử lý tài liệu đang tạm thời không khả dụng.</p> : null}</section> : <>
-        <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-5"><h2 className="text-lg font-black text-slate-950">Sẵn sàng học</h2><p className="mt-2 text-sm leading-6 text-slate-600">Bản đồ kiến thức, thẻ ghi nhớ và bài luyện của tài liệu đã sẵn sàng.</p>{capabilities.knowledgeMap.enabled ? <Button className="mt-4" onClick={() => router.push(`/student/study-coach/materials/${material.id}/knowledge-map`)}><BookOpen className="size-4" /> Bắt đầu học</Button> : capabilities.flashcards.enabled ? <Button className="mt-4" onClick={() => router.push(`/student/review/flashcards${scoped}`)}><Layers className="size-4" /> Bắt đầu học</Button> : null}</section>
+        <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/60 p-5"><h2 className="text-lg font-black text-slate-950">Sẵn sàng học</h2><p className="mt-2 text-sm leading-6 text-slate-600">Bắt đầu với hệ thống kiến thức, sau đó ôn thẻ ghi nhớ và làm bài luyện của riêng tài liệu này.</p>{capabilities.knowledgeMap.enabled ? <Button className="mt-4" onClick={() => router.push(`${materialPath}/knowledge-map`)}><BookOpen className="size-4" /> Bắt đầu lộ trình</Button> : capabilities.flashcards.enabled ? <Button className="mt-4" onClick={() => router.push(`${materialPath}/flashcards`)}><Layers className="size-4" /> Ôn thẻ ghi nhớ</Button> : null}</section>
         <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Hành động học tập">
-          {capabilities.knowledgeMap.enabled ? <Action label="Bản đồ kiến thức" icon={Map} onClick={() => router.push(`/student/study-coach/materials/${material.id}/knowledge-map`)} /> : null}
-          {capabilities.flashcards.enabled ? <Action label="Ôn thẻ ghi nhớ" icon={Layers} onClick={() => router.push(`/student/review/flashcards${scoped}`)} /> : null}
-          {capabilities.quiz.enabled ? <Action label="Làm bài luyện" icon={BrainCircuit} onClick={() => router.push(`/student/review/quiz${scoped}`)} /> : null}
-          {capabilities.mastery.enabled ? <Action label="Xem tiến độ" icon={BookOpen} onClick={() => router.push(`/student/study-coach/materials/${material.id}/mastery`)} /> : null}
-          {capabilities.insights.enabled ? <Action label="Xem phân tích học tập" icon={Sparkles} onClick={() => router.push(`/student/study-coach/insights${scoped}`)} /> : null}
+          {capabilities.knowledgeMap.enabled ? <Action label="Hệ thống kiến thức" icon={Map} onClick={() => router.push(`${materialPath}/knowledge-map`)} /> : null}
+          {capabilities.flashcards.enabled ? <Action label="Ôn thẻ ghi nhớ" icon={Layers} onClick={() => router.push(`${materialPath}/flashcards`)} /> : null}
+          {capabilities.quiz.enabled ? <Action label="Làm bài luyện" icon={BrainCircuit} onClick={() => router.push(`${materialPath}/quiz`)} /> : null}
+          {capabilities.mastery.enabled ? <Action label="Xem tiến độ" icon={BookOpen} onClick={() => router.push(`${materialPath}/mastery`)} /> : null}
+          {capabilities.insights.enabled ? <Action label="Xem phân tích học tập" icon={Sparkles} onClick={() => router.push(`${materialPath}/insights`)} /> : null}
         </section>
       </>}
     </div> : null}

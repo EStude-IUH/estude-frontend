@@ -29,9 +29,9 @@ export function StudyCoachHomePage() {
       const available = await studyCoachService.getCapabilities();
       setCapabilities(available);
       const [masteryData, materialData, insightData, queue] = await Promise.all([
-        available.mastery.enabled ? studyCoachService.getMastery() : Promise.resolve({ items: [], total: 0, activity: { flashcardReviewCount: 0, quizAnswerCount: 0, totalActivityCount: 0 } }),
+        available.mastery.enabled ? studyCoachService.getMastery() : Promise.resolve({ items: [], total: 0, activity: { flashcardReviewCount: 0, quizAnswerCount: 0, flashcardSessionCount: 0, quizCompletionCount: 0, totalCompletedSessions: 0, totalActivityCount: 0 } }),
         available.materials.enabled ? studyCoachService.getMaterials(1, 100) : Promise.resolve({ items: [], meta: { page: 1, limit: 100, total: 0, totalPages: 0 } }),
-        available.insights.enabled ? studyCoachService.getInsights({ scope: "STUDENT", language: "vi" }) : Promise.resolve({ items: [], total: 0 }),
+        available.insights.enabled ? studyCoachService.getInsights({ scope: "STUDENT" }) : Promise.resolve({ items: [], total: 0 }),
         available.flashcards.enabled ? studyCoachService.getDueQueue() : Promise.resolve({ dueCount: 0, newCount: 0 }),
       ]);
       setMastery(masteryData.items);
@@ -55,9 +55,10 @@ export function StudyCoachHomePage() {
   const nextAction = insight?.nextActions[0] ?? null;
   const actionableNext = nextAction && capabilities && (
     (nextAction.actionType === "REVIEW" && capabilities.flashcards.enabled) ||
-    (nextAction.actionType === "LEARN" && capabilities.mastery.enabled) ||
+    (nextAction.actionType === "LEARN" && capabilities.knowledgeMap.enabled) ||
     ((nextAction.actionType === "PRACTICE" || nextAction.actionType === "CHALLENGE") && capabilities.quiz.enabled)
   ) ? nextAction : null;
+  const chooseMaterial = () => document.getElementById("study-coach-materials")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return <StudentShell><div data-testid="study-coach-home">
     <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 to-blue-500 p-6 text-white shadow-card sm:p-8">
@@ -65,7 +66,7 @@ export function StudyCoachHomePage() {
       <h1 className="mt-2 text-3xl font-black">Học tiếp từ đúng nơi bạn cần</h1>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50">Hoạt động học của bạn được tổng hợp thành tiến độ, gợi ý ôn tập và lời giải thích dễ hiểu.</p>
       <div className="mt-6 flex flex-wrap gap-3">
-        {capabilities?.flashcards.enabled ? <Button onClick={() => router.push(actionableNext ? actionHref(actionableNext.actionType, actionableNext.documentId) : "/student/review/flashcards")}><ArrowRight className="size-4" /> Tiếp tục học</Button> : null}
+        {capabilities?.flashcards.enabled ? <Button onClick={() => actionableNext ? router.push(actionHref(actionableNext.actionType, actionableNext.documentId)) : chooseMaterial()}><ArrowRight className="size-4" /> {actionableNext ? "Tiếp tục học" : "Chọn tài liệu để học"}</Button> : null}
         {capabilities?.insights.enabled ? <Button variant="outline" className="border-white/50 bg-white/10 text-white hover:bg-white/20" onClick={() => router.push("/student/study-coach/insights")}><Sparkles className="size-4" /> Xem phân tích</Button> : null}
       </div>
     </header>
@@ -79,8 +80,8 @@ export function StudyCoachHomePage() {
       </section>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {capabilities.flashcards.enabled ? <Shortcut icon={Layers} label="Ôn Flashcards" detail={`${dueCount} thẻ đang chờ`} onClick={() => router.push("/student/review/flashcards")} /> : null}
-        {capabilities.quiz.enabled ? <Shortcut icon={BrainCircuit} label="Làm Quiz" detail="Luyện tập theo tài liệu" onClick={() => router.push("/student/review/quiz")} /> : null}
+        {capabilities.flashcards.enabled ? <Shortcut icon={Layers} label="Ôn thẻ ghi nhớ" detail={`${dueCount} thẻ đang chờ · chọn tài liệu để ôn`} onClick={chooseMaterial} /> : null}
+        {capabilities.quiz.enabled ? <Shortcut icon={BrainCircuit} label="Làm bài luyện" detail="Chọn tài liệu để nội dung không bị trộn lẫn" onClick={chooseMaterial} /> : null}
         {capabilities.mastery.enabled ? <Shortcut icon={MapIcon} label="Xem năng lực" detail="Tách riêng theo tài liệu" onClick={() => document.getElementById("mastery-by-document")?.scrollIntoView({ behavior: "smooth", block: "start" })} /> : null}
         {capabilities.insights.enabled ? <Shortcut icon={Sparkles} label="Phân tích AI" detail="Gợi ý từ kết quả học" onClick={() => router.push("/student/study-coach/insights")} /> : null}
       </section>
