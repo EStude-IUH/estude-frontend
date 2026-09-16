@@ -393,14 +393,21 @@ export function AccountManagementPanel() {
     setUpdatingParentLinkId(selectedStudentId);
     setEditError("");
     try {
-      const linked = await authenticatedRequest<User[]>(
-        `/users/${encodeURIComponent(editingUser.id)}/children/${encodeURIComponent(selectedStudentId)}`,
-        { method: "POST" },
+      const result = await authenticatedRequest<{ createdStudentIds: string[]; duplicateStudentIds: string[]; status: "PENDING" | "ACTIVE" }>(
+        "/users/parent-student-links",
+        { method: "POST", body: JSON.stringify({ parentId: editingUser.id, studentIds: [selectedStudentId], relationshipType: "GUARDIAN" }) },
       );
+      if (result.duplicateStudentIds.length) {
+        setEditError("Học sinh này đã có liên kết đang hiệu lực hoặc chờ duyệt.");
+        return;
+      }
+      const linked = result.status === "ACTIVE"
+        ? await authenticatedRequest<User[]>(`/users/${encodeURIComponent(editingUser.id)}/children`)
+        : parentChildren;
       setParentChildren(linked);
       const linkedIds = new Set(linked.map((student) => student.id));
       setSelectedStudentId(studentCandidates.find((student) => !linkedIds.has(student.id))?.id ?? "");
-      notify("Đã liên kết học sinh với phụ huynh", { key: "parent-student-linked" });
+      notify(result.status === "PENDING" ? "Đã gửi liên kết chờ duyệt" : "Đã liên kết học sinh với phụ huynh", { key: "parent-student-linked" });
     } catch (error) {
       setEditError(getErrorMessage(error, "Không thể liên kết học sinh"));
     } finally {

@@ -14,6 +14,11 @@ export interface ParentStudentLink {
   id: string;
   parent: User;
   student: User;
+  status: "PENDING" | "ACTIVE" | "REJECTED" | "REVOKED";
+  relationshipType: "FATHER" | "MOTHER" | "GUARDIAN" | "OTHER";
+  note: string | null;
+  approvedAt: string | null;
+  revokedAt: string | null;
   createdAt: string;
 }
 
@@ -39,5 +44,10 @@ export interface DefaultPasswordSettings {
   teacherConfigured: boolean;
   studentConfigured: boolean;
   parentConfigured: boolean;
+  updatedAt: string | null;
+}
+
+export interface ParentLinkSettings {
+  requireApproval: boolean;
   updatedAt: string | null;
 }

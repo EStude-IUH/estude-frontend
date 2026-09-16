@@ -48,6 +48,11 @@ export const MODULE_LINKS = [
     permission: "password_settings.read",
   },
   {
+    href: "/admin/settings/parent-links",
+    label: "Cấu hình liên kết phụ huynh",
+    permission: "system_settings.read",
+  },
+  {
     href: "/admin/settings/ai-question",
     label: "Cấu hình AI",
     permission: "ai_settings.read",

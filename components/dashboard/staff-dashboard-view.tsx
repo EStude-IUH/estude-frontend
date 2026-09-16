@@ -104,6 +104,11 @@ const settingsSubItems = [
     section: "default-passwords",
   },
   {
+    label: "Liên kết phụ huynh",
+    href: "/admin/settings/parent-links",
+    section: "parent-links",
+  },
+  {
     label: "Bảo mật & phiên",
     href: "/admin/settings/security",
     section: "security",

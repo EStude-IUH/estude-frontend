@@ -21,6 +21,7 @@ interface DateRangePickerProps extends DateRangeValue {
   className?: string;
   buttonClassName?: string;
   singleDate?: boolean;
+  onClear?: () => void;
 }
 
 interface DateTimePickerProps {
@@ -207,6 +208,7 @@ export function DateRangePicker({
   className,
   buttonClassName,
   singleDate = false,
+  onClear,
 }: DateRangePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => normalizeDate(new Date()), []);
@@ -276,6 +278,7 @@ export function DateRangePicker({
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-left text-sm outline-none transition hover:border-slate-300 focus:border-brand-400",
+          onClear && (from || to) && "pr-10",
           open && "border-brand-400",
           buttonClassName,
         )}
@@ -297,6 +300,17 @@ export function DateRangePicker({
           </>
         )}
       </button>
+      {onClear && (from || to) ? (
+        <button
+          type="button"
+          aria-label="Xóa bộ lọc"
+          title="Xóa bộ lọc"
+          onClick={(event) => { event.stopPropagation(); onClear(); setOpen(false); }}
+          className="absolute right-2 top-1/2 z-10 grid size-6 -translate-y-1/2 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+        >
+          ×
+        </button>
+      ) : null}
 
       {open ? (
         <div
@@ -585,7 +599,7 @@ function CalendarMonth({
 
   return (
     <div className={cn("min-w-0 p-3", className)}>
-      <div className="grid h-8 grid-cols-[64px_minmax(0,1fr)_64px] items-center">
+      <div className="grid h-8 grid-cols-[56px_minmax(0,1fr)_56px] items-center">
         <div className="flex">
           {onPreviousYear ? (
             <CalendarNavButton label="Năm trước" onClick={onPreviousYear}>
@@ -598,7 +612,7 @@ function CalendarMonth({
             </CalendarNavButton>
           ) : null}
         </div>
-        <p className="truncate text-center text-[13px] font-bold capitalize text-slate-700">
+        <p className="whitespace-nowrap text-center text-xs font-bold capitalize text-slate-700">
           {monthFormatter.format(month)}
         </p>
         <div className="flex justify-end">

@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-control";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ApiError, authenticatedRequest } from "@/lib/auth-api";
-import type { DefaultPasswordSettings } from "@/types/users";
+import type { DefaultPasswordSettings, ParentLinkSettings } from "@/types/users";
 
 function SettingSwitch({
   checked,
@@ -98,6 +98,7 @@ export type SystemSettingsSection =
   | "performance"
   | "ai-question"
   | "default-passwords"
+  | "parent-links"
   | "security";
 
 export function SystemSettingsPanel({
@@ -135,6 +136,10 @@ export function SystemSettingsPanel({
   const [passwordSettingsError, setPasswordSettingsError] = useState("");
   const [loadingPasswordSettings, setLoadingPasswordSettings] = useState(false);
   const [savingPasswordSettings, setSavingPasswordSettings] = useState(false);
+  const [parentLinkSettings, setParentLinkSettings] = useState<ParentLinkSettings | null>(null);
+  const [parentLinkSettingsError, setParentLinkSettingsError] = useState("");
+  const [loadingParentLinkSettings, setLoadingParentLinkSettings] = useState(false);
+  const [savingParentLinkSettings, setSavingParentLinkSettings] = useState(false);
 
   useEffect(() => {
     if (section !== "default-passwords") return;
@@ -163,6 +168,35 @@ export function SystemSettingsPanel({
       cancelled = true;
     };
   }, [section]);
+
+  useEffect(() => {
+    if (section !== "parent-links") return;
+    let cancelled = false;
+    setLoadingParentLinkSettings(true);
+    setParentLinkSettingsError("");
+    authenticatedRequest<ParentLinkSettings>("/users/parent-link-settings")
+      .then((settings) => { if (!cancelled) setParentLinkSettings(settings); })
+      .catch((error: unknown) => {
+        if (!cancelled) setParentLinkSettingsError(error instanceof ApiError ? error.details.join(" · ") || error.message : "Không thể tải cấu hình liên kết phụ huynh");
+      })
+      .finally(() => { if (!cancelled) setLoadingParentLinkSettings(false); });
+    return () => { cancelled = true; };
+  }, [section]);
+
+  async function saveParentLinkSettings() {
+    if (!parentLinkSettings) return;
+    setSavingParentLinkSettings(true);
+    setParentLinkSettingsError("");
+    try {
+      const settings = await authenticatedRequest<ParentLinkSettings>("/users/parent-link-settings", { method: "PATCH", body: JSON.stringify({ requireApproval: parentLinkSettings.requireApproval }) });
+      setParentLinkSettings(settings);
+      notify("Đã cập nhật quy trình liên kết phụ huynh", { key: "parent-link-settings-saved" });
+    } catch (error) {
+      setParentLinkSettingsError(error instanceof ApiError ? error.details.join(" · ") || error.message : "Không thể lưu cấu hình liên kết phụ huynh");
+    } finally {
+      setSavingParentLinkSettings(false);
+    }
+  }
 
   async function handleSave() {
     if (section === "default-passwords") {
@@ -213,7 +247,7 @@ export function SystemSettingsPanel({
 
   return (
     <div className="w-full pb-8">
-      {section !== "default-passwords" ? (
+      {section !== "default-passwords" && section !== "parent-links" ? (
         <div className="mb-3 flex justify-end">
           <Button permission="system_settings.update"
             className="w-fit !rounded-lg"
@@ -588,6 +622,25 @@ export function SystemSettingsPanel({
                 <Save className="size-4" />
               )}
               {savingPasswordSettings ? "Đang lưu..." : "Lưu cấu hình"}
+            </Button>
+          </div>
+        </section>
+
+        <section className={`${section === "parent-links" ? "" : "hidden"} mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6`}>
+          <SectionHeader icon={UsersRound} title="Liên kết phụ huynh – học sinh" description="Thiết lập việc liên kết cần được duyệt trước khi phụ huynh có quyền xem thông tin học sinh." tone="bg-blue-50 text-brand-600" />
+          {loadingParentLinkSettings ? (
+            <p className="mt-6 flex items-center gap-2 text-sm text-slate-500"><LoaderCircle className="size-4 animate-spin" /> Đang tải cấu hình...</p>
+          ) : parentLinkSettings ? (
+            <div className="mt-6 space-y-4">
+              <SettingSwitch checked={parentLinkSettings.requireApproval} onChange={(requireApproval) => setParentLinkSettings({ ...parentLinkSettings, requireApproval })} label="Bắt buộc duyệt liên kết" description="Khi bật, liên kết mới ở trạng thái chờ duyệt và phụ huynh chưa xem được thông tin học sinh." />
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Khi tắt, người có quyền liên kết tạo quan hệ có hiệu lực ngay. Khi bật, người có quyền duyệt sẽ quyết định chấp nhận hoặc từ chối từng liên kết.</p>
+            </div>
+          ) : null}
+          {parentLinkSettingsError ? <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{parentLinkSettingsError}</p> : null}
+          <div className="mt-6 flex justify-end border-t border-slate-100 pt-5">
+            <Button permission="system_settings.update" disabled={!parentLinkSettings || loadingParentLinkSettings || savingParentLinkSettings} onClick={() => void saveParentLinkSettings()}>
+              {savingParentLinkSettings ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {savingParentLinkSettings ? "Đang lưu..." : "Lưu cấu hình"}
             </Button>
           </div>
         </section>

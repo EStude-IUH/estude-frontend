@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/context/auth-context";
 import { PermissionsProvider } from "@/context/permissions-context";
-import { ModuleLauncher } from "@/components/auth/module-launcher";
 import { ActionNotificationProvider } from "@/components/ui/action-notification";
 import "./globals.css";
 
@@ -26,7 +25,7 @@ export default function RootLayout({
       <body className={inter.variable} suppressHydrationWarning>
         <AuthProvider>
           <PermissionsProvider>
-            <ActionNotificationProvider>{children}<ModuleLauncher /></ActionNotificationProvider>
+            <ActionNotificationProvider>{children}</ActionNotificationProvider>
           </PermissionsProvider>
         </AuthProvider>
       </body>
