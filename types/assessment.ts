@@ -505,6 +505,114 @@ export interface ExamAttempt {
   examCode: string | null;
 }
 
+export type ExamClassParticipationStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED";
+export type TeacherReviewStatus = "DRAFT" | "PUBLISHED";
+
+export interface ExamClassReportAttempt {
+  id: string;
+  status: AttemptStatus;
+  startedAt: string;
+  submittedAt: string | null;
+  score: number | null;
+  maxScore: number;
+  percentage: number | null;
+  durationSeconds: number | null;
+}
+
+export interface ExamClassReportReview {
+  comment: string;
+  status: TeacherReviewStatus;
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+export interface ExamClassReportStudent {
+  id: string;
+  fullName: string;
+  studentCode: string;
+  avatarUrl: string | null;
+  participationStatus: ExamClassParticipationStatus;
+  attemptCount: number;
+  submittedAttemptCount: number;
+  selectedAttempt: ExamClassReportAttempt | null;
+  topicPerformance: Array<{
+    topicId: string;
+    topicName: string;
+    opportunityCount: number;
+    correctCount: number;
+    accuracy: number;
+  }>;
+  needsSupport: boolean;
+  supportTopicNames: string[];
+  review: ExamClassReportReview | null;
+}
+
+export interface ExamClassQuestionPerformance {
+  questionId: string;
+  order: number;
+  content: string;
+  type: QuestionType | null;
+  topicId: string;
+  topicName: string;
+  opportunityCount: number;
+  answeredCount: number;
+  correctCount: number | null;
+  incorrectCount: number | null;
+  unansweredCount: number;
+  accuracy: number | null;
+  supportStudentCount: number | null;
+  supportStudentIds: string[];
+  optionDistribution: Array<{
+    optionId: string;
+    label: string;
+    text: string;
+    selectedCount: number;
+  }>;
+}
+
+export interface ExamClassTopicPerformance {
+  topicId: string;
+  topicName: string;
+  questionCount: number;
+  opportunityCount: number;
+  answeredCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  accuracy: number | null;
+  supportStudentCount: number;
+  supportStudentIds: string[];
+}
+
+export interface ExamClassReport {
+  generatedAt: string;
+  policy: {
+    enrollmentScope: "CURRENT_ACTIVE_ENROLLMENTS";
+    selectedAttemptRule: "LATEST_SUBMITTED";
+    activeAttemptFallback: "LATEST_IN_PROGRESS_FOR_DISPLAY_ONLY";
+    supportThresholdPercent: number;
+    note: string;
+  };
+  summary: {
+    enrolledStudentCount: number;
+    uniqueAttemptedStudentCount: number;
+    totalAttemptCount: number;
+    notStartedCount: number;
+    inProgressStudentCount: number;
+    submittedStudentCount: number;
+    selectedSubmittedAttemptCount: number;
+    averageScore: number | null;
+    medianScore: number | null;
+    averagePercentage: number | null;
+    medianPercentage: number | null;
+    averageDurationSeconds: number | null;
+    medianDurationSeconds: number | null;
+  };
+  students: ExamClassReportStudent[];
+  questionPerformance: ExamClassQuestionPerformance[];
+  topicPerformance: ExamClassTopicPerformance[];
+}
+
 export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
 
 export interface StudyLearningProfile {

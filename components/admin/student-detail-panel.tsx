@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   BookOpen,
@@ -205,8 +205,21 @@ export function StudentDetailPanel({
   backHref?: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const focusedClassId = searchParams.get("classId") ?? "";
+  const focusedSubjectId = searchParams.get("subjectId") ?? "";
+  const returnTo = searchParams.get("returnTo");
+  const effectiveBackHref =
+    returnTo?.startsWith("/teacher/") || returnTo?.startsWith("/admin/")
+      ? returnTo
+      : backHref;
   const [data, setData] = useState<StudentOverview | null>(null);
-  const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [activeTab, setActiveTab] = useState<DetailTab>(
+    requestedTab === "subjects" || requestedTab === "exams"
+      ? requestedTab
+      : "overview",
+  );
   const [selectedTermId, setSelectedTermId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -250,6 +263,26 @@ export function StudentDetailPanel({
       ) ?? [],
     [data],
   );
+  const visibleSubjects = useMemo(
+    () =>
+      focusedClassId || focusedSubjectId
+        ? allSubjects.filter(
+            (item) =>
+              (!focusedClassId || item.enrollment.class.id === focusedClassId) &&
+              (!focusedSubjectId || item.id === focusedSubjectId),
+          )
+        : allSubjects,
+    [allSubjects, focusedClassId, focusedSubjectId],
+  );
+  const visibleExamResults = useMemo(
+    () =>
+      data?.examResults.filter(
+        (result) =>
+          (!focusedClassId || result.classId === focusedClassId) &&
+          (!focusedSubjectId || result.subjectId === focusedSubjectId),
+      ) ?? [],
+    [data, focusedClassId, focusedSubjectId],
+  );
 
   if (isLoading) {
     return (
@@ -273,7 +306,7 @@ export function StudentDetailPanel({
           <div className="mt-4 flex justify-center gap-2">
             <Button
               variant="outline"
-              onClick={() => router.push(backHref)}
+              onClick={() => router.push(effectiveBackHref)}
             >
               Quay lại danh sách
             </Button>
@@ -316,7 +349,7 @@ export function StudentDetailPanel({
   );
 
   const renderSubjects = () =>
-    allSubjects.length ? (
+    visibleSubjects.length ? (
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[850px] text-left text-[13px]">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -330,7 +363,7 @@ export function StudentDetailPanel({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {allSubjects.map((item) => (
+            {visibleSubjects.map((item) => (
               <tr key={`${item.enrollment.id}-${item.id}`}>
                 <td className="px-4 py-3 font-mono font-semibold text-brand-700">
                   {item.code}
@@ -406,7 +439,7 @@ export function StudentDetailPanel({
     );
 
   const renderExams = () =>
-    data.examResults.length ? (
+    visibleExamResults.length ? (
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[980px] text-left text-[13px]">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -422,7 +455,7 @@ export function StudentDetailPanel({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {data.examResults.map((result) => (
+            {visibleExamResults.map((result) => (
               <tr key={result.id}>
                 <td className="px-4 py-3 font-bold text-slate-900">
                   {result.title}
@@ -601,6 +634,20 @@ export function StudentDetailPanel({
           </div>
         </aside>
         <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {focusedClassId || focusedSubjectId ? (
+            <div className="shrink-0 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-800">
+              Đang lọc hồ sơ theo lớp và môn học của bài kiểm tra đã chọn.
+              {returnTo ? (
+                <button
+                  type="button"
+                  onClick={() => router.push(effectiveBackHref)}
+                  className="ml-2 font-extrabold text-brand-700 underline underline-offset-2"
+                >
+                  Quay lại báo cáo lớp
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid shrink-0 grid-cols-2 gap-2 p-3 lg:grid-cols-4 lg:py-2">
             {[
               {

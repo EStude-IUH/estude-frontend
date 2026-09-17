@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BookOpenCheck,
+  CalendarClock,
+  ClipboardList,
   Download,
   Edit3,
+  FileCheck2,
   FileText,
   LoaderCircle,
   Plus,
@@ -19,9 +22,9 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
-import { academicDataService } from "@/lib/assessment-api";
+import { academicDataService, examService } from "@/lib/assessment-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
-import type { ClassTopic, ClassTopicInput, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
+import type { ClassTopic, ClassTopicInput, Exam, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
 
 const emptyForm: ClassTopicInput = { subjectId: "", name: "", description: "", sortOrder: 0 };
 
@@ -35,11 +38,19 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
+function examStatus(exam: Exam): { label: string; className: string } {
+  if (!exam.published) return { label: "Bản nháp", className: "bg-slate-100 text-slate-600" };
+  if (exam.status === "ONGOING") return { label: "Đang diễn ra", className: "bg-emerald-50 text-emerald-700" };
+  if (exam.status === "ENDED") return { label: "Đã kết thúc", className: "bg-blue-50 text-brand-700" };
+  return { label: "Sắp diễn ra", className: "bg-amber-50 text-amber-700" };
+}
+
 export function TeacherClassLearningSpace({ classId }: { classId: string }) {
   const router = useRouter();
   const { notify } = useActionNotification();
   const [schoolClass, setSchoolClass] = useState<TeacherAssignedClass | null>(null);
   const [topics, setTopics] = useState<ClassTopic[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingTopicId, setUploadingTopicId] = useState("");
@@ -54,12 +65,14 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
     setIsLoading(true);
     setError("");
     try {
-      const [loadedClass, loadedTopics] = await Promise.all([
+      const [loadedClass, loadedTopics, loadedExams] = await Promise.all([
         academicDataService.getTeacherAssignedClass(classId),
         academicDataService.getClassTopics(classId),
+        examService.getExams(),
       ]);
       setSchoolClass(loadedClass);
       setTopics(loadedTopics);
+      setExams(loadedExams.filter((exam) => exam.classId === classId));
     } catch (cause) {
       setError(errorMessage(cause, "Không thể tải không gian lớp học"));
     } finally {
@@ -186,6 +199,35 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
           </div>
         </div>
         <Button permission="teaching.create" className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
+      </section>
+
+      <section data-testid="class-exam-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+        <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="flex items-center gap-2 font-black text-slate-900"><ClipboardList className="size-5 text-brand-600" />Bài kiểm tra của lớp</h3>
+            <p className="mt-1 text-sm text-slate-500">Mở báo cáo để xem đủ học sinh, lượt làm và kết quả theo câu/chủ đề.</p>
+          </div>
+          <Button permission="exams.read" variant="outline" size="sm" onClick={() => router.push("/teacher/exams")}>Quản lý bài kiểm tra</Button>
+        </header>
+        {exams.length ? (
+          <div className="divide-y divide-slate-100">
+            {exams.map((exam) => {
+              const status = examStatus(exam);
+              return (
+                <article key={exam.id} className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-600"><FileCheck2 className="size-5" /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-slate-900">{exam.title}</p><span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${status.className}`}>{status.label}</span></div>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500"><span>{exam.subjectName}</span><span className="inline-flex items-center gap-1"><CalendarClock className="size-3.5" />{new Date(exam.settings.startsAt).toLocaleString("vi-VN")}</span><span>{exam.attemptedCount ?? 0} học sinh đã bắt đầu</span></p>
+                  </div>
+                  <Button permission={exam.published ? "exams.submissions" : "exams.read"} size="sm" variant={exam.published ? "secondary" : "outline"} onClick={() => router.push(exam.published ? `/teacher/exams/${exam.id}/submissions` : `/teacher/exams/${exam.id}`)}>{exam.published ? "Xem báo cáo lớp" : "Xem bài kiểm tra"}</Button>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-5 py-7 text-center text-sm text-slate-500">Lớp chưa có bài kiểm tra. Tạo và công bố bài kiểm tra để bắt đầu theo dõi kết quả.</div>
+        )}
       </section>
 
       <ClassChatPanel classId={classId} className={schoolClass?.name} />

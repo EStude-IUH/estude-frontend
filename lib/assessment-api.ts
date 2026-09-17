@@ -7,6 +7,8 @@ import {
 import type {
   Exam,
   ExamAttempt,
+  ExamClassReport,
+  ExamClassReportReview,
   ExamInput,
   ExamAnswer,
   AcademicYear,
@@ -438,6 +440,21 @@ export const examService = {
   },
   getSubmissions(id: string): Promise<ExamAttempt[]> {
     return authenticatedRequest<ExamAttempt[]>(`/exams/${encodeURIComponent(id)}/submissions`);
+  },
+  getClassReport(id: string): Promise<ExamClassReport> {
+    return authenticatedRequest<ExamClassReport>(
+      `/exams/${encodeURIComponent(id)}/class-report`,
+    );
+  },
+  updateStudentReview(
+    examId: string,
+    studentId: string,
+    payload: { comment: string; status: "DRAFT" | "PUBLISHED" },
+  ): Promise<ExamClassReportReview> {
+    return authenticatedRequest<ExamClassReportReview>(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/review`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    );
   },
 };
 
