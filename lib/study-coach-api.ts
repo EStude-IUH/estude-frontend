@@ -4,6 +4,7 @@ import type {
   FlashcardReviewResult,
   StudyCoachFlashcard,
   StudyCoachQuizAnswerResult,
+  StudyCoachQuizExport,
   StudyCoachQuizHistoryItem,
   StudyCoachQuizResult,
   StudyCoachQuizState,
@@ -181,6 +182,10 @@ export const studyCoachService = {
     return authenticatedRequest(`/study-coach/quizzes/history${query}`, { cache: "no-store" });
   },
 
+  getQuizExport(examId: string): Promise<StudyCoachQuizExport> {
+    return authenticatedRequest(`/study-coach/quizzes/${encodeURIComponent(examId)}/export`);
+  },
+
   startQuiz(
     examId: string,
     clientEventId: string,
@@ -200,12 +205,17 @@ export const studyCoachService = {
     questionId: string,
     selectedOptionIndexes: number[],
     clientEventId: string,
+    textAnswer?: string,
   ): Promise<StudyCoachQuizAnswerResult> {
     return authenticatedRequest(
       `/study-coach/quizzes/attempts/${encodeURIComponent(attemptId)}/answers`,
       {
         method: "POST",
-        body: JSON.stringify({ questionId, selectedOptionIndexes, clientEventId }),
+        body: JSON.stringify({
+          questionId,
+          ...(textAnswer ? { textAnswer } : { selectedOptionIndexes }),
+          clientEventId,
+        }),
       },
     );
   },

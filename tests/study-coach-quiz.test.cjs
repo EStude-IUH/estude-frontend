@@ -23,17 +23,30 @@ const attempt = () => ({ attemptId: "attempt", examId: "exam", status: "IN_PROGR
 const result = { attemptId: "attempt", examId: "exam", status: "SUBMITTED", title: "Cell Quiz", submittedAt: new Date().toISOString(), durationSeconds: 12, idempotentReplay: false, totalQuestions: 3, correctCount: 2, incorrectCount: 0, unansweredCount: 1, percentage: 66.67, score: 2, maxScore: 3, questions: questions.map((question, index) => ({ ...question, isCorrect: index < 2, selectedOptionIndexes: index < 2 ? [0] : [], score: index < 2 ? 1 : 0 })) };
 const historyItem = { attemptId: "history-attempt", examId: "exam", title: "Cell Quiz", document: quiz.document, submittedAt: new Date().toISOString(), totalQuestions: 3, answeredCount: 3, correctCount: 2, incorrectCount: 1, unansweredCount: 0, percentage: 66.67, durationSeconds: 12 };
 
+function loadStudyCoachApi(requests) {
+  const filename = path.resolve("lib/study-coach-api.ts");
+  const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); const originalRequire = loaded.require.bind(loaded);
+  loaded.require = (id) => {
+    if (id === "@/lib/auth-api") return { ApiError: class ApiError extends Error {}, authenticatedRequest: async (url, init) => { requests.push({ url, init }); return {}; } };
+    return originalRequire(id);
+  };
+  loaded._compile(compiled, filename);
+  return loaded.exports.studyCoachService;
+}
+
 async function setup(t, overrides = {}) {
-  const calls = { list: [], start: [], answer: [], submit: [], get: [] };
+  const calls = { list: [], start: [], answer: [], submit: [], get: [], export: [] };
   const storage = new Map();
   if (overrides.storedAttempt) storage.set(`estude:study-coach:quiz-attempt:v1:${overrides.materialId ?? "all"}`, overrides.storedAttempt);
   global.localStorage = { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) };
   const api = {
     getQuizzes: async (documentId) => { calls.list.push(documentId); return overrides.list ? overrides.list(documentId) : { items: [quiz], total: 1 }; },
     getQuizHistory: async () => overrides.history ? overrides.history() : { items: [], total: 0 },
+    getQuizExport: async (id) => { calls.export.push(id); return overrides.export ? overrides.export(id) : { examId: "exam", title: "Cell Quiz", documentId: "document", exportedAt: new Date().toISOString(), questions }; },
     getQuizAttempt: async (id) => { calls.get.push(id); return overrides.get ? overrides.get(id) : attempt(); },
     startQuiz: async (...args) => { calls.start.push(args); return overrides.start ? overrides.start(...args) : attempt(); },
-    submitQuizAnswer: async (...args) => { calls.answer.push(args); return overrides.answer ? overrides.answer(...args) : { attemptId: "attempt", examId: "exam", questionId: args[1], selectedOptionIndexes: args[2], answeredAt: new Date().toISOString(), responseTimeMs: 50, idempotentReplay: false, progress: { answeredCount: calls.answer.length, totalQuestions: 3 } }; },
+    submitQuizAnswer: async (...args) => { calls.answer.push(args); return overrides.answer ? overrides.answer(...args) : { attemptId: "attempt", examId: "exam", questionId: args[1], selectedOptionIndexes: args[2], textAnswer: args[4] ?? null, answeredAt: new Date().toISOString(), responseTimeMs: 50, idempotentReplay: false, progress: { answeredCount: calls.answer.length, totalQuestions: 3 } }; },
     submitQuiz: async (...args) => { calls.submit.push(args); return overrides.submit ? overrides.submit(...args) : result; },
     getQuizResult: async () => overrides.result ? overrides.result() : result,
   };
@@ -96,6 +109,49 @@ test("supports single, multiple and true-false interaction with progress and fin
   assert.ok(ui.button("Bắt đầu làm bài"));
   await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
   assert.equal(ui.calls.start.length, 2);
+});
+
+test("supports fill-in-the-blank without revealing accepted answers before submission", async (t) => {
+  const fillQuestion = { questionId: "fill", order: 1, type: "FILL_BLANK", content: "Vật chất di truyền là ___.", options: [], score: 1, maxScore: 1, conceptIds: [], sourceReferences: [], difficulty: "EASY", answerState: "UNANSWERED" };
+  const fillAttempt = { attemptId: "fill-attempt", examId: "exam", status: "IN_PROGRESS", title: "Cell Quiz", documentId: "document", startedAt: new Date().toISOString(), totalQuestions: 1, answeredCount: 0, unansweredCount: 1, currentQuestionIndex: 0, questions: [fillQuestion], answers: [] };
+  const ui = await setup(t, {
+    start: () => fillAttempt,
+    answer: (_attemptId, questionId, selectedOptionIndexes, _eventId, textAnswer) => ({ attemptId: "fill-attempt", examId: "exam", questionId, selectedOptionIndexes, textAnswer, answeredAt: new Date().toISOString(), responseTimeMs: 50, idempotentReplay: false, progress: { answeredCount: 1, totalQuestions: 1 } }),
+  });
+  await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Bắt đầu làm bài").props.onClick(); await flush(); });
+  assert.match(ui.text(), /Điền vào chỗ trống/);
+  assert.doesNotMatch(ui.text(), /ADN|DNA|correctAnswers/);
+  const input = ui.renderer.root.findByType("input");
+  await act(async () => { input.props.onChange({ target: { value: "ADN" } }); await flush(); });
+  await act(async () => { ui.button("Xác nhận câu trả lời").props.onClick(); await flush(); });
+  assert.deepEqual(ui.calls.answer[0][2], []);
+  assert.equal(ui.calls.answer[0][4], "ADN");
+});
+
+test("sends only the field required by each answer type", async () => {
+  const requests = [];
+  const api = loadStudyCoachApi(requests);
+
+  await api.submitQuizAnswer("attempt", "fill", [], "fill-event", "doc lap");
+  await api.submitQuizAnswer("attempt", "choice", [1], "choice-event");
+
+  assert.deepEqual(JSON.parse(requests[0].init.body), { questionId: "fill", textAnswer: "doc lap", clientEventId: "fill-event" });
+  assert.deepEqual(JSON.parse(requests[1].init.body), { questionId: "choice", selectedOptionIndexes: [1], clientEventId: "choice-event" });
+});
+
+test("exports an answer-safe printable question sheet", async (t) => {
+  const writes = [];
+  const previousWindow = global.window;
+  global.window = { location: { search: "" }, open: () => ({ document: { write: (value) => writes.push(value), open() {}, close() {} }, focus() {}, close() {} }) };
+  t.after(() => { global.window = previousWindow; });
+  const ui = await setup(t);
+  await act(async () => { ui.button("Cell Quiz").props.onClick(); await flush(); });
+  await act(async () => { ui.button("Xuất câu hỏi PDF").props.onClick(); await flush(); });
+  assert.deepEqual(ui.calls.export, ["exam"]);
+  assert.match(writes.join(""), /Cell Quiz/);
+  assert.match(writes.join(""), /Single question/);
+  assert.doesNotMatch(writes.join(""), /correctOption|correctAnswers/);
 });
 
 test("retries a failed answer with the same clientEventId and prevents double submit", async (t) => {
