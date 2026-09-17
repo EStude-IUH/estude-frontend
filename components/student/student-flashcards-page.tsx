@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { studyCoachService } from "@/lib/study-coach-api";
@@ -27,6 +27,7 @@ const RATINGS = [
 interface StoredSession {
   documentId?: string;
   mode?: "DUE" | "ALL";
+  sessionEventId?: string;
   cardIds: string[];
   initialTotal: number;
   reviewed: number;
@@ -39,7 +40,10 @@ interface PendingReview {
 
 export function StudentFlashcardsPage() {
   const router = useRouter();
-  const [documentId] = useState(() => typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search).get("documentId") || undefined);
+  const params = useParams<{ materialId?: string }>();
+  const [legacyDocumentId] = useState(() => typeof window === "undefined" ? undefined : new URLSearchParams(window.location.search).get("documentId") || undefined);
+  const documentId = typeof params.materialId === "string" ? params.materialId : legacyDocumentId;
+  const sessionKey = `${SESSION_KEY}:${documentId ?? "all"}`;
   const answerRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
   const [cards, setCards] = useState<StudyCoachFlashcard[]>([]);
@@ -51,15 +55,16 @@ export function StudentFlashcardsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [pendingReview, setPendingReview] = useState<PendingReview | null>(null);
+  const [sessionEventId, setSessionEventId] = useState("");
 
   const saveSession = useCallback((session: StoredSession | null) => {
     try {
-      if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      else localStorage.removeItem(SESSION_KEY);
+      if (session) localStorage.setItem(sessionKey, JSON.stringify(session));
+      else localStorage.removeItem(sessionKey);
     } catch {
       // Deterministic server queue remains the fallback when browser storage is unavailable.
     }
-  }, []);
+  }, [sessionKey]);
 
   const loadQueue = useCallback(
     async (forceNew = false, mode: "DUE" | "ALL" = "DUE") => {
@@ -75,7 +80,7 @@ export function StudentFlashcardsPage() {
         let stored: StoredSession | null = null;
         if (!forceNew) {
           try {
-            stored = JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null") as StoredSession | null;
+            stored = JSON.parse(localStorage.getItem(sessionKey) ?? "null") as StoredSession | null;
           } catch {
             stored = null;
           }
@@ -86,6 +91,7 @@ export function StudentFlashcardsPage() {
           (stored.mode ?? "DUE") === mode &&
           stored.cardIds.length
         ) {
+          const resumedSessionEventId = stored.sessionEventId ?? createSessionEventId();
           const byId = new Map(result.cards.map((card) => [card.id, card]));
           const resumed = stored.cardIds.flatMap((id) => {
             const card = byId.get(id);
@@ -98,14 +104,18 @@ export function StudentFlashcardsPage() {
           setCards(resumed);
           setInitialTotal(stored.initialTotal);
           setReviewed(inferredReviewed);
-          saveSession({ ...stored, mode, cardIds: resumed.map((card) => card.id), reviewed: inferredReviewed });
+          setSessionEventId(resumedSessionEventId);
+          saveSession({ ...stored, sessionEventId: resumedSessionEventId, mode, cardIds: resumed.map((card) => card.id), reviewed: inferredReviewed });
         } else {
+          const nextSessionEventId = createSessionEventId();
           setCards(result.cards);
           setInitialTotal(result.cards.length);
           setReviewed(0);
+          setSessionEventId(nextSessionEventId);
           saveSession({
             documentId,
             mode,
+            sessionEventId: nextSessionEventId,
             cardIds: result.cards.map((card) => card.id),
             initialTotal: result.cards.length,
             reviewed: 0,
@@ -117,7 +127,7 @@ export function StudentFlashcardsPage() {
         setLoading(false);
       }
     },
-    [documentId, saveSession],
+    [documentId, saveSession, sessionKey],
   );
 
   useEffect(() => {
@@ -148,6 +158,16 @@ export function StudentFlashcardsPage() {
       await studyCoachService.reviewFlashcard(current.id, rating, clientEventId);
       const nextCards = cards.slice(1);
       const nextReviewed = reviewed + 1;
+      if (!nextCards.length && documentId) {
+        const completionEventId = sessionEventId || createSessionEventId();
+        if (!sessionEventId) setSessionEventId(completionEventId);
+        await studyCoachService.completeFlashcardSession({
+          documentId,
+          reviewedCardCount: initialTotal,
+          mode: queue?.mode ?? "DUE",
+          clientEventId: completionEventId,
+        });
+      }
       setCards(nextCards);
       setReviewed(nextReviewed);
       setRevealed(false);
@@ -157,6 +177,7 @@ export function StudentFlashcardsPage() {
           ? {
               documentId,
               mode: queue?.mode ?? "DUE",
+              sessionEventId,
               cardIds: nextCards.map((card) => card.id),
               initialTotal,
               reviewed: nextReviewed,
@@ -183,15 +204,15 @@ export function StudentFlashcardsPage() {
             <ArrowLeft className="size-4" /> {documentId ? "Quay lại tài liệu" : "Quay lại Study Coach"}
           </button>
           <p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-brand-600">
-            AI Study Coach
+            Ôn tập theo tài liệu
           </p>
-          <h1 className="mt-1 text-2xl font-black text-slate-950">Flashcards</h1>
+          <h1 className="mt-1 text-2xl font-black text-slate-950">Thẻ ghi nhớ</h1>
           <p className="mt-1 text-sm text-slate-500">
             Tự nhớ câu trả lời trước, sau đó lật thẻ và đánh giá mức độ ghi nhớ.
           </p>
         </div>
         <p className="text-sm font-bold text-slate-500">
-          Tối đa 30 thẻ đến hạn và thẻ mới mỗi phiên.
+          {current?.document.name ?? (documentId ? "Nội dung của tài liệu bạn đã chọn" : "Chọn một bộ thẻ để bắt đầu")}
         </p>
       </header>
 
@@ -224,7 +245,7 @@ export function StudentFlashcardsPage() {
           title="Chưa có flashcard cần học"
           detail={
             queue?.totalAvailable === 0
-              ? "Bạn chưa có flashcard. Hãy tải tài liệu PDF trong Study Coach để AI tạo bộ thẻ học."
+              ? "Tài liệu này chưa có thẻ ghi nhớ để ôn tập."
               : queue?.newCount
               ? "Không thể tạo phiên từ các thẻ hiện có. Vui lòng thử lại."
               : "Bạn đã ôn hết các thẻ đến hạn và hiện không còn thẻ mới."
@@ -367,4 +388,9 @@ function StatePanel({
 function createClientEventId(): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `flashcard-review-${random}`;
+}
+
+function createSessionEventId(): string {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `flashcard-session-${random}`;
 }

@@ -94,22 +94,25 @@ export const difficultyLabels = {
 } as const;
 
 export const actionLabels: Record<InsightActionType, string> = {
-  LEARN: "Học khái niệm",
-  PRACTICE: "Luyện quiz",
-  REVIEW: "Ôn flashcard",
-  CHALLENGE: "Thử thách",
+  LEARN: "Xem lại kiến thức",
+  PRACTICE: "Làm bài luyện",
+  REVIEW: "Ôn thẻ ghi nhớ",
+  CHALLENGE: "Làm bài nâng cao",
 };
 
 export function actionHref(action: InsightActionType, documentId?: string): string {
-  if (action === "LEARN" && documentId) {
-    return `/student/study-coach/materials/${encodeURIComponent(documentId)}/mastery`;
+  if (documentId) {
+    const materialPath = `/student/study-coach/materials/${encodeURIComponent(documentId)}`;
+    if (action === "LEARN") return `${materialPath}/knowledge-map`;
+    if (action === "REVIEW") return `${materialPath}/flashcards`;
+    return `${materialPath}/quiz`;
   }
   const path = action === "REVIEW"
     ? "/student/review/flashcards"
     : action === "LEARN"
       ? "/student/study-coach/mastery"
       : "/student/review/quiz";
-  return documentId ? `${path}?documentId=${encodeURIComponent(documentId)}` : path;
+  return path;
 }
 
 export function studentError(cause: unknown, fallback: string): string {

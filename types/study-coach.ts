@@ -178,7 +178,7 @@ export interface FlashcardReviewResult {
   remaining: { due: number; new: number; total: number };
 }
 
-export type StudyCoachQuizQuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+export type StudyCoachQuizQuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK";
 
 export interface StudyCoachQuizSummary {
   id: string;
@@ -188,6 +188,21 @@ export interface StudyCoachQuizSummary {
   document: { id: string; name: string };
   availableQuestionCount: number;
   activeAttemptId: string | null;
+}
+
+export interface StudyCoachQuizHistoryItem {
+  attemptId: string;
+  examId: string;
+  title: string;
+  document: { id: string; name: string };
+  submittedAt: string;
+  totalQuestions: number;
+  answeredCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  percentage: number;
+  durationSeconds: number;
 }
 
 export interface StudyCoachQuizQuestion {
@@ -207,6 +222,7 @@ export interface StudyCoachQuizQuestion {
 export interface StudyCoachQuizAnswer {
   questionId: string;
   selectedOptionIndexes: number[];
+  textAnswer: string | null;
   answeredAt: string;
   responseTimeMs: number;
 }
@@ -233,6 +249,14 @@ export interface StudyCoachQuizAnswerResult extends StudyCoachQuizAnswer {
   progress: { answeredCount: number; totalQuestions: number };
 }
 
+export interface StudyCoachQuizExport {
+  examId: string;
+  title: string;
+  documentId: string;
+  exportedAt: string;
+  questions: Array<Omit<StudyCoachQuizQuestion, "answerState">>;
+}
+
 export interface StudyCoachQuizResult {
   attemptId: string;
   examId: string;
@@ -253,6 +277,8 @@ export interface StudyCoachQuizResult {
     order: number;
     isCorrect: boolean;
     selectedOptionIndexes: number[];
+    textAnswer: string | null;
+    correctAnswers: string[];
     score: number;
     maxScore: 1;
     type: StudyCoachQuizQuestionType;
@@ -289,6 +315,9 @@ export interface ConceptMasteryView {
 export interface StudyCoachLearningActivity {
   flashcardReviewCount: number;
   quizAnswerCount: number;
+  flashcardSessionCount: number;
+  quizCompletionCount: number;
+  totalCompletedSessions: number;
   totalActivityCount: number;
 }
 

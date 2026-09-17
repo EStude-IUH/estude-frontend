@@ -4,6 +4,8 @@ import type {
   FlashcardReviewResult,
   StudyCoachFlashcard,
   StudyCoachQuizAnswerResult,
+  StudyCoachQuizExport,
+  StudyCoachQuizHistoryItem,
   StudyCoachQuizResult,
   StudyCoachQuizState,
   StudyCoachQuizSummary,
@@ -158,9 +160,30 @@ export const studyCoachService = {
     });
   },
 
+  completeFlashcardSession(input: {
+    documentId: string;
+    reviewedCardCount: number;
+    mode: "DUE" | "ALL";
+    clientEventId: string;
+  }): Promise<{ eventId: string; completedAt: string; idempotentReplay: boolean }> {
+    return authenticatedRequest("/study-coach/flashcards/sessions/complete", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
   getQuizzes(documentId?: string): Promise<{ items: StudyCoachQuizSummary[]; total: number }> {
     const query = documentId ? `?documentId=${encodeURIComponent(documentId)}` : "";
     return authenticatedRequest(`/study-coach/quizzes${query}`);
+  },
+
+  getQuizHistory(documentId?: string): Promise<{ items: StudyCoachQuizHistoryItem[]; total: number }> {
+    const query = documentId ? `?documentId=${encodeURIComponent(documentId)}` : "";
+    return authenticatedRequest(`/study-coach/quizzes/history${query}`, { cache: "no-store" });
+  },
+
+  getQuizExport(examId: string): Promise<StudyCoachQuizExport> {
+    return authenticatedRequest(`/study-coach/quizzes/${encodeURIComponent(examId)}/export`);
   },
 
   startQuiz(
@@ -182,12 +205,17 @@ export const studyCoachService = {
     questionId: string,
     selectedOptionIndexes: number[],
     clientEventId: string,
+    textAnswer?: string,
   ): Promise<StudyCoachQuizAnswerResult> {
     return authenticatedRequest(
       `/study-coach/quizzes/attempts/${encodeURIComponent(attemptId)}/answers`,
       {
         method: "POST",
-        body: JSON.stringify({ questionId, selectedOptionIndexes, clientEventId }),
+        body: JSON.stringify({
+          questionId,
+          ...(textAnswer ? { textAnswer } : { selectedOptionIndexes }),
+          clientEventId,
+        }),
       },
     );
   },
@@ -226,9 +254,8 @@ export const studyCoachService = {
   getInsights(filters: {
     scope: InsightScope;
     documentId?: string;
-    language: "vi" | "en";
   }): Promise<{ items: LearningInsight[]; total: number }> {
-    const params = new URLSearchParams({ scope: filters.scope, language: filters.language });
+    const params = new URLSearchParams({ scope: filters.scope, language: "vi" });
     if (filters.documentId) params.set("documentId", filters.documentId);
     return authenticatedRequest(`/study-coach/insights?${params.toString()}`);
   },
@@ -236,11 +263,10 @@ export const studyCoachService = {
   generateInsight(input: {
     scope: InsightScope;
     documentId?: string;
-    language: "vi" | "en";
   }): Promise<LearningInsight> {
     return authenticatedRequest("/study-coach/insights/generate", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, language: "vi" }),
     });
   },
 

@@ -195,7 +195,7 @@ export function StudyCoachMaterialLibrary({ capabilities }: { capabilities: Stud
 
   const busy = uploadPhase !== "idle";
   return (
-    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card" data-testid="material-library" aria-busy={loading || busy}>
+    <section id="study-coach-materials" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-5 shadow-card" data-testid="material-library" aria-busy={loading || busy}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div><p className="text-xs font-black uppercase tracking-wider text-brand-600">Tài liệu học tập</p><h2 className="mt-1 text-xl font-black">Tài liệu của bạn</h2></div>
         <Button disabled={!processingEnabled} onClick={() => setUploadOpen((open) => !open)} aria-expanded={uploadOpen} aria-controls="study-coach-upload-form"><Plus className="size-4" /> Tải tài liệu</Button>
@@ -226,7 +226,7 @@ export function StudyCoachMaterialLibrary({ capabilities }: { capabilities: Stud
       {loading ? <MaterialSkeleton /> : null}
       {!loading && error ? <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-5" role="alert"><p className="font-bold text-rose-800">{error}</p><Button variant="outline" className="mt-3" onClick={() => void load(page)}><RotateCcw className="size-4" /> Thử lại</Button></div> : null}
       {!loading && !error && result?.items.length === 0 ? <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-center"><FileText className="mx-auto size-8 text-slate-400" /><p className="mt-3 font-black text-slate-800">Bạn chưa có tài liệu học nào.</p><p className="mt-1 text-sm text-slate-500">Tải tài liệu đầu tiên để bắt đầu.</p></div> : null}
-      {!loading && !error && result?.items.length ? <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{result.items.map((material) => <MaterialCard key={material.id} material={material} capabilities={capabilities} processing={processingId === material.id} cancelling={cancellingId === material.id} deleting={deletingId === material.id} onOpen={() => router.push(`/student/study-coach/materials/${material.id}`)} onProcess={() => void processMaterial(material.id)} onCancel={() => void cancelMaterial(material.id)} onDelete={() => void deleteMaterial(material.id)} onFlashcards={() => router.push(`/student/review/flashcards?documentId=${encodeURIComponent(material.id)}`)} onMastery={() => router.push(`/student/study-coach/materials/${encodeURIComponent(material.id)}/mastery`)} />)}</div> : null}
+      {!loading && !error && result?.items.length ? <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{result.items.map((material) => <MaterialCard key={material.id} material={material} capabilities={capabilities} processing={processingId === material.id} cancelling={cancellingId === material.id} deleting={deletingId === material.id} onOpen={() => router.push(`/student/study-coach/materials/${material.id}`)} onProcess={() => void processMaterial(material.id)} onCancel={() => void cancelMaterial(material.id)} onDelete={() => void deleteMaterial(material.id)} onFlashcards={() => router.push(`/student/study-coach/materials/${encodeURIComponent(material.id)}/flashcards`)} onMastery={() => router.push(`/student/study-coach/materials/${encodeURIComponent(material.id)}/mastery`)} />)}</div> : null}
       {!loading && !error && result && result.meta.totalPages > 1 ? <nav className="mt-5 flex items-center justify-between gap-3" aria-label="Phân trang tài liệu"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Trang trước</Button><span className="text-sm font-bold text-slate-600">Trang {result.meta.page}/{result.meta.totalPages} · {result.meta.total} tài liệu</span><Button variant="outline" disabled={page >= result.meta.totalPages} onClick={() => setPage((value) => value + 1)}>Trang sau</Button></nav> : null}
     </section>
   );
@@ -248,7 +248,7 @@ function MaterialCard({ material, capabilities, processing, cancelling, deleting
       {canProcess && capabilities.processing.enabled ? <Button variant="secondary" disabled={busy} onClick={onProcess}>{processing ? <LoaderCircle className="size-4 animate-spin" /> : null}{material.lifecycle === "FAILED" ? "Thử xử lý lại" : "Xử lý"}</Button> : null}
       {material.lifecycle === "PROCESSING" ? <Button variant="danger" disabled={busy} onClick={onCancel}>{cancelling ? <LoaderCircle className="size-4 animate-spin" /> : <XCircle className="size-4" />}{cancelling ? "Đang hủy..." : "Hủy xử lý"}</Button> : null}
       {canDelete ? <Button variant="danger" disabled={busy} onClick={onDelete}>{deleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}{deleting ? "Đang xóa..." : "Xóa"}</Button> : null}
-      {material.readyForStudy && capabilities.flashcards.enabled ? <Button variant="ghost" disabled={deleting} onClick={onFlashcards}>Flashcards</Button> : null}
+      {material.readyForStudy && capabilities.flashcards.enabled ? <Button variant="ghost" disabled={deleting} onClick={onFlashcards}>Thẻ ghi nhớ</Button> : null}
       {material.readyForStudy && capabilities.mastery.enabled ? <Button variant="ghost" disabled={deleting} onClick={onMastery}>Tiến độ</Button> : null}
     </div>
   </article>;
