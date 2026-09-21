@@ -48,4 +48,5 @@ export interface ParentOverview {
   attendance: Array<AttendanceRecord & { studentName: string }>;
   upcomingExams: Array<{ id: string; title: string; subjectName: string; classId: string; className: string; startsAt: string; endsAt: string }>;
   notifications: PortalNotification[];
+  learningAlerts?: PortalNotification[];
 }

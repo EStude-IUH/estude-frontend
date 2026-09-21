@@ -432,7 +432,7 @@ function CourseMaterials({ items, error, onPreview, onDownload }: { items: Array
       <header className="border-b border-slate-100 px-5 py-4"><h2 className="text-base font-black text-slate-950">Tài liệu môn học</h2><p className="mt-0.5 text-xs text-slate-500">{items.length} tài liệu đã được chia sẻ</p></header>
       {error ? <div className="p-4"><ErrorPanel message={error} /></div> : null}
       <div className="overflow-x-auto"><Table>
-        <TableHeader className="bg-brand-600 text-white"><tr><TableHead className="w-14 text-center text-white">#</TableHead><TableHead className="text-white">Tài liệu</TableHead><TableHead className="text-white">Chủ đề</TableHead><TableHead className="text-white">Dung lượng</TableHead><TableHead className="text-white">Ngày đăng</TableHead><TableHead className="w-32 text-right text-white">Thao tác</TableHead></tr></TableHeader>
+        <TableHeader><tr><TableHead className="w-14 text-center">#</TableHead><TableHead>Tài liệu</TableHead><TableHead>Chủ đề</TableHead><TableHead>Dung lượng</TableHead><TableHead>Ngày đăng</TableHead><TableHead className="w-32 text-right">Thao tác</TableHead></tr></TableHeader>
         <TableBody>
           {items.length === 0 ? <TableEmptyRow colSpan={6} message="Chưa có tài liệu cho môn học này" icon={<FileText className="size-5 text-slate-400" />} /> : null}
           {items.map(({ material, topicName }, index) => (

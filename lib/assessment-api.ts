@@ -7,8 +7,11 @@ import {
 import type {
   Exam,
   ExamAttempt,
+  ExamClassAnalysisState,
+  SubjectSupportReport,
   ExamClassReport,
   ExamClassReportReview,
+  ExamListAiAnalysis,
   ExamInput,
   ExamAnswer,
   AcademicYear,
@@ -445,6 +448,27 @@ export const examService = {
     return authenticatedRequest<ExamClassReport>(
       `/exams/${encodeURIComponent(id)}/class-report`,
     );
+  },
+  getClassAnalysis(id: string): Promise<ExamClassAnalysisState> {
+    return authenticatedRequest<ExamClassAnalysisState>(`/exams/${encodeURIComponent(id)}/class-report/ai-analysis`);
+  },
+  getSubjectSupport(id: string): Promise<SubjectSupportReport> {
+    return authenticatedRequest<SubjectSupportReport>(`/exams/${encodeURIComponent(id)}/subject-support`);
+  },
+  sendSupportAlert(id: string, payload: { studentId: string; audience: "STUDENT" | "PARENTS"; version: string; message: string }): Promise<{ id: string; recipientCount: number; alreadySent: boolean }> {
+    return authenticatedRequest(`/exams/${encodeURIComponent(id)}/subject-support/alerts`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  analyzeClassReport(id: string, refresh = false): Promise<ExamClassAnalysisState> {
+    return authenticatedRequest<ExamClassAnalysisState>(
+      `/exams/${encodeURIComponent(id)}/class-report/ai-analysis`,
+      { method: "POST", body: JSON.stringify({ refresh }) },
+    );
+  },
+  analyzeExamList(payload: { classId: string; examIds: string[] }): Promise<ExamListAiAnalysis> {
+    return authenticatedRequest<ExamListAiAnalysis>("/exams/list/ai-analysis", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateStudentReview(
     examId: string,

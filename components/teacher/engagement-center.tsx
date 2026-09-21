@@ -1,10 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BellRing, Check, CircleAlert, LoaderCircle, Save, Send, UsersRound } from "lucide-react";
+import { Check, CircleAlert, LoaderCircle, Save, Send, UsersRound } from "lucide-react";
 import { AssessmentShell, ErrorPanel, PageHeading } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/form-control";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmptyRow,
+  TableHead,
+  TableHeader,
+} from "@/components/ui/data-table";
+import { CustomSelect, Input, Select, Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
@@ -13,9 +21,9 @@ import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { TeacherAssignedClass } from "@/types/assessment";
 import type { AttendanceRoster, AttendanceStatus } from "@/types/engagement";
 
-export function TeacherEngagementCenter({ initialTab = "attendance" }: { initialTab?: "attendance" | "message" }) {
+export function TeacherEngagementCenter({ mode }: { mode: "attendance" | "message" }) {
   const { notify } = useActionNotification();
-  const [tab, setTab] = useState(initialTab);
+  const isAttendance = mode === "attendance";
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
   const [classId, setClassId] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -50,10 +58,13 @@ export function TeacherEngagementCenter({ initialTab = "attendance" }: { initial
   const loadRoster = useCallback(async () => {
     if (!classId || !subjectId) {
       setRoster(null);
+      setStatuses({});
       return;
     }
     setLoading(true);
     setError("");
+    setRoster(null);
+    setStatuses({});
     try {
       const result = await attendanceService.getClassRoster(classId, subjectId, date);
       setRoster(result);
@@ -65,7 +76,7 @@ export function TeacherEngagementCenter({ initialTab = "attendance" }: { initial
     }
   }, [classId, date, subjectId]);
 
-  useEffect(() => { if (tab === "attendance") void loadRoster(); }, [loadRoster, tab]);
+  useEffect(() => { if (isAttendance) void loadRoster(); }, [isAttendance, loadRoster]);
 
   function chooseClass(value: string) {
     const nextClass = classes.find((item) => item.id === value);
@@ -120,52 +131,104 @@ export function TeacherEngagementCenter({ initialTab = "attendance" }: { initial
 
   return (
     <AssessmentShell>
-      <PageHeading eyebrow="Class operations" title="Điểm danh & thông báo" description="Thao tác nhanh cho lớp học trên mọi kích thước màn hình." />
-      <div className="mb-5 flex gap-2" role="tablist" aria-label="Công cụ lớp học">
-        <Button variant={tab === "attendance" ? "primary" : "outline"} onClick={() => setTab("attendance")}><Check className="size-4" /> Điểm danh</Button>
-        <Button variant={tab === "message" ? "primary" : "outline"} onClick={() => setTab("message")}><BellRing className="size-4" /> Gửi thông báo</Button>
-      </div>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Select label="Lớp học" value={classId} onChange={(event) => chooseClass(event.target.value)}>
-            {classes.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}
-          </Select>
-          <Select label="Môn học" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>
-            {subjects.map((item) => <option key={item.id} value={item.id}>{getVietnameseSubjectName(item)}</option>)}
-          </Select>
-          {tab === "attendance" ? <Input label="Ngày học" type="date" value={date} onChange={(event) => setDate(event.target.value)} /> : null}
-        </div>
-      </section>
-
-      {tab === "attendance" ? (
-        <section className="mt-5">
-          {error ? <ErrorPanel message={error} /> : null}
-          {loading ? <div className="grid min-h-52 place-items-center rounded-2xl border border-slate-200 bg-white"><LoaderCircle className="size-7 animate-spin text-brand-600" /></div> : null}
-          {!loading && !error && roster && !roster.students.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><UsersRound className="mx-auto size-8 text-slate-300" /><h2 className="mt-3 font-extrabold">Lớp chưa có học sinh</h2><p className="mt-1 text-sm text-slate-500">Hãy thêm học sinh vào lớp trước khi điểm danh.</p></div> : null}
-          {!loading && roster?.students.length ? <>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-white">
-              <p className="text-sm font-bold"><span className="text-emerald-300">{summary.present} có mặt</span> · <span className="text-rose-300">{summary.absent} vắng</span></p>
-              <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => setStatuses(Object.fromEntries(roster.students.map((student) => [student.id, "PRESENT"])))}>Tất cả có mặt</Button><Button size="sm" disabled={syncing} onClick={() => void saveAttendance()}>{syncing ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />} {syncing ? "Đang lưu" : "Lưu điểm danh"}</Button></div>
-            </div>
-            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
-              <table className="w-full text-left"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Học sinh</th><th className="px-5 py-3">Mã học sinh</th><th className="px-5 py-3 text-right">Trạng thái</th></tr></thead><tbody className="divide-y divide-slate-100">{roster.students.map((student) => <tr key={student.id}><td className="px-5 py-3 font-bold">{student.fullName}</td><td className="px-5 py-3 text-sm text-slate-500">{student.accountName}</td><td className="px-5 py-3 text-right"><AttendanceToggle value={statuses[student.id]} onClick={() => toggleStudent(student.id)} /></td></tr>)}</tbody></table>
-            </div>
-            <div className="grid gap-3 md:hidden">{roster.students.map((student) => <article key={student.id} className={`flex items-center gap-3 rounded-2xl border p-4 ${statuses[student.id] === "PRESENT" ? "border-emerald-200 bg-emerald-50/60" : "border-rose-200 bg-rose-50/60"}`}><span className="relative grid size-11 shrink-0 overflow-hidden place-items-center rounded-full bg-white font-black text-brand-700">{student.avatarUrl ? <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${student.avatarUrl})` }} /> : student.fullName.charAt(0)}</span><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{student.fullName}</p><p className="text-xs text-slate-500">{student.accountName} · {statuses[student.id] === "PRESENT" ? "Có mặt" : "Vắng"}</p></div><AttendanceToggle value={statuses[student.id]} onClick={() => toggleStudent(student.id)} compact /></article>)}</div>
-          </> : null}
-        </section>
-      ) : (
-        <section className="mx-auto mt-5 max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-7">
-          <div className="flex items-start gap-3"><span className="grid size-11 place-items-center rounded-xl bg-violet-50 text-violet-700"><Send className="size-5" /></span><div><h2 className="text-lg font-extrabold">Soạn thông báo</h2><p className="mt-1 text-sm text-slate-500">Gửi đúng nhóm người nhận thuộc lớp bạn phụ trách.</p></div></div>
-          <div className="mt-6 space-y-5">
-            <Select label="Người nhận" value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="STUDENTS">Học sinh trong lớp</option><option value="PARENTS">Phụ huynh trong lớp</option></Select>
-            <Input label="Tiêu đề" maxLength={160} value={title} onChange={(event) => { setTitle(event.target.value); setComposerError(""); }} placeholder="Ví dụ: Nhắc lịch kiểm tra giữa kỳ" />
-            <Textarea label="Nội dung" rows={7} maxLength={5000} value={message} onChange={(event) => { setMessage(event.target.value); setComposerError(""); }} placeholder="Nhập nội dung ngắn gọn, rõ ràng..." />
-            {composerError ? <p role="alert" className="flex items-center gap-2 rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700"><CircleAlert className="size-4" /> {composerError}</p> : null}
-            <Button className="w-full sm:w-auto" disabled={sending} onClick={() => { const validation = validateComposer(); setComposerError(validation); if (!validation) setConfirming(true); }}>{sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />} {sending ? "Đang gửi..." : "Gửi thông báo"}</Button>
+      <PageHeading
+        title={isAttendance ? "Điểm danh" : "Thông báo"}
+        description={isAttendance ? "Ghi nhận tình trạng tham gia lớp học." : "Gửi thông báo đến học sinh hoặc phụ huynh."}
+      />
+      <div className="flex max-h-[calc(100dvh-88px)] min-h-0 w-full flex-col overflow-hidden">
+        <section className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
+          <div className={`grid min-w-0 gap-3 sm:grid-cols-2 ${isAttendance ? "xl:grid-cols-[360px_360px_240px]" : "xl:grid-cols-[360px_360px]"}`}>
+            <CustomSelect
+              label="Lớp học"
+              value={classId}
+              options={classes.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` }))}
+              placeholder="Chọn lớp học"
+              buttonClassName="!h-[42px] !rounded-lg !ring-0"
+              ariaLabel="Chọn lớp học"
+              onValueChange={chooseClass}
+            />
+            <CustomSelect
+              label="Môn học"
+              value={subjectId}
+              options={subjects.map((item) => ({ value: item.id, label: getVietnameseSubjectName(item) }))}
+              placeholder="Chọn môn học"
+              buttonClassName="!h-[42px] !rounded-lg !ring-0"
+              ariaLabel="Chọn môn học"
+              onValueChange={setSubjectId}
+            />
+            {isAttendance ? <Input className="!h-[42px] !rounded-lg focus:!ring-0" label="Ngày học" type="date" value={date} onChange={(event) => setDate(event.target.value)} /> : null}
           </div>
         </section>
-      )}
+
+        {isAttendance ? (
+          <div className="mt-2 min-h-0 shrink overflow-y-auto">
+            {error ? <div className="mb-2"><ErrorPanel message={error} /></div> : null}
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+              <header className="flex flex-col gap-3 border-b border-slate-100 p-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2" aria-label="Tổng quan điểm danh">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700"><Check className="size-3.5" /> {summary.present} có mặt</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700"><CircleAlert className="size-3.5" /> {summary.absent} vắng</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <Button className="!h-[38px] !rounded-lg" size="sm" variant="outline" disabled={loading || !roster?.students.length} onClick={() => setStatuses(Object.fromEntries((roster?.students ?? []).map((student) => [student.id, "PRESENT"])))}>Tất cả có mặt</Button>
+                  <Button className="!h-[38px] !rounded-lg" size="sm" disabled={loading || syncing || !roster?.students.length} onClick={() => void saveAttendance()}>{syncing ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />} {syncing ? "Đang lưu" : "Lưu điểm danh"}</Button>
+                </div>
+              </header>
+
+              {loading ? <div className="grid min-h-44 place-items-center text-sm font-semibold text-slate-500"><span className="flex items-center gap-2"><LoaderCircle className="size-5 animate-spin text-brand-600" /> Đang tải danh sách...</span></div> : null}
+
+              {!loading ? (
+                <>
+                  <div className="hidden overflow-auto md:block">
+                    <Table className="min-w-[720px]">
+                      <TableHeader className="!bg-brand-600 !text-white">
+                        <tr>
+                          <TableHead className="w-14 text-center">#</TableHead>
+                          <TableHead>Học sinh</TableHead>
+                          <TableHead>Mã học sinh</TableHead>
+                          <TableHead className="w-44 text-center">Trạng thái</TableHead>
+                        </tr>
+                      </TableHeader>
+                      <TableBody>
+                        {!error && !roster?.students.length ? <TableEmptyRow colSpan={4} message="Lớp chưa có học sinh" icon={<UsersRound className="size-5 text-slate-400" />} /> : null}
+                        {!error ? roster?.students.map((student, index) => (
+                          <tr key={student.id} className="transition hover:bg-blue-50/70">
+                            <TableCell className="text-center text-xs text-slate-400">{index + 1}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <span className="relative grid size-9 shrink-0 overflow-hidden place-items-center rounded-full bg-blue-50 text-sm font-bold text-brand-700">
+                                  {student.avatarUrl ? <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${student.avatarUrl})` }} /> : student.fullName.trim().charAt(0).toUpperCase()}
+                                </span>
+                                <span className="font-bold text-slate-900">{student.fullName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs font-semibold text-brand-700">{student.accountName}</TableCell>
+                            <TableCell className="text-center"><AttendanceToggle value={statuses[student.id]} onClick={() => toggleStudent(student.id)} /></TableCell>
+                          </tr>
+                        )) : null}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {!error && roster?.students.length ? <div className="grid gap-2 p-2.5 md:hidden">{roster.students.map((student) => <article key={student.id} className={`flex items-center gap-3 rounded-lg border p-3 ${statuses[student.id] === "PRESENT" ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"}`}><span className="relative grid size-10 shrink-0 overflow-hidden place-items-center rounded-full bg-white font-bold text-brand-700">{student.avatarUrl ? <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${student.avatarUrl})` }} /> : student.fullName.trim().charAt(0).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-900">{student.fullName}</p><p className="mt-0.5 text-xs text-slate-500">{student.accountName} · {statuses[student.id] === "PRESENT" ? "Có mặt" : "Vắng"}</p></div><AttendanceToggle value={statuses[student.id]} onClick={() => toggleStudent(student.id)} compact /></article>)}</div> : null}
+                  {!error && !roster?.students.length ? <div className="p-2.5 md:hidden"><div className="rounded-lg border border-dashed border-slate-300 px-5 py-10 text-center"><UsersRound className="mx-auto size-8 text-slate-300" /><h2 className="mt-3 font-extrabold text-slate-900">Lớp chưa có học sinh</h2><p className="mt-1 text-sm text-slate-500">Hãy thêm học sinh vào lớp trước khi điểm danh.</p></div></div> : null}
+                </>
+              ) : null}
+            </section>
+          </div>
+        ) : (
+          <section className="mt-2 min-h-0 shrink overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-card">
+            <header className="flex items-start gap-3 border-b border-slate-100 px-4 py-3.5"><span className="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-brand-700"><Send className="size-5" /></span><div><h2 className="font-extrabold text-slate-900">Soạn thông báo</h2><p className="mt-0.5 text-xs text-slate-500">Gửi đúng nhóm người nhận thuộc lớp bạn phụ trách.</p></div></header>
+            <div className="space-y-4 p-4 sm:p-5">
+              <Select label="Người nhận" value={audience} onChange={(event) => setAudience(event.target.value as typeof audience)}><option value="STUDENTS">Học sinh trong lớp</option><option value="PARENTS">Phụ huynh trong lớp</option></Select>
+              <Input label="Tiêu đề" maxLength={160} value={title} onChange={(event) => { setTitle(event.target.value); setComposerError(""); }} placeholder="Ví dụ: Nhắc lịch kiểm tra giữa kỳ" />
+              <Textarea label="Nội dung" rows={7} maxLength={5000} value={message} onChange={(event) => { setMessage(event.target.value); setComposerError(""); }} placeholder="Nhập nội dung ngắn gọn, rõ ràng..." />
+              {composerError ? <p role="alert" className="flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700"><CircleAlert className="size-4" /> {composerError}</p> : null}
+              <div className="flex justify-end"><Button className="w-full sm:w-auto" disabled={sending} onClick={() => { const validation = validateComposer(); setComposerError(validation); if (!validation) setConfirming(true); }}>{sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />} {sending ? "Đang gửi..." : "Gửi thông báo"}</Button></div>
+            </div>
+          </section>
+        )}
+      </div>
 
       <Modal open={confirming} onClose={() => setConfirming(false)} title="Xác nhận gửi thông báo" description={`Thông báo sẽ được gửi đến ${audience === "STUDENTS" ? "học sinh" : "phụ huynh"} của ${selectedClass?.name ?? "lớp đã chọn"}.`} footer={<><Button variant="outline" onClick={() => setConfirming(false)}>Kiểm tra lại</Button><Button onClick={() => void sendNotification()}><Send className="size-4" /> Xác nhận gửi</Button></>}><div className="rounded-xl bg-slate-50 p-4"><p className="font-extrabold">{title}</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{message}</p></div></Modal>
     </AssessmentShell>
@@ -174,5 +237,5 @@ export function TeacherEngagementCenter({ initialTab = "attendance" }: { initial
 
 function AttendanceToggle({ value, onClick, compact = false }: { value?: AttendanceStatus; onClick: () => void; compact?: boolean }) {
   const present = value !== "ABSENT";
-  return <button type="button" onClick={onClick} aria-pressed={present} aria-label={present ? "Đang có mặt, nhấn để đánh dấu vắng" : "Đang vắng, nhấn để đánh dấu có mặt"} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full border font-extrabold transition focus:outline-none focus:ring-4 focus:ring-blue-100 ${compact ? "size-11 px-0" : "px-4"} ${present ? "border-emerald-300 bg-emerald-100 text-emerald-800" : "border-rose-300 bg-rose-100 text-rose-800"}`}><span className="grid size-6 place-items-center rounded-full bg-white">{present ? <Check className="size-4" /> : <CircleAlert className="size-4" />}</span>{compact ? null : present ? "Có mặt" : "Vắng"}</button>;
+  return <button type="button" onClick={onClick} aria-pressed={present} aria-label={present ? "Đang có mặt, nhấn để đánh dấu vắng" : "Đang vắng, nhấn để đánh dấu có mặt"} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border text-xs font-bold transition focus:outline-none focus:ring-4 focus:ring-blue-100 ${compact ? "w-9 px-0" : "min-w-24 px-3"} ${present ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"}`}>{present ? <Check className="size-4" /> : <CircleAlert className="size-4" />}{compact ? null : present ? "Có mặt" : "Vắng"}</button>;
 }

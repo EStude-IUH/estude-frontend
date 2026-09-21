@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowUp,
   BookOpen,
+  BrainCircuit,
   CalendarClock,
   Check,
   ChevronRight,
@@ -15,11 +16,16 @@ import {
   FileCheck2,
   FileQuestion,
   ListChecks,
+  LoaderCircle,
+  Minus,
   Plus,
   Search,
   ShieldCheck,
   Settings2,
   Send,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -33,6 +39,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { ExamSubmissionsPanel } from "@/components/assessment/exam-submissions-panel";
+import { ExamResultsOverview } from "@/components/assessment/exam-results-overview";
+import { ExamDetailTabs } from "@/components/assessment/exam-detail-tabs";
 import {
   Table,
   TableBody,
@@ -68,6 +77,7 @@ import {
   QUESTION_TYPE_LABELS,
   type Exam,
   type ExamInput,
+  type ExamListAiAnalysis,
   type ExamQuestion,
   type ExamSettings,
   type Question,
@@ -199,6 +209,7 @@ function formatClassLabel(
 
 export function TeacherExamsPage() {
   const router = useRouter();
+  const { notify } = useActionNotification();
   const [exams, setExams] = useState<Exam[]>([]);
   const [assignedClasses, setAssignedClasses] = useState<TeacherAssignedClass[]>(
     [],
@@ -210,6 +221,12 @@ export function TeacherExamsPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | Exam["status"]>(
     "ALL",
   );
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [analyzingList, setAnalyzingList] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+  const [listAnalysis, setListAnalysis] = useState<ExamListAiAnalysis | null>(null);
+  const [analysisScope, setAnalysisScope] = useState({ className: "", examCount: 0 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [publishingId, setPublishingId] = useState("");
@@ -285,11 +302,47 @@ export function TeacherExamsPage() {
     }
   }
 
+  async function analyzeVisibleExams() {
+    if (classFilter === "ALL" || visibleExams.length === 0 || visibleExams.length > 30) return;
+    const selectedClass = assignedClasses.find((item) => item.id === classFilter);
+    setAnalyzingList(true);
+    setAnalysisError("");
+    setListAnalysis(null);
+    setAnalysisScope({
+      className: selectedClass
+        ? formatClassLabel(assignedClasses, selectedClass.id, selectedClass.name)
+        : visibleExams[0]?.className ?? "Lớp đã chọn",
+      examCount: visibleExams.length,
+    });
+    setAnalysisOpen(true);
+    try {
+      const analysis = await examService.analyzeExamList({
+        classId: classFilter,
+        examIds: visibleExams.map((exam) => exam.id),
+      });
+      setListAnalysis(analysis);
+      notify(
+        analysis.source === "AI"
+          ? "AI đã hoàn tất phân tích danh sách bài kiểm tra"
+          : "Đã tạo phân tích dự phòng từ số liệu lớp",
+      );
+    } catch (cause) {
+      setAnalysisError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể phân tích danh sách bài kiểm tra",
+      );
+    } finally {
+      setAnalyzingList(false);
+    }
+  }
+
   const visibleExams = exams.filter((exam) => {
     const matchesStatus =
       statusFilter === "ALL" || exam.status === statusFilter;
     const matchesQuery = matchesSearchKeyword(exam.keyword, submittedQuery);
-    return matchesStatus && matchesQuery;
+    const matchesClass = classFilter === "ALL" || exam.classId === classFilter;
+    return matchesStatus && matchesQuery && matchesClass;
   });
   const totalPages = Math.max(1, Math.ceil(visibleExams.length / pageSize));
   const pagedExams = visibleExams.slice(
@@ -307,7 +360,7 @@ export function TeacherExamsPage() {
       <div className="flex max-h-[calc(100dvh-106px)] min-h-0 w-full flex-col overflow-hidden">
         <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,360px)_180px]">
+            <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1fr)_180px_220px]">
               <DebouncedSearchInput
                 className="!h-[42px] !rounded-lg focus:!ring-0"
                 value={query}
@@ -315,6 +368,7 @@ export function TeacherExamsPage() {
                 onSearch={(value) => {
                   setPage(1);
                   setSubmittedQuery(value);
+                  setListAnalysis(null);
                 }}
                 placeholder="Tìm theo tên bài, môn học hoặc lớp"
               />
@@ -332,10 +386,58 @@ export function TeacherExamsPage() {
                 onValueChange={(value) => {
                   setStatusFilter(value as "ALL" | Exam["status"]);
                   setPage(1);
+                  setListAnalysis(null);
+                }}
+              />
+              <CustomSelect
+                value={classFilter}
+                options={[
+                  { value: "ALL", label: "Tất cả lớp" },
+                  ...assignedClasses.map((schoolClass) => ({
+                    value: schoolClass.id,
+                    label: formatClassLabel(
+                      assignedClasses,
+                      schoolClass.id,
+                      schoolClass.name,
+                    ),
+                  })),
+                ]}
+                buttonClassName="!h-[42px] !rounded-lg !ring-0"
+                ariaLabel="Lọc theo lớp"
+                onValueChange={(value) => {
+                  setClassFilter(value);
+                  setPage(1);
+                  setListAnalysis(null);
                 }}
               />
             </div>
             <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+              <Button
+                permission="exams.submissions"
+                variant="secondary"
+                className="!h-[42px] !rounded-lg whitespace-nowrap"
+                disabled={
+                  analyzingList ||
+                  classFilter === "ALL" ||
+                  visibleExams.length === 0 ||
+                  visibleExams.length > 30
+                }
+                onClick={() => void analyzeVisibleExams()}
+                title={
+                  classFilter === "ALL"
+                    ? "Chọn một lớp để phân tích"
+                    : visibleExams.length > 30
+                      ? "Thu hẹp bộ lọc còn tối đa 30 bài kiểm tra"
+                      : "Phân tích các bài kiểm tra đang khớp bộ lọc"
+                }
+              >
+                {analyzingList ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                {analyzingList ? "Đang phân tích..." : "AI phân tích"}
+              </Button>
               <Button permission="exams.create"
                 className="!h-[42px] !rounded-lg"
                 onClick={() => router.push("/teacher/exams/new")}
@@ -488,7 +590,7 @@ export function TeacherExamsPage() {
                               size="sm"
                               variant="ghost"
                               className="text-brand-700"
-                              onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}
+                              onClick={() => router.push(`/teacher/exams/${exam.id}`)}
                               aria-label={`Xem bài nộp của ${exam.title}`}
                               title="Bài nộp"
                             >
@@ -530,6 +632,26 @@ export function TeacherExamsPage() {
         </section>
 
       <Modal
+        open={analysisOpen}
+        title="AI phân tích danh sách bài kiểm tra"
+        description={`${analysisScope.className} · ${analysisScope.examCount} bài đang khớp bộ lọc`}
+        onClose={() => setAnalysisOpen(false)}
+        width="max-w-5xl"
+        bodyClassName="max-h-[calc(100dvh-10rem)] overflow-y-auto !p-5"
+      >
+        {analyzingList ? (
+          <div className="flex min-h-52 items-center justify-center gap-3 text-sm font-semibold text-slate-500">
+            <LoaderCircle className="size-6 animate-spin text-brand-600" />
+            Đang tổng hợp xu hướng qua các bài kiểm tra...
+          </div>
+        ) : analysisError ? (
+          <ErrorPanel message={analysisError} />
+        ) : listAnalysis ? (
+          <ExamListAiAnalysisPanel analysis={listAnalysis} />
+        ) : null}
+      </Modal>
+
+      <Modal
         open={isEditorOpen}
         title="Chỉnh sửa bài kiểm tra"
         description="Cập nhật các bước thiết lập và lưu thay đổi ngay tại đây."
@@ -550,6 +672,89 @@ export function TeacherExamsPage() {
       </Modal>
       </div>
     </AssessmentShell>
+  );
+}
+
+function ExamListAiAnalysisPanel({ analysis }: { analysis: ExamListAiAnalysis }) {
+  const trend = {
+    IMPROVING: { label: "Đang cải thiện", icon: TrendingUp, className: "bg-emerald-50 text-emerald-700" },
+    DECLINING: { label: "Có xu hướng giảm", icon: TrendingDown, className: "bg-rose-50 text-rose-700" },
+    STABLE: { label: "Tương đối ổn định", icon: Minus, className: "bg-blue-50 text-brand-700" },
+    INSUFFICIENT_DATA: { label: "Chưa đủ dữ liệu", icon: Minus, className: "bg-slate-100 text-slate-600" },
+  }[analysis.trend.direction];
+  const TrendIcon = trend.icon;
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
+              <BrainCircuit className="size-5" />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-black text-slate-950">{analysis.headline}</h3>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${analysis.source === "AI" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
+                  {analysis.source === "AI" ? "Gemini AI" : "Phân tích dự phòng"}
+                </span>
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{analysis.summary}</p>
+            </div>
+          </div>
+        </div>
+        <div className={`mt-4 flex items-start gap-3 rounded-xl p-4 ${trend.className}`}>
+          <TrendIcon className="mt-0.5 size-5 shrink-0" />
+          <div><p className="font-black">{trend.label}</p><p className="mt-1 text-sm leading-6 opacity-90">{analysis.trend.evidence}</p></div>
+        </div>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AiExamListGroup title="Điểm tích cực" items={analysis.strengths} tone="success" />
+        <AiExamListGroup title="Điểm cần chú ý" items={analysis.concerns} tone="warning" />
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h3 className="font-black text-slate-950">Đề xuất ưu tiên</h3>
+        <div className="mt-3 space-y-3">
+          {analysis.recommendations.map((item, index) => (
+            <div key={`${item.title}-${index}`} className="flex gap-3 rounded-xl bg-slate-50 p-4">
+              <span className={`mt-0.5 h-fit rounded-full px-2 py-1 text-[10px] font-black ${item.priority === "HIGH" ? "bg-rose-100 text-rose-700" : item.priority === "MEDIUM" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-brand-700"}`}>
+                {item.priority === "HIGH" ? "CAO" : item.priority === "MEDIUM" ? "VỪA" : "THẤP"}
+              </span>
+              <div><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.action}</p></div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-black text-slate-950">Gợi ý hoạt động tiếp theo</h3>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-700">{analysis.lessonPlan.durationMinutes} phút</span>
+        </div>
+        <p className="mt-2 font-bold text-brand-800">{analysis.lessonPlan.focus}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{analysis.lessonPlan.objective}</p>
+        <ol className="mt-3 space-y-2">
+          {analysis.lessonPlan.activities.map((activity, index) => (
+            <li key={`${activity}-${index}`} className="flex gap-3 text-sm leading-6 text-slate-700"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-black text-brand-700">{index + 1}</span>{activity}</li>
+          ))}
+        </ol>
+      </section>
+      <p className="text-xs leading-5 text-slate-400">AI chỉ nhận số liệu tổng hợp đã ẩn danh của các bài đang khớp bộ lọc. Giáo viên cần đối chiếu với bối cảnh lớp trước khi áp dụng.</p>
+    </div>
+  );
+}
+
+function AiExamListGroup({ title, items, tone }: { title: string; items: Array<{ title: string; evidence: string }>; tone: "success" | "warning" }) {
+  return (
+    <section className={`rounded-2xl border p-5 ${tone === "success" ? "border-emerald-100 bg-emerald-50/50" : "border-amber-100 bg-amber-50/50"}`}>
+      <h3 className="font-black text-slate-950">{title}</h3>
+      <div className="mt-3 space-y-3">
+        {items.length ? items.map((item, index) => (
+          <div key={`${item.title}-${index}`}><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.evidence}</p></div>
+        )) : <p className="text-sm text-slate-500">Chưa có tín hiệu đủ rõ trong phạm vi lọc.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -2008,20 +2213,17 @@ export function ExamDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
-    void Promise.all([
-      examService.getExamById(params.id),
-      questionBankService.getQuestions(),
-    ])
-      .then(([loadedExam, loadedQuestions]) => {
-        setExam(loadedExam);
-        setQuestions(loadedQuestions);
-      })
-      .catch((cause) =>
-        setError(cause instanceof Error ? cause.message : "Không thể tải đề"),
-      );
+    let active = true;
+    setExam(null);
+    setError("");
+    void examService.getExamById(params.id)
+      .then((loadedExam) => { if (active) setExam(loadedExam); })
+      .catch((cause) => {
+        if (active) setError(cause instanceof Error ? cause.message : "Không thể tải bài kiểm tra");
+      });
+    return () => { active = false; };
   }, [params.id]);
   if (error)
     return (
@@ -2036,10 +2238,6 @@ export function ExamDetailPage() {
       </AssessmentShell>
     );
 
-  const orderedQuestions = [...exam.questions].sort(
-    (left, right) => left.order - right.order,
-  );
-
   return (
     <AssessmentShell>
       <PageHeading
@@ -2047,204 +2245,82 @@ export function ExamDetailPage() {
         title={exam.title}
         description={`${toVietnameseSubjectName(exam.subjectName)} · ${exam.className}`}
       />
-      <div className="grid w-full items-start gap-3 lg:grid-cols-[430px_minmax(0,1fr)]">
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card lg:col-start-1 lg:flex lg:min-h-0 lg:flex-col">
-          <div className="relative overflow-hidden px-4 py-3 sm:px-5">
-            <div className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full bg-brand-100/50 blur-2xl" />
-            <div className="relative flex items-start gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/20">
-                <FileCheck2 className="size-5" />
+      <ExamDetailTabs examId={exam.id} active="overview" />
+      <div className="grid w-full items-start gap-3 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white text-[13px] shadow-card">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="flex items-center gap-2 text-[13px] font-bold text-slate-900">
+              <FileCheck2 className="size-4 text-brand-600" /> Thông tin bài kiểm tra
+            </h2>
+          </div>
+          <div className="space-y-3 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex rounded-full px-2.5 py-1 font-bold ${statusClass(exam.status)}`}>
+                {EXAM_STATUS_LABELS[exam.status]}
               </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${statusClass(exam.status)}`}
-                  >
-                    {EXAM_STATUS_LABELS[exam.status]}
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
-                    {exam.published ? "Đã công bố" : "Bản nháp"}
-                  </span>
-                </div>
-                <h2 className="mt-2 text-xl font-black leading-7 text-slate-950">
-                  {exam.title}
-                </h2>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-semibold text-slate-500">
-                  <span className="inline-flex items-center gap-1.5">
-                    <BookOpen className="size-4 text-brand-500" />
-                    {toVietnameseSubjectName(exam.subjectName)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <ListChecks className="size-4 text-brand-500" />
-                    {exam.className}
-                  </span>
-                </div>
-                {exam.description ? (
-                  <p className="mt-2 max-w-3xl whitespace-pre-wrap text-[13px] leading-5 text-slate-500">
-                    {exam.description}
-                  </p>
-                ) : null}
-              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-500">
+                {exam.published ? "Đã công bố" : "Bản nháp"}
+              </span>
             </div>
+            <h3 className="text-base font-bold leading-6 text-slate-900">{exam.title}</h3>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <BookOpen className="size-3.5 text-brand-500" />
+                {toVietnameseSubjectName(exam.subjectName)}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <ListChecks className="size-3.5 text-brand-500" />{exam.className}
+              </span>
+            </div>
+            {exam.description ? <p className="whitespace-pre-wrap break-words leading-5 text-slate-500">{exam.description}</p> : null}
           </div>
-
-          <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60">
-            <div className="border-b border-r border-slate-100 px-4 py-2">
-              <p className="text-[11px] font-semibold text-slate-400">Câu hỏi</p>
-              <p className="mt-0.5 text-base font-black text-slate-900">
-                {exam.questions.length}
-              </p>
-            </div>
-            <div className="border-b border-slate-100 px-4 py-2">
-              <p className="text-[11px] font-semibold text-slate-400">Tổng điểm</p>
-              <p className="mt-0.5 text-base font-black text-slate-900">
-                {exam.totalPoints}
-              </p>
-            </div>
-            <div className="border-r border-slate-100 px-4 py-2">
-              <p className="text-[11px] font-semibold text-slate-400">Thời lượng</p>
-              <p className="mt-0.5 text-base font-black text-slate-900">
-                {exam.settings.durationMinutes} phút
-              </p>
-            </div>
-            <div className="px-4 py-2">
-              <p className="text-[11px] font-semibold text-slate-400">Lượt làm</p>
-              <p className="mt-0.5 text-base font-black text-slate-900">
-                {exam.settings.attemptsAllowed}
-              </p>
-            </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-slate-100 bg-slate-50/60 px-4 py-3">
+            <div><dt className="text-slate-500">Câu hỏi</dt><dd className="mt-1 font-bold text-slate-900">{exam.questions.length}</dd></div>
+            <div><dt className="text-slate-500">Tổng điểm</dt><dd className="mt-1 font-bold text-slate-900">{formatPoints(exam.totalPoints)}</dd></div>
+            <div><dt className="text-slate-500">Thời lượng</dt><dd className="mt-1 font-bold text-slate-900">{exam.settings.durationMinutes} phút</dd></div>
+            <div><dt className="text-slate-500">Lượt làm</dt><dd className="mt-1 font-bold text-slate-900">{exam.settings.attemptsAllowed}</dd></div>
+          </dl>
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h3 className="mb-3 font-bold text-slate-900">Lịch làm bài</h3>
+            <dl className="space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <dt className="inline-flex items-center gap-1.5 text-slate-500"><CalendarClock className="size-3.5 text-brand-500" />Bắt đầu</dt>
+                <dd className="font-semibold text-slate-700">{formatExamDate(exam.settings.startsAt)}</dd>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <dt className="inline-flex items-center gap-1.5 text-slate-500"><Clock3 className="size-3.5 text-rose-400" />Kết thúc</dt>
+                <dd className="font-semibold text-slate-700">{formatExamDate(exam.settings.endsAt)}</dd>
+              </div>
+            </dl>
           </div>
-          <div className="divide-y divide-slate-100 border-t border-slate-100 lg:min-h-0 lg:flex-1">
-            <section className="p-3 sm:p-4">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
-                  <CalendarClock className="size-4" />
-                </span>
-                <h2 className="font-black text-slate-900">Lịch làm bài</h2>
-              </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    <CalendarClock className="size-3.5 text-brand-500" /> Bắt đầu
-                  </p>
-                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
-                    {formatExamDate(exam.settings.startsAt)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-                  <p className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    <Clock3 className="size-3.5 text-rose-400" /> Kết thúc
-                  </p>
-                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">
-                    {formatExamDate(exam.settings.endsAt)}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="p-3 sm:p-4">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-700">
-                  <Settings2 className="size-4" />
-                </span>
-                <h2 className="font-black text-slate-900">Cấu hình bài thi</h2>
-              </div>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <dt className="text-slate-400">Số mã đề</dt>
-                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.examVersionCount}</dd>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <dt className="text-slate-400">Xáo trộn câu hỏi</dt>
-                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.shuffleQuestions ? "Có" : "Không"}</dd>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <dt className="text-slate-400">Xáo trộn đáp án</dt>
-                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.shuffleAnswers ? "Có" : "Không"}</dd>
-                </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <dt className="text-slate-400">Hiện điểm sau khi nộp</dt>
-                  <dd className="mt-0.5 font-bold text-slate-800">{exam.settings.showScoreImmediately ? "Có" : "Không"}</dd>
-                </div>
-              </dl>
-              {!exam.published ? (
-                <Button permission="exams.update" className="mt-4 w-full" onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}>
-                  <Edit3 className="size-4" /> Chỉnh sửa bản nháp
-                </Button>
-              ) : (
-                <Button permission="exams.submissions" className="mt-4 w-full" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>
-                  <FileCheck2 className="size-4" /> Xem bài nộp
-                </Button>
-              )}
-            </section>
+          <div className="px-4 py-3">
+            <h3 className="mb-3 font-bold text-slate-900">Cấu hình bài thi</h3>
+            <dl className="space-y-2.5">
+              <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Số mã đề</dt><dd className="font-semibold text-slate-700">{exam.settings.examVersionCount}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Xáo trộn câu hỏi</dt><dd className="font-semibold text-slate-700">{exam.settings.shuffleQuestions ? "Có" : "Không"}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Xáo trộn đáp án</dt><dd className="font-semibold text-slate-700">{exam.settings.shuffleAnswers ? "Có" : "Không"}</dd></div>
+              <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Hiện điểm sau khi nộp</dt><dd className="font-semibold text-slate-700">{exam.settings.showScoreImmediately ? "Có" : "Không"}</dd></div>
+            </dl>
+          </div>
+          <div className="border-t border-slate-100 p-3">
+            {!exam.published ? (
+              <Button permission="exams.update" className="w-full !text-[13px]" onClick={() => router.push(`/teacher/exams/${exam.id}/edit`)}>
+                <Edit3 className="size-4" /> Chỉnh sửa bản nháp
+              </Button>
+            ) : (
+              <Button permission="exams.submissions" className="w-full !text-[13px]" variant="secondary" onClick={() => router.push(`/teacher/exams/${exam.id}/submissions`)}>
+                <TrendingUp className="size-4" /> Báo cáo kết quả lớp
+              </Button>
+            )}
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl bg-white lg:col-start-2 lg:flex lg:max-h-[calc(100dvh-106px)] lg:min-h-0 lg:flex-col">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
-                  <ListChecks className="size-4" />
-                </span>
-                <h2 className="font-black text-slate-900">
-                  Danh sách câu hỏi
-                </h2>
-              </div>
-              <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-black text-brand-700">
-                {orderedQuestions.length} câu
-              </span>
-            </div>
+        <ExamResultsOverview key={exam.id} examId={exam.id} totalPoints={exam.totalPoints} />
 
-            {orderedQuestions.length === 0 ? (
-              <div className="grid min-h-48 place-items-center px-5 py-10 text-center lg:min-h-0 lg:flex-1">
-                <div>
-                  <span className="mx-auto grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-400">
-                    <FileQuestion className="size-5" />
-                  </span>
-                  <p className="mt-3 text-[13px] font-semibold text-slate-500">
-                    Bài kiểm tra chưa có câu hỏi.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="max-h-[calc(100dvh-180px)] space-y-2 overflow-y-auto overscroll-contain p-3 sm:p-4 lg:min-h-0 lg:max-h-none lg:flex-1">
-                {orderedQuestions.map((item, index) => {
-                  const question = questions.find(
-                    (value) => value.id === item.questionId,
-                  );
-                  return (
-                    <article
-                      key={item.questionId}
-                      className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:border-brand-200 hover:bg-brand-50/20"
-                    >
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-[13px] font-black text-brand-700">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold leading-6 text-slate-900">
-                          {question?.content ?? `Câu hỏi ${item.questionId}`}
-                        </p>
-                        {question ? (
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                            <span className="rounded-md bg-slate-100 px-2 py-0.5">
-                              {QUESTION_TYPE_LABELS[question.type]}
-                            </span>
-                            <span className="rounded-md bg-slate-100 px-2 py-0.5">
-                              {DIFFICULTY_LABELS[question.difficulty]}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-black text-violet-700">
-                        {item.points} điểm
-                      </span>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
+      </div>
+      <div className="mt-4">
+        <h2 className="mb-2 text-sm font-bold text-slate-900">Danh sách học sinh nộp bài</h2>
+        <ExamSubmissionsPanel key={exam.id} examId={exam.id} totalPoints={exam.totalPoints} />
       </div>
     </AssessmentShell>
   );

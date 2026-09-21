@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BookOpenCheck,
+  BrainCircuit,
   CalendarClock,
   ClipboardList,
   Download,
@@ -13,6 +14,10 @@ import {
   FileText,
   LoaderCircle,
   Plus,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  Minus,
   Trash2,
   Upload,
   XCircle,
@@ -24,7 +29,7 @@ import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
 import { academicDataService, examService } from "@/lib/assessment-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
-import type { ClassTopic, ClassTopicInput, Exam, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
+import type { ClassTopic, ClassTopicInput, Exam, ExamListAiAnalysis, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
 
 const emptyForm: ClassTopicInput = { subjectId: "", name: "", description: "", sortOrder: 0 };
 
@@ -60,6 +65,10 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
   const [editingTopic, setEditingTopic] = useState<ClassTopic | null>(null);
   const [deletingTopic, setDeletingTopic] = useState<ClassTopic | null>(null);
   const [form, setForm] = useState<ClassTopicInput>(emptyForm);
+  const [analyzingExams, setAnalyzingExams] = useState(false);
+  const [examAnalysisOpen, setExamAnalysisOpen] = useState(false);
+  const [examAnalysisError, setExamAnalysisError] = useState("");
+  const [examAnalysis, setExamAnalysis] = useState<ExamListAiAnalysis | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -183,6 +192,33 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
     }
   }
 
+  async function analyzeClassExams() {
+    if (!exams.length || exams.length > 30) return;
+    setAnalyzingExams(true);
+    setExamAnalysis(null);
+    setExamAnalysisError("");
+    setExamAnalysisOpen(true);
+    try {
+      const analysis = await examService.analyzeExamList({
+        classId,
+        examIds: exams.map((exam) => exam.id),
+      });
+      setExamAnalysis(analysis);
+      notify(
+        analysis.source === "AI"
+          ? "AI đã hoàn tất phân tích các bài kiểm tra của lớp"
+          : "Đã tạo phân tích dự phòng từ số liệu lớp",
+        { key: "class-exam-ai-analysis" },
+      );
+    } catch (cause) {
+      setExamAnalysisError(
+        errorMessage(cause, "Không thể phân tích các bài kiểm tra của lớp"),
+      );
+    } finally {
+      setAnalyzingExams(false);
+    }
+  }
+
   if (isLoading && !schoolClass) {
     return <div className="flex min-h-[420px] items-center justify-center gap-2 text-sm font-semibold text-slate-500"><LoaderCircle className="size-5 animate-spin text-brand-600" />Đang tải lớp học...</div>;
   }
@@ -207,7 +243,25 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
             <h3 className="flex items-center gap-2 font-black text-slate-900"><ClipboardList className="size-5 text-brand-600" />Bài kiểm tra của lớp</h3>
             <p className="mt-1 text-sm text-slate-500">Mở báo cáo để xem đủ học sinh, lượt làm và kết quả theo câu/chủ đề.</p>
           </div>
-          <Button permission="exams.read" variant="outline" size="sm" onClick={() => router.push("/teacher/exams")}>Quản lý bài kiểm tra</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              permission="exams.submissions"
+              variant="secondary"
+              size="sm"
+              className="min-w-[150px]"
+              disabled={analyzingExams || exams.length === 0 || exams.length > 30}
+              onClick={() => void analyzeClassExams()}
+              title={
+                exams.length > 30
+                  ? "Danh sách tối đa 30 bài kiểm tra mỗi lần phân tích"
+                  : "Phân tích toàn bộ bài kiểm tra của lớp bằng AI"
+              }
+            >
+              {analyzingExams ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {analyzingExams ? "Đang phân tích..." : "AI phân tích lớp"}
+            </Button>
+            <Button permission="exams.read" variant="outline" size="sm" onClick={() => router.push("/teacher/exams")}>Quản lý bài kiểm tra</Button>
+          </div>
         </header>
         {exams.length ? (
           <div className="divide-y divide-slate-100">
@@ -231,6 +285,26 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
       </section>
 
       <ClassChatPanel classId={classId} className={schoolClass?.name} />
+
+      <Modal
+        open={examAnalysisOpen}
+        title="AI phân tích các bài kiểm tra của lớp"
+        description={`${schoolClass?.name ?? "Lớp học"} · ${exams.length} bài kiểm tra`}
+        onClose={() => setExamAnalysisOpen(false)}
+        width="max-w-5xl"
+        bodyClassName="max-h-[calc(100dvh-10rem)] overflow-y-auto !p-5"
+      >
+        {analyzingExams ? (
+          <div className="flex min-h-52 items-center justify-center gap-3 text-sm font-semibold text-slate-500">
+            <LoaderCircle className="size-6 animate-spin text-brand-600" />
+            Đang tổng hợp xu hướng qua các bài kiểm tra...
+          </div>
+        ) : examAnalysisError ? (
+          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{examAnalysisError}</div>
+        ) : examAnalysis ? (
+          <ClassExamAiAnalysis analysis={examAnalysis} />
+        ) : null}
+      </Modal>
 
       {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
 
@@ -280,4 +354,53 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
       <ConfirmationDialog open={Boolean(deletingTopic)} title="Xóa chủ đề" confirmLabel="Xóa chủ đề" confirmVariant="danger" loading={saving} onClose={() => setDeletingTopic(null)} onConfirm={() => void deleteTopic()}><p>Chủ đề <b>{deletingTopic?.name}</b> sẽ bị xóa. Các tệp gốc vẫn được giữ trong thư viện tài liệu.</p></ConfirmationDialog>
     </div>
   );
+}
+
+function ClassExamAiAnalysis({ analysis }: { analysis: ExamListAiAnalysis }) {
+  const trend = {
+    IMPROVING: { label: "Đang cải thiện", icon: TrendingUp, className: "bg-emerald-50 text-emerald-700" },
+    DECLINING: { label: "Có xu hướng giảm", icon: TrendingDown, className: "bg-rose-50 text-rose-700" },
+    STABLE: { label: "Tương đối ổn định", icon: Minus, className: "bg-blue-50 text-brand-700" },
+    INSUFFICIENT_DATA: { label: "Chưa đủ dữ liệu", icon: Minus, className: "bg-slate-100 text-slate-600" },
+  }[analysis.trend.direction];
+  const TrendIcon = trend.icon;
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white"><BrainCircuit className="size-5" /></span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-black text-slate-950">{analysis.headline}</h3>
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${analysis.source === "AI" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>{analysis.source === "AI" ? "Gemini AI" : "Phân tích dự phòng"}</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{analysis.summary}</p>
+          </div>
+        </div>
+        <div className={`mt-4 flex items-start gap-3 rounded-xl p-4 ${trend.className}`}><TrendIcon className="mt-0.5 size-5 shrink-0" /><div><p className="font-black">{trend.label}</p><p className="mt-1 text-sm leading-6">{analysis.trend.evidence}</p></div></div>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ClassExamInsight title="Điểm tích cực" items={analysis.strengths} className="border-emerald-100 bg-emerald-50/50" />
+        <ClassExamInsight title="Điểm cần chú ý" items={analysis.concerns} className="border-amber-100 bg-amber-50/50" />
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 p-5">
+        <h3 className="font-black text-slate-950">Đề xuất ưu tiên</h3>
+        <div className="mt-3 space-y-3">{analysis.recommendations.map((item, index) => <div key={`${item.title}-${index}`} className="rounded-xl bg-slate-50 p-4"><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.action}</p></div>)}</div>
+      </section>
+
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
+        <div className="flex items-center justify-between gap-3"><h3 className="font-black text-slate-950">Gợi ý hoạt động tiếp theo</h3><span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-700">{analysis.lessonPlan.durationMinutes} phút</span></div>
+        <p className="mt-2 font-bold text-brand-800">{analysis.lessonPlan.focus}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{analysis.lessonPlan.objective}</p>
+        <ol className="mt-3 space-y-2">{analysis.lessonPlan.activities.map((activity, index) => <li key={`${activity}-${index}`} className="flex gap-3 text-sm leading-6 text-slate-700"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-black text-brand-700">{index + 1}</span>{activity}</li>)}</ol>
+      </section>
+      <p className="text-xs leading-5 text-slate-400">AI chỉ nhận số liệu tổng hợp đã ẩn danh của lớp. Giáo viên cần đối chiếu với bối cảnh thực tế trước khi áp dụng.</p>
+    </div>
+  );
+}
+
+function ClassExamInsight({ title, items, className }: { title: string; items: Array<{ title: string; evidence: string }>; className: string }) {
+  return <section className={`rounded-2xl border p-5 ${className}`}><h3 className="font-black text-slate-950">{title}</h3><div className="mt-3 space-y-3">{items.length ? items.map((item, index) => <div key={`${item.title}-${index}`}><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.evidence}</p></div>) : <p className="text-sm text-slate-500">Chưa có tín hiệu đủ rõ.</p>}</div></section>;
 }

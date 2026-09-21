@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BookOpenCheck, CheckCircle2, CircleAlert, Eye, FileText, MessageSquareText, Save, Send, Timer, UserRoundSearch, UsersRound, XCircle } from "lucide-react";
+import { BarChart3, BookOpenCheck, BrainCircuit, CheckCircle2, CircleAlert, Eye, FileText, LoaderCircle, MessageSquareText, Save, Send, Sparkles, Target, Timer, TrendingUp, UserRoundSearch, UsersRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AssessmentShell, ErrorPanel, LoadingPanel, PageHeading } from "@/components/assessment/assessment-shell";
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader } fr
 import { Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { examService } from "@/lib/assessment-api";
-import type { Exam, ExamAttempt, ExamClassReport, ExamClassReportStudent, TeacherReviewStatus } from "@/types/assessment";
+import type { Exam, ExamAttempt, ExamClassAiAnalysis, ExamClassReport, ExamClassReportStudent, TeacherReviewStatus } from "@/types/assessment";
 
 export function SubmissionsPage() {
   const params = useParams<{ id: string }>();
@@ -88,12 +88,13 @@ export function SubmissionsPage() {
     }
   }
 
+
   if (loading) return <AssessmentShell><LoadingPanel /></AssessmentShell>;
   if (error || !exam || !report) return <AssessmentShell><ErrorPanel message={error || "Không tìm thấy báo cáo bài kiểm tra"} /></AssessmentShell>;
   const { summary } = report;
   return (
     <AssessmentShell>
-      <PageHeading eyebrow="Class assessment report" title="Báo cáo kết quả lớp" description={`${exam.title} · ${exam.className} · ${exam.subjectName}`} />
+      <PageHeading eyebrow="Class assessment report" title="Báo cáo kết quả lớp" description={`${exam.title} · ${exam.className} · ${exam.subjectName}`} action={<Button permission="exams.submissions" onClick={() => router.push(`/teacher/exams/${exam.id}/analysis`)}><Sparkles className="size-4" />Phân tích AI</Button>} />
 
       <section data-testid="class-report-policy" className="mb-4 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <CircleAlert className="mt-0.5 size-5 shrink-0 text-brand-600" />
@@ -115,6 +116,9 @@ export function SubmissionsPage() {
         <StatusCount label="Đang làm" value={summary.inProgressStudentCount} className="border-x border-slate-200 text-amber-700" />
         <StatusCount label="Đã nộp" value={summary.submittedStudentCount} className="text-emerald-700" />
       </div>
+
+      <ReportOverviewDashboard report={report} />
+
 
       <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto]">
         <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-card">
@@ -163,8 +167,205 @@ function StatusCount({ label, value, className }: { label: string; value: number
   return <div className={`px-3 py-3 ${className}`}><p className="text-xl font-black">{value}</p><p className="text-xs font-semibold">{label}</p></div>;
 }
 
+export function ClassAiAnalysisPanel({ analysis, loading, compact = false }: { analysis: ExamClassAiAnalysis | null; loading: boolean; compact?: boolean }) {
+  if (loading) {
+    return <section data-testid="class-report-ai-loading" className="mb-5 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-6 shadow-card"><div className="flex items-center gap-4"><span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-violet-100 text-violet-700"><LoaderCircle className="size-6 animate-spin" /></span><div><h2 className="font-black text-slate-950">AI đang phân tích kết quả lớp</h2><p className="mt-1 text-sm text-slate-500">Đang tổng hợp mức độ tham gia, phân bố điểm và các chủ đề cần ưu tiên.</p></div></div></section>;
+  }
+  if (!analysis) return null;
+  const generatedAt = new Date(analysis.generatedAt);
+  const generatedLabel = Number.isNaN(generatedAt.getTime()) ? "Vừa tạo" : generatedAt.toLocaleString("vi-VN");
+  const priorityMeta = {
+    HIGH: { label: "Ưu tiên cao", className: "bg-rose-50 text-rose-700" },
+    MEDIUM: { label: "Ưu tiên vừa", className: "bg-amber-50 text-amber-700" },
+    LOW: { label: "Khuyến nghị", className: "bg-blue-50 text-brand-700" },
+  } as const;
+  return (
+    <section data-testid="class-report-ai-analysis" className={compact ? "overflow-hidden rounded-lg border border-slate-200 bg-white text-[13px] shadow-card [&_p]:text-[13px] [&_h2]:text-sm [&_h3]:text-[13px] [&_h4]:text-[13px]" : "mb-5 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-card"}>
+      <header className={`flex flex-wrap items-start justify-between gap-3 border-b border-violet-100 bg-gradient-to-r from-violet-50 via-blue-50/70 to-white ${compact ? "p-4" : "px-5 py-5 sm:px-6"}`}>
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><BrainCircuit className="size-5" /></span>
+          <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-black text-slate-950">Phân tích lớp bằng AI</h2><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${analysis.source === "AI" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>{analysis.source === "AI" ? "Gemini AI" : "Phân tích dự phòng"}</span></div><p className="mt-1 text-xs font-semibold text-slate-400">{generatedLabel}{analysis.model ? ` · ${analysis.model}` : ""}</p></div>
+        </div>
+        <p className="max-w-xl text-sm font-black leading-6 text-violet-900">{analysis.headline}</p>
+      </header>
+
+      <div className={compact ? "p-4" : "p-5 sm:p-6"}>
+        <p className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-6 text-slate-700">{analysis.summary}</p>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <AiInsightGroup title="Điểm tích cực" icon={<CheckCircle2 className="size-4" />} tone="emerald" items={analysis.strengths} empty="Chưa đủ dữ liệu để xác định điểm mạnh nổi bật." />
+          <AiInsightGroup title="Điểm cần chú ý" icon={<CircleAlert className="size-4" />} tone="rose" items={analysis.concerns} empty="Chưa ghi nhận vấn đề nổi bật từ dữ liệu hiện tại." />
+        </div>
+
+        <div className="mt-5 grid items-start gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2"><Target className="size-4 text-brand-600" /><h3 className="font-black text-slate-900">Hành động đề xuất</h3></div>
+            <div className="mt-3 space-y-2.5">{analysis.recommendations.map((item, index) => { const meta = priorityMeta[item.priority]; return <article key={`${item.title}-${index}`} className="rounded-xl bg-slate-50 p-3.5"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wide ${meta.className}`}>{meta.label}</span><h4 className="text-sm font-black text-slate-900">{item.title}</h4></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.action}</p></article>; })}</div>
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Sparkles className="size-4 text-brand-600" /><h3 className="font-black text-slate-900">Gợi ý hoạt động trên lớp</h3></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-700">{analysis.lessonPlan.durationMinutes} phút</span></div>
+            <p className="mt-3 text-sm font-black text-brand-800">{analysis.lessonPlan.focus}</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">{analysis.lessonPlan.objective}</p>
+            <ol className="mt-4 space-y-2">{analysis.lessonPlan.activities.map((activity, index) => <li key={`${activity}-${index}`} className="flex gap-3 text-sm leading-6 text-slate-700"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white text-xs font-black text-brand-700">{index + 1}</span><span>{activity}</span></li>)}</ol>
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs leading-5 text-slate-400">Phân tích AI chỉ dùng số liệu tổng hợp đã ẩn danh và mang tính hỗ trợ. Giáo viên cần đối chiếu với bối cảnh lớp trước khi áp dụng.</p>
+      </div>
+    </section>
+  );
+}
+
+function AiInsightGroup({ title, icon, tone, items, empty }: { title: string; icon: React.ReactNode; tone: "emerald" | "rose"; items: Array<{ title: string; evidence: string }>; empty: string }) {
+  const styles = tone === "emerald" ? "border-emerald-100 bg-emerald-50/60 text-emerald-700" : "border-rose-100 bg-rose-50/60 text-rose-700";
+  return <div className={`rounded-xl border p-4 ${styles}`}><div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-lg bg-white">{icon}</span><h3 className="font-black">{title}</h3></div>{items.length ? <div className="mt-3 space-y-2">{items.map((item, index) => <article key={`${item.title}-${index}`} className="rounded-lg bg-white/80 p-3"><h4 className="text-sm font-black text-slate-900">{item.title}</h4><p className="mt-1 text-xs leading-5 text-slate-600">{item.evidence}</p></article>)}</div> : <p className="mt-3 rounded-lg bg-white/70 p-3 text-sm text-slate-500">{empty}</p>}</div>;
+}
+
+export function ReportOverviewDashboard({ report, compact = false }: { report: ExamClassReport; compact?: boolean }) {
+  const { summary } = report;
+  const totalStudents = summary.enrolledStudentCount;
+  const completionRate = percentage(summary.submittedStudentCount, totalStudents);
+  const inProgressRate = percentage(summary.inProgressStudentCount, totalStudents);
+  const notStartedRate = percentage(summary.notStartedCount, totalStudents);
+  const supportStudents = report.students.filter((student) => student.needsSupport);
+  const submittedWithScore = report.students.filter(
+    (student) => student.participationStatus === "SUBMITTED" && student.selectedAttempt?.percentage != null,
+  );
+  const scoreBuckets = [
+    { label: "0–39%", count: 0, tone: "bg-rose-500", textTone: "text-rose-700" },
+    { label: "40–59%", count: 0, tone: "bg-amber-500", textTone: "text-amber-700" },
+    { label: "60–79%", count: 0, tone: "bg-blue-500", textTone: "text-blue-700" },
+    { label: "80–100%", count: 0, tone: "bg-emerald-500", textTone: "text-emerald-700" },
+  ];
+  for (const student of submittedWithScore) {
+    const value = student.selectedAttempt?.percentage ?? 0;
+    const bucket = value < 40 ? scoreBuckets[0] : value < 60 ? scoreBuckets[1] : value < 80 ? scoreBuckets[2] : scoreBuckets[3];
+    bucket.count += 1;
+  }
+  const maximumBucketCount = Math.max(1, ...scoreBuckets.map((bucket) => bucket.count));
+  const scoredTopics = report.topicPerformance.filter((topic) => topic.accuracy !== null);
+  const weakestTopic = scoredTopics[0] ?? null;
+  const strongestTopic = scoredTopics.at(-1) ?? null;
+  const visibleTopics = scoredTopics.slice(0, 6);
+  const generatedAt = new Date(report.generatedAt);
+  const generatedLabel = Number.isNaN(generatedAt.getTime())
+    ? "Vừa cập nhật"
+    : `Cập nhật ${generatedAt.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`;
+  const donutBackground = totalStudents > 0
+    ? `conic-gradient(#10b981 0 ${completionRate}%, #f59e0b ${completionRate}% ${completionRate + inProgressRate}%, #e2e8f0 ${completionRate + inProgressRate}% 100%)`
+    : "#e2e8f0";
+
+  return (
+    <section data-testid="class-report-dashboard" className={compact ? "space-y-3 text-[13px] [&_article]:rounded-lg [&_article]:p-4 [&_h3]:text-[13px] [&_p]:text-[13px]" : "mb-5 space-y-3"} aria-label={compact ? "Thống kê kết quả lớp" : undefined} aria-labelledby={compact ? undefined : "class-report-dashboard-title"}>
+      {!compact ? <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">Dashboard báo cáo</p>
+          <h2 id="class-report-dashboard-title" className="mt-1 text-lg font-black text-slate-950">Toàn cảnh kết quả lớp</h2>
+        </div>
+        <p className="text-xs font-semibold text-slate-400">{generatedLabel}</p>
+      </div> : null}
+
+      <div className={compact ? "grid gap-3 md:grid-cols-2" : "grid gap-3 xl:grid-cols-[0.85fr_1.15fr]"}>
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-700"><UsersRound className="size-5" /></span>
+            <div><h3 className="font-black text-slate-900">Mức độ tham gia</h3><p className="text-xs text-slate-500">Trên tổng số học sinh đang ghi danh</p></div>
+          </div>
+          <div className={compact ? "mt-4 grid items-center gap-3 2xl:grid-cols-[128px_1fr]" : "mt-5 grid items-center gap-5 sm:grid-cols-[170px_1fr]"}>
+            <div
+              role="img"
+              aria-label={`${formatNumber(completionRate)}% học sinh đã nộp bài`}
+              className={`relative mx-auto grid place-items-center rounded-full ${compact ? "size-32" : "size-40"}`}
+              style={{ background: donutBackground }}
+            >
+              <div className={`grid place-items-center rounded-full bg-white text-center shadow-inner ${compact ? "size-24" : "size-28"}`}>
+                <div><p className="text-3xl font-black text-slate-950">{formatNumber(completionRate)}%</p><p className="text-xs font-bold text-slate-500">đã nộp</p></div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <ChartLegend color="bg-emerald-500" label="Đã nộp" value={summary.submittedStudentCount} detail={`${formatNumber(completionRate)}%`} />
+              <ChartLegend color="bg-amber-500" label="Đang làm" value={summary.inProgressStudentCount} detail={`${formatNumber(inProgressRate)}%`} />
+              <ChartLegend color="bg-slate-300" label="Chưa bắt đầu" value={summary.notStartedCount} detail={`${formatNumber(notStartedRate)}%`} />
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700"><BarChart3 className="size-5" /></span><div><h3 className="font-black text-slate-900">Phân bố kết quả</h3><p className="text-xs text-slate-500">Theo lượt đã nộp gần nhất có điểm</p></div></div>
+            <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">{submittedWithScore.length} học sinh</span>
+          </div>
+          {submittedWithScore.length ? (
+            <div className="mt-5 grid h-52 grid-cols-4 items-end gap-3 border-b border-slate-200 px-1" role="img" aria-label="Biểu đồ phân bố tỷ lệ điểm của học sinh">
+              {scoreBuckets.map((bucket) => (
+                <div key={bucket.label} className="flex h-full min-w-0 flex-col justify-end text-center">
+                  <p className={`mb-2 text-sm font-black ${bucket.textTone}`}>{bucket.count}</p>
+                  <div className="flex h-36 items-end justify-center rounded-t-lg bg-slate-50 px-2">
+                    <span className={`w-full max-w-16 rounded-t-md ${bucket.tone}`} style={{ height: bucket.count ? `${Math.max(12, (bucket.count / maximumBucketCount) * 100)}%` : "4px" }} />
+                  </div>
+                  <p className="mt-2 truncate text-[11px] font-bold text-slate-500" title={bucket.label}>{bucket.label}</p>
+                </div>
+              ))}
+            </div>
+          ) : <DashboardEmpty message="Chưa có bài đã nộp và chấm điểm để tạo phân bố." />}
+        </article>
+      </div>
+
+      {!compact ? <div className="grid items-start gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-700"><Target className="size-5" /></span><div><h3 className="font-black text-slate-900">Độ chính xác theo chủ đề</h3><p className="text-xs text-slate-500">Ưu tiên các chủ đề có kết quả thấp nhất</p></div></div>
+            <span className="text-xs font-bold text-slate-400">Ngưỡng hỗ trợ: {formatNumber(report.policy.supportThresholdPercent)}%</span>
+          </div>
+          {visibleTopics.length ? (
+            <div className="mt-5 space-y-4">
+              {visibleTopics.map((topic) => {
+                const accuracy = topic.accuracy ?? 0;
+                const belowThreshold = accuracy < report.policy.supportThresholdPercent;
+                return <div key={topic.topicId || topic.topicName}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><p className="truncate font-bold text-slate-700" title={topic.topicName}>{topic.topicName}</p><p className={`shrink-0 font-black ${belowThreshold ? "text-rose-700" : "text-emerald-700"}`}>{formatNumber(accuracy)}%</p></div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${belowThreshold ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${Math.max(2, Math.min(100, accuracy))}%` }} /></div>
+                  <p className="mt-1 text-[11px] text-slate-400">{topic.correctCount}/{topic.opportunityCount} lượt trả lời đúng · {topic.supportStudentCount} học sinh cần hỗ trợ</p>
+                </div>;
+              })}
+            </div>
+          ) : <DashboardEmpty message="Chưa đủ dữ liệu câu hỏi khách quan để phân tích theo chủ đề." />}
+        </article>
+
+        <article className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 to-white p-5 shadow-card">
+          <div className="flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-100 text-brand-700"><TrendingUp className="size-5" /></span><div><h3 className="font-black text-slate-900">Insight nhanh</h3><p className="text-xs text-slate-500">Các chỉ số cần chú ý của lớp</p></div></div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <DashboardInsight label="Tỷ lệ hoàn thành" value={`${formatNumber(completionRate)}%`} detail={`${summary.submittedStudentCount}/${totalStudents} học sinh đã nộp`} />
+            <DashboardInsight label="Điểm trung bình" value={summary.averagePercentage === null ? "—" : `${formatNumber(summary.averagePercentage)}%`} detail={summary.medianPercentage === null ? "Chưa có trung vị" : `Trung vị ${formatNumber(summary.medianPercentage)}%`} />
+            <DashboardInsight label="Cần hỗ trợ" value={supportStudents.length} detail={summary.submittedStudentCount ? `${formatNumber(percentage(supportStudents.length, summary.submittedStudentCount))}% số em đã nộp` : "Chưa có bài đã nộp"} alert={supportStudents.length > 0} />
+            <DashboardInsight label="Chủ đề cần ưu tiên" value={weakestTopic?.topicName ?? "—"} detail={weakestTopic?.accuracy === null || weakestTopic === null ? "Chưa đủ dữ liệu" : `${formatNumber(weakestTopic.accuracy)}% chính xác`} alert={Boolean(weakestTopic && (weakestTopic.accuracy ?? 100) < report.policy.supportThresholdPercent)} />
+            {strongestTopic && strongestTopic !== weakestTopic ? <DashboardInsight label="Chủ đề nổi bật" value={strongestTopic.topicName} detail={`${formatNumber(strongestTopic.accuracy ?? 0)}% chính xác`} /> : null}
+          </div>
+        </article>
+      </div> : null}
+    </section>
+  );
+}
+
+function ChartLegend({ color, label, value, detail }: { color: string; label: string; value: number; detail: string }) {
+  return <div className="flex items-center gap-3"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-700">{label}</p></div><p className="text-sm font-black text-slate-950">{value} <span className="ml-1 text-xs font-semibold text-slate-400">{detail}</span></p></div>;
+}
+
+function DashboardInsight({ label, value, detail, alert = false }: { label: string; value: string | number; detail: string; alert?: boolean }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-3.5"><p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className={`mt-1 break-words text-lg font-black ${alert ? "text-rose-700" : "text-slate-950"}`}>{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></div>;
+}
+
+function DashboardEmpty({ message }: { message: string }) {
+  return <div className="mt-5 grid min-h-44 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm font-semibold text-slate-400">{message}</div>;
+}
+
+function percentage(value: number, total: number): number {
+  return total > 0 ? Math.round((value / total) * 1_000) / 10 : 0;
+}
+
 function StudentReportTable({ students, onOpenAttempt, onOpenProfile, onReview }: { students: ExamClassReportStudent[]; onOpenAttempt: (attemptId: string) => void; onOpenProfile: (studentId: string) => void; onReview: (student: ExamClassReportStudent) => void }) {
-  return <section data-testid="class-report-students" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card"><div className="overflow-x-auto"><Table className="min-w-[1120px]"><TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white"><tr><TableHead className="!text-white">Học sinh</TableHead><TableHead className="!text-white">Trạng thái</TableHead><TableHead className="text-center !text-white">Số lượt</TableHead><TableHead className="text-center !text-white">Lượt dùng để báo cáo</TableHead><TableHead className="!text-white">Nội dung cần hỗ trợ</TableHead><TableHead className="!text-white">Nhận xét</TableHead><TableHead className="text-right !text-white">Thao tác</TableHead></tr></TableHeader><TableBody>{students.length === 0 ? <TableEmptyRow colSpan={7} message="Lớp chưa có học sinh đang ghi danh." /> : null}{students.map((student) => <tr key={student.id} className="transition hover:bg-slate-50/70"><TableCell><button type="button" className="text-left" onClick={() => onOpenProfile(student.id)}><p className="font-bold text-slate-900 hover:text-brand-700">{student.fullName}</p><p className="mt-1 font-mono text-xs text-slate-400">{student.studentCode}</p></button></TableCell><TableCell><ParticipationBadge status={student.participationStatus} /></TableCell><TableCell className="text-center"><b>{student.attemptCount}</b><p className="text-[11px] text-slate-400">{student.submittedAttemptCount} đã nộp</p></TableCell><TableCell className="text-center">{student.selectedAttempt?.status === "SUBMITTED" ? <><b className={student.needsSupport ? "text-rose-700" : "text-emerald-700"}>{student.selectedAttempt.score === null ? "—" : `${formatNumber(student.selectedAttempt.score)}/${formatNumber(student.selectedAttempt.maxScore)}`}</b><p className="text-[11px] text-slate-400">{student.selectedAttempt.percentage === null ? "Chưa có tỷ lệ" : `${formatNumber(student.selectedAttempt.percentage)}%`} · {formatDuration(student.selectedAttempt.durationSeconds)}</p></> : <span className="text-sm text-slate-400">Chưa có lượt đã nộp</span>}</TableCell><TableCell>{student.supportTopicNames.length ? <div className="flex max-w-72 flex-wrap gap-1.5">{student.supportTopicNames.map((topic) => <span key={topic} className="rounded-md bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">{topic}</span>)}</div> : student.participationStatus === "SUBMITTED" ? <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700"><BookOpenCheck className="size-4" />Đạt ngưỡng các chủ đề</span> : <span className="text-sm text-slate-400">Chưa có dữ liệu</span>}</TableCell><TableCell>{student.review ? <><span className={`inline-flex rounded-md px-2 py-1 text-xs font-bold ${student.review.status === "PUBLISHED" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{student.review.status === "PUBLISHED" ? "Đã công bố" : "Bản nháp"}</span><p className="mt-1 max-w-64 truncate text-xs text-slate-500">{student.review.comment || "Chưa có nội dung"}</p></> : <span className="text-sm text-slate-400">Chưa nhận xét</span>}</TableCell><TableCell><div className="flex justify-end gap-2">{student.selectedAttempt ? <Button size="sm" variant="outline" onClick={() => onOpenAttempt(student.selectedAttempt!.id)}><Eye className="size-4" />Xem bài</Button> : null}<Button size="sm" variant="secondary" onClick={() => onReview(student)}><MessageSquareText className="size-4" />Nhận xét</Button></div></TableCell></tr>)}</TableBody></Table></div><p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">Điểm và thời gian chỉ lấy từ lượt đã nộp gần nhất. Lượt đang làm không tham gia tính trung bình.</p></section>;
+  return <section data-testid="class-report-students" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card"><div className="max-h-[65dvh] overflow-auto overscroll-contain focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-200" role="region" aria-label="Danh sách kết quả học sinh" tabIndex={0}><Table className="min-w-[1120px]"><TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white"><tr><TableHead className="!text-white">Học sinh</TableHead><TableHead className="!text-white">Trạng thái</TableHead><TableHead className="text-center !text-white">Số lượt</TableHead><TableHead className="text-center !text-white">Lượt dùng để báo cáo</TableHead><TableHead className="!text-white">Nội dung cần hỗ trợ</TableHead><TableHead className="!text-white">Nhận xét</TableHead><TableHead className="w-60 text-right !text-white">Thao tác</TableHead></tr></TableHeader><TableBody>{students.length === 0 ? <TableEmptyRow colSpan={7} message="Lớp chưa có học sinh đang ghi danh." /> : null}{students.map((student) => <tr key={student.id} className="transition hover:bg-slate-50/70"><TableCell><button type="button" className="text-left" onClick={() => onOpenProfile(student.id)}><p className="font-bold text-slate-900 hover:text-brand-700">{student.fullName}</p><p className="mt-1 font-mono text-xs text-slate-400">{student.studentCode}</p></button></TableCell><TableCell><ParticipationBadge status={student.participationStatus} /></TableCell><TableCell className="text-center"><b>{student.attemptCount}</b><p className="text-[11px] text-slate-400">{student.submittedAttemptCount} đã nộp</p></TableCell><TableCell className="text-center">{student.selectedAttempt?.status === "SUBMITTED" ? <><b className={student.needsSupport ? "text-rose-700" : "text-emerald-700"}>{student.selectedAttempt.score === null ? "—" : `${formatNumber(student.selectedAttempt.score)}/${formatNumber(student.selectedAttempt.maxScore)}`}</b><p className="text-[11px] text-slate-400">{student.selectedAttempt.percentage === null ? "Chưa có tỷ lệ" : `${formatNumber(student.selectedAttempt.percentage)}%`} · {formatDuration(student.selectedAttempt.durationSeconds)}</p></> : <span className="text-sm text-slate-400">Chưa có lượt đã nộp</span>}</TableCell><TableCell>{student.supportTopicNames.length ? <div className="flex max-w-72 flex-wrap gap-1.5">{student.supportTopicNames.map((topic) => <span key={topic} className="rounded-md bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">{topic}</span>)}</div> : student.participationStatus === "SUBMITTED" ? <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700"><BookOpenCheck className="size-4" />Đạt ngưỡng các chủ đề</span> : <span className="text-sm text-slate-400">Chưa có dữ liệu</span>}</TableCell><TableCell>{student.review ? <><span className={`inline-flex rounded-md px-2 py-1 text-xs font-bold ${student.review.status === "PUBLISHED" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{student.review.status === "PUBLISHED" ? "Đã công bố" : "Bản nháp"}</span><p className="mt-1 max-w-64 truncate text-xs text-slate-500">{student.review.comment || "Chưa có nội dung"}</p></> : <span className="text-sm text-slate-400">Chưa nhận xét</span>}</TableCell><TableCell className="w-60"><div className="flex min-w-[232px] justify-end gap-2">{student.selectedAttempt ? <Button size="sm" variant="outline" className="w-[108px] shrink-0 whitespace-nowrap" onClick={() => onOpenAttempt(student.selectedAttempt!.id)}><Eye className="size-4" />Xem bài</Button> : null}<Button size="sm" variant="secondary" className="w-[116px] shrink-0 whitespace-nowrap" onClick={() => onReview(student)}><MessageSquareText className="size-4" />Nhận xét</Button></div></TableCell></tr>)}</TableBody></Table></div><p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">Điểm và thời gian chỉ lấy từ lượt đã nộp gần nhất. Lượt đang làm không tham gia tính trung bình.</p></section>;
 }
 
 function TopicReportTable({ report, onOpenStudent }: { report: ExamClassReport; onOpenStudent: (studentId: string) => void }) {

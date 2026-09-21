@@ -11,11 +11,18 @@ export function ParentOverviewPanels() {
   const [overview, setOverview] = useState<ParentOverview | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    void parentEngagementService.getOverview().then(setOverview).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải dữ liệu tổng quan"));
+    let active = true;
+    const refresh = () => { void parentEngagementService.getOverview().then((data) => { if (active) { setOverview(data); setError(""); } }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Không thể tải dữ liệu tổng quan"); }); };
+    refresh();
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 30_000);
+    return () => { active = false; window.removeEventListener("focus", refresh); window.clearInterval(timer); };
   }, []);
-  if (error) return <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p>;
+  if (error && !overview) return <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p>;
   if (!overview) return <div className="mt-6 grid min-h-36 place-items-center rounded-2xl border border-slate-200 bg-white"><LoaderCircle className="size-7 animate-spin text-brand-600" /></div>;
+  const learningAlerts = overview.learningAlerts ?? overview.notifications.filter((item) => item.actionUrl === "/parent#learning-alerts");
   return <div className="mt-6 grid gap-5 lg:grid-cols-2">
+    {learningAlerts.length > 0 ? <section id="learning-alerts" className="scroll-mt-24 rounded-xl border border-amber-200 bg-white p-5 shadow-card lg:col-span-2"><div className="flex items-center gap-2"><CircleAlert className="size-5 text-amber-600" /><h2 className="text-lg font-bold text-slate-900">Cần phối hợp hỗ trợ học tập</h2></div><p className="mt-1 text-sm text-slate-500">Nhận xét đã được giáo viên xem xét và gửi riêng tới gia đình.</p><div className="mt-4 divide-y divide-slate-100">{learningAlerts.map((item) => <article key={item.id} className="py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap justify-between gap-2"><h3 className="font-bold text-slate-900">{item.title}</h3><time className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleString("vi-VN")}</time></div><p className="mt-1 text-xs font-semibold text-brand-700">Giáo viên: {item.senderName}</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.message}</p></article>)}</div></section> : null}
     <ParentPanel title="Thông báo mới" icon={BellRing} empty="Chưa có thông báo từ giáo viên hoặc nhà trường.">
       {overview.notifications.slice(0, 6).map((item) => <article key={item.id} className="relative border-l-2 border-dashed border-blue-200 pb-5 pl-5 last:border-transparent last:pb-0"><span className={`absolute -left-[7px] top-1 size-3 rounded-full ring-4 ring-white ${item.readAt ? "bg-slate-300" : "bg-brand-500"}`} /><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="text-base font-extrabold">{item.title}</h3><time className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleString("vi-VN")}</time></div><p className="mt-1 text-sm leading-6 text-slate-600">{item.message}</p><p className="mt-2 text-xs font-semibold text-brand-700">{item.senderName}</p></article>)}
     </ParentPanel>

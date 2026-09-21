@@ -323,6 +323,8 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
               || pathname === "/teacher/exams"
               || pathname === "/teacher/exams/new"
               || pathname.startsWith("/teacher/exams/")
+              || pathname === "/teacher/attendance"
+              || pathname === "/teacher/notifications"
               || pathname === "/teacher/settings/exam-defaults"
               ? "w-full"
               : "mx-auto max-w-[1280px]"
@@ -383,12 +385,14 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
   if (/^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname))
     return "Chỉnh sửa câu hỏi";
   if (pathname === "/teacher/exams/new") return "Tạo mới bài kiểm tra";
+  if (/^\/teacher\/exams\/[^/]+\/analysis$/.test(pathname)) return "Phân tích AI";
+  if (/^\/teacher\/exams\/[^/]+\/subject-support$/.test(pathname)) return "Theo dõi học tập theo môn";
   if (/^\/teacher\/exams\/[^/]+\/submissions\/[^/]+$/.test(pathname))
     return "Chấm bài";
   if (/^\/teacher\/exams\/[^/]+\/submissions$/.test(pathname))
-    return "Danh sách bài nộp";
+    return "Báo cáo kết quả lớp";
   if (/^\/teacher\/exams\/[^/]+$/.test(pathname))
-    return "Chi tiết bài kiểm tra";
+    return "Danh sách học sinh nộp bài";
   if (/^\/student\/attempts\/[^/]+\/result$/.test(pathname))
     return "Kết quả bài làm";
   if (/^\/student\/attempts\/[^/]+$/.test(pathname)) return "Làm bài kiểm tra";
@@ -408,6 +412,17 @@ function getWorkspaceBreadcrumbs(
     ];
   }
 
+  const supportMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/subject-support$/);
+  if (supportMatch) return [{ label: "Bài kiểm tra", href: "/teacher/exams" }, { label: "Tổng quan & bài nộp", href: `/teacher/exams/${supportMatch[1]}` }, { label: "Theo dõi học tập theo môn" }];
+  const analysisMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/analysis$/);
+  if (analysisMatch) {
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      { label: "Tổng quan & bài nộp", href: `/teacher/exams/${analysisMatch[1]}` },
+      { label: "Phân tích AI" },
+    ];
+  }
+
   const submissionDetailMatch = pathname.match(
     /^\/teacher\/exams\/([^/]+)\/submissions\/[^/]+$/,
   );
@@ -415,8 +430,7 @@ function getWorkspaceBreadcrumbs(
     const examId = submissionDetailMatch[1];
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
-      { label: "Chi tiết bài kiểm tra", href: `/teacher/exams/${examId}` },
-      { label: "Danh sách bài nộp", href: `/teacher/exams/${examId}/submissions` },
+      { label: "Danh sách học sinh nộp bài", href: `/teacher/exams/${examId}` },
       { label: "Chi tiết bài làm" },
     ];
   }
@@ -428,15 +442,15 @@ function getWorkspaceBreadcrumbs(
     const examId = submissionsMatch[1];
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
-      { label: "Chi tiết bài kiểm tra", href: `/teacher/exams/${examId}` },
-      { label: "Danh sách bài nộp" },
+      { label: "Danh sách học sinh nộp bài", href: `/teacher/exams/${examId}` },
+      { label: "Báo cáo kết quả lớp" },
     ];
   }
 
   if (/^\/teacher\/exams\/[^/]+$/.test(pathname)) {
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
-      { label: "Chi tiết bài kiểm tra" },
+      { label: "Danh sách học sinh nộp bài" },
     ];
   }
 

@@ -125,7 +125,7 @@ export function routePermission(path: string): string | null {
     return "questions.update";
   if (path === "/teacher/exams/new") return "exams.create";
   if (/^\/teacher\/exams\/[^/]+\/edit$/.test(path)) return "exams.update";
-  if (path.includes("/submissions")) return "exams.submissions";
+  if (path.includes("/submissions") || /^\/teacher\/exams\/[^/]+\/(analysis|subject-support)$/.test(path)) return "exams.submissions";
   if (path.startsWith("/student/attempts/") && path.endsWith("/study"))
     return "study.read";
   if (

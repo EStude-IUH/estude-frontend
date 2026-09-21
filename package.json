@@ -19,7 +19,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:chat": "node tests/class-chat.test.cjs",
-    "test:assessment-report": "node --test tests/exam-class-report.test.cjs",
+    "test:assessment-report": "node --test tests/exam-class-report.test.cjs tests/exam-results-overview.test.cjs tests/exam-submissions-panel.test.cjs tests/exam-analysis-page.test.cjs tests/subject-support.test.cjs tests/parent-learning-alerts.test.cjs",
     "test:study-coach": "node --test tests/study-coach-flashcards.test.cjs tests/study-coach-quiz.test.cjs tests/study-coach-ui.test.cjs tests/study-coach-materials.test.cjs"
   },
   "dependencies": {

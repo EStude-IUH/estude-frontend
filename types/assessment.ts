@@ -613,6 +613,88 @@ export interface ExamClassReport {
   topicPerformance: ExamClassTopicPerformance[];
 }
 
+export interface ExamClassAiAnalysis {
+  knowledgeGaps?: Array<{ knowledge: string; questionNumbers: number[]; evidence: string; remediation: string }>;
+  generatedAt: string;
+  source: "AI" | "FALLBACK";
+  model: string | null;
+  headline: string;
+  summary: string;
+  strengths: Array<{ title: string; evidence: string }>;
+  concerns: Array<{ title: string; evidence: string }>;
+  recommendations: Array<{
+    priority: "HIGH" | "MEDIUM" | "LOW";
+    title: string;
+    action: string;
+  }>;
+  lessonPlan: {
+    focus: string;
+    objective: string;
+    activities: string[];
+    durationMinutes: number;
+  };
+}
+
+export interface ExamClassAnalysisState {
+  status: "NOT_STARTED" | "QUEUED" | "PROCESSING" | "READY" | "FAILED";
+  analysis: ExamClassAiAnalysis | null;
+  snapshot: {
+    questions?: Array<{ order: number; content?: string; topicName: string; opportunityCount: number; accuracy: number | null; incorrectCount?: number | null; unansweredCount: number }>;
+    title: string;
+    className: string;
+    subjectName: string;
+    totalPoints: number;
+    enrolledStudentCount: number;
+    submittedStudentCount: number;
+    averagePercentage: number | null;
+    averageDurationSeconds: number | null;
+  } | null;
+  hasNewData: boolean;
+  canAnalyze: boolean;
+  currentSubmittedStudentCount: number;
+  requestedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+}
+
+export interface SubjectSupportStudent {
+  id: string;
+  fullName: string;
+  studentCode: string;
+  parentCount: number;
+  level: "INSUFFICIENT" | "HIGH" | "WATCH" | "STABLE";
+  needsFollowUp: boolean;
+  averagePercentage: number | null;
+  recentAveragePercentage: number | null;
+  trendPercentagePoints: number | null;
+  scoredExamCount: number;
+  submittedExamCount: number;
+  overdueExamCount: number;
+  reasons: string[];
+  history: Array<{ examId: string; title: string; endsAt: string; attemptId: string | null; status: string; percentage: number | null; awaitingGrading: boolean }>;
+  gaps: Array<{ examId: string; examTitle: string; questionId: string; questionNumber: number; content: string; topicName: string }>;
+}
+
+export interface SubjectSupportReport {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subjectName: string;
+  version: string;
+  generatedAt: string;
+  examCount: number;
+  policy: string;
+  students: SubjectSupportStudent[];
+}
+
+export interface ExamListAiAnalysis extends ExamClassAiAnalysis {
+  trend: {
+    direction: "IMPROVING" | "DECLINING" | "STABLE" | "INSUFFICIENT_DATA";
+    evidence: string;
+  };
+}
+
 export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
 
 export interface StudyLearningProfile {

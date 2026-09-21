@@ -26,6 +26,14 @@ const report = {
   topicPerformance: [{ topicId: "topic", topicName: "Hình học", questionCount: 2, opportunityCount: 2, answeredCount: 2, correctCount: 0, incorrectCount: 2, unansweredCount: 0, accuracy: 0, supportStudentCount: 1, supportStudentIds: ["student-a"] }],
   questionPerformance: [{ questionId: "question", order: 1, content: "Tìm điều kiện xác định", type: "SINGLE_CHOICE", topicId: "topic", topicName: "Hình học", opportunityCount: 1, answeredCount: 1, correctCount: 0, incorrectCount: 1, unansweredCount: 0, accuracy: 0, supportStudentCount: 1, supportStudentIds: ["student-a"], optionDistribution: [{ optionId: "a", label: "A", text: "x > 0", selectedCount: 1 }] }],
 };
+const aiAnalysis = {
+  generatedAt: new Date().toISOString(), source: "AI", model: "gemini-test",
+  headline: "Lớp cần củng cố Hình học", summary: "Hình học đang dưới ngưỡng hỗ trợ.",
+  strengths: [{ title: "Đã có dữ liệu", evidence: "Một học sinh đã nộp bài." }],
+  concerns: [{ title: "Hình học còn yếu", evidence: "Độ chính xác hiện là 0%." }],
+  recommendations: [{ priority: "HIGH", title: "Ôn lại Hình học", action: "Chữa lỗi và luyện tập theo nhóm." }],
+  lessonPlan: { focus: "Hình học", objective: "Củng cố kiến thức nền.", activities: ["Chẩn đoán nhanh", "Chữa lỗi"], durationMinutes: 30 },
+};
 
 test("teacher class report separates students from attempts and supports reviewed comments", async (t) => {
   const updates = [];
@@ -36,13 +44,13 @@ test("teacher class report separates students from attempts and supports reviewe
   loaded.require = (id) => {
     if (id === "next/navigation") return { useParams: () => ({ id: "exam" }), useRouter: () => ({ push: (route) => routes.push(route) }) };
     if (id === "lucide-react") return new Proxy({}, { get: (_target, name) => (props) => React.createElement("svg", { ...props, "data-icon": String(name) }) });
-    if (id === "@/components/assessment/assessment-shell") return { AssessmentShell: ({ children }) => React.createElement("main", null, children), ErrorPanel: ({ message }) => React.createElement("p", null, message), LoadingPanel: () => React.createElement("p", null, "loading"), PageHeading: ({ title, description }) => React.createElement("header", null, title, description) };
+    if (id === "@/components/assessment/assessment-shell") return { AssessmentShell: ({ children }) => React.createElement("main", null, children), ErrorPanel: ({ message }) => React.createElement("p", null, message), LoadingPanel: () => React.createElement("p", null, "loading"), PageHeading: ({ title, description, action }) => React.createElement("header", null, title, description, action) };
     if (id === "@/components/ui/action-notification") return { useActionNotification: () => ({ notify() {} }) };
     if (id === "@/components/ui/button") return { Button: ({ children, ...props }) => React.createElement("button", props, children) };
     if (id === "@/components/ui/data-table") return { Table: (props) => React.createElement("table", props), TableBody: (props) => React.createElement("tbody", props), TableCell: (props) => React.createElement("td", props), TableEmptyRow: ({ colSpan, message }) => React.createElement("tr", null, React.createElement("td", { colSpan }, message)), TableHead: (props) => React.createElement("th", props), TableHeader: (props) => React.createElement("thead", props) };
     if (id === "@/components/ui/form-control") return { Textarea: ({ label, hint, ...props }) => React.createElement("label", null, label, React.createElement("textarea", props), hint) };
     if (id === "@/components/ui/modal") return { Modal: ({ open, title, children, footer }) => open ? React.createElement("section", null, title, children, footer) : null };
-    if (id === "@/lib/assessment-api") return { examService: { getExamById: async () => exam, getClassReport: async () => report, updateStudentReview: async (examId, studentId, payload) => { updates.push({ examId, studentId, payload }); return { ...payload, publishedAt: payload.status === "PUBLISHED" ? new Date().toISOString() : null, updatedAt: new Date().toISOString() }; } } };
+    if (id === "@/lib/assessment-api") return { examService: { getExamById: async () => exam, getClassReport: async () => report, analyzeClassReport: async () => aiAnalysis, updateStudentReview: async (examId, studentId, payload) => { updates.push({ examId, studentId, payload }); return { ...payload, publishedAt: payload.status === "PUBLISHED" ? new Date().toISOString() : null, updatedAt: new Date().toISOString() }; } } };
     return originalRequire(id);
   };
   loaded._compile(compiled, filename);
@@ -58,6 +66,15 @@ test("teacher class report separates students from attempts and supports reviewe
   assert.match(text(), /Chưa bắt đầu/);
   assert.match(text(), /1 em đã nộp/);
   assert.match(text(), /lượt đã nộp gần nhất/);
+  assert.match(text(), /Dashboard báo cáo/);
+  assert.match(text(), /Mức độ tham gia/);
+  assert.match(text(), /Phân bố kết quả/);
+  assert.match(text(), /Độ chính xác theo chủ đề/);
+  assert.match(text(), /Insight nhanh/);
+
+  await act(async () => { button("Phân tích AI").props.onClick(); await flush(); });
+  assert.deepEqual(routes, ["/teacher/exams/exam/analysis"]);
+  routes.length = 0;
 
   await act(async () => { button("Chủ đề").props.onClick(); await flush(); });
   assert.match(text(), /Hình học/);
