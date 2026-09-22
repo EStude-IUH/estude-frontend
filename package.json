@@ -19,6 +19,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test:chat": "node tests/class-chat.test.cjs",
+    "test:gradebook": "node --test tests/gradebook.test.cjs",
+    "test:parent": "node --test tests/parent-child-navigation.test.cjs tests/parent-learning-alerts.test.cjs",
     "test:assessment-report": "node --test tests/exam-class-report.test.cjs tests/exam-results-overview.test.cjs tests/exam-submissions-panel.test.cjs tests/exam-analysis-page.test.cjs tests/subject-support.test.cjs tests/parent-learning-alerts.test.cjs",
     "test:study-coach": "node --test tests/study-coach-flashcards.test.cjs tests/study-coach-quiz.test.cjs tests/study-coach-ui.test.cjs tests/study-coach-materials.test.cjs"
   },

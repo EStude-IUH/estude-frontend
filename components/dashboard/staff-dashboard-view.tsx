@@ -541,7 +541,7 @@ export function StaffDashboardView() {
             )}
           </button>
 
-          <div className="relative flex items-center">
+          <div className="relative flex shrink-0 items-center">
             <div
               className={`box-border max-w-[190px] overflow-hidden px-2 transition-[max-width,padding] duration-300 ease-in-out ${
                 isSidebarCollapsed
@@ -562,7 +562,7 @@ export function StaffDashboardView() {
           </div>
 
           <nav
-            className="mt-4 space-y-1.5"
+            className="-mr-2 mt-4 min-h-0 flex-1 space-y-1.5 overflow-x-hidden overflow-y-auto overscroll-contain pr-2"
             aria-label="Điều hướng khu vực điều hành"
           >
             {navItems.map(({ icon: NavIcon, label, href }) => {

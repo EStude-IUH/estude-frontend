@@ -33,6 +33,7 @@ export interface PortalNotification {
   senderName: string;
   kind: "CLASS_STUDENTS" | "CLASS_PARENTS" | "SYSTEM";
   classId: string | null;
+  studentId?: string | null;
   subjectId: string | null;
   examId: string | null;
   actionUrl: string | null;

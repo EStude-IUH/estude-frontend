@@ -380,6 +380,7 @@ export function AcademicDataPanel() {
               label="Thứ tự"
               type="number"
               min={1}
+              max={2}
               required
               value={termForm.displayOrder}
               onChange={(event) =>
@@ -463,10 +464,10 @@ function GradeComponentConfiguration({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [form, setForm] = useState({
-    code: "",
-    name: "",
-    requiredColumns: 1,
-    weight: 10,
+    code: "TX",
+    name: "Thường xuyên",
+    requiredColumns: 3,
+    weight: 1,
     teacherCanConfigureCalculation: false,
     sortOrder: 0,
     isActive: true,
@@ -558,10 +559,10 @@ function GradeComponentConfiguration({
     try {
       const result =
         await academicDataService.validateGradeConfiguration(subjectId);
-      setMessage(`Cấu hình hợp lệ: tổng trọng số ${result.totalWeight}%`);
+      setMessage(`Cấu hình hợp lệ: hệ số TX/GK/CK là 1/2/3 (tổng ${result.totalWeight}).`);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Tổng trọng số phải bằng 100%",
+        cause instanceof Error ? cause.message : "Cần cấu hình TX/GK/CK đúng hệ số 1/2/3",
       );
     } finally {
       setSaving(false);
@@ -577,8 +578,7 @@ function GradeComponentConfiguration({
         <div>
           <h2 className="font-black">Cấu hình thành phần điểm</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Thiết lập số cột, trọng số và quyền cấu hình cách tính cho từng môn
-            học.
+            Danh mục hệ số THPT: TX = 1, GK = 2, CK = 3. Số cột thực tế và hình thức đánh giá được giáo viên xác nhận tại sổ điểm của từng lớp, học kỳ.
           </p>
         </div>
       </div>
@@ -612,10 +612,10 @@ function GradeComponentConfiguration({
           {selectedSubject ? `Môn ${getVietnameseSubjectName(selectedSubject)} · ` : ""}
           <b
             className={
-              totalWeight === 100 ? "text-emerald-700" : "text-amber-600"
+              totalWeight === 6 ? "text-emerald-700" : "text-amber-600"
             }
           >
-            {totalWeight}% / 100%
+            Tổng hệ số: {totalWeight} (chuẩn 6)
           </b>
         </span>
         <div className="flex gap-2">
@@ -625,7 +625,7 @@ function GradeComponentConfiguration({
             disabled={!subjectId || saving}
             onClick={() => void validate()}
           >
-            Kiểm tra 100%
+            Kiểm tra hệ số
           </Button>
           <Button permission="academic.create"
             size="sm"
@@ -633,10 +633,10 @@ function GradeComponentConfiguration({
             onClick={() => {
               setEditing(null);
               setForm({
-                code: "",
-                name: "",
-                requiredColumns: 1,
-                weight: 10,
+                code: "TX",
+                name: "Thường xuyên",
+                requiredColumns: 3,
+                weight: 1,
                 teacherCanConfigureCalculation: false,
                 sortOrder: 0,
                 isActive: true,
@@ -660,7 +660,7 @@ function GradeComponentConfiguration({
               <tr>
                 <th className="px-3 py-3">Thành phần</th>
                 <th className="px-3 py-3">Số cột</th>
-                <th className="px-3 py-3">Trọng số</th>
+                <th className="px-3 py-3">Hệ số</th>
                 <th className="px-3 py-3">Giáo viên tự cấu hình</th>
                 <th className="px-3 py-3 text-right">Thao tác</th>
               </tr>
@@ -689,7 +689,7 @@ function GradeComponentConfiguration({
                       {item.code} · {item.name}
                     </td>
                     <td className="px-3 py-3">{item.requiredColumns}</td>
-                    <td className="px-3 py-3 font-bold">{item.weight}%</td>
+                    <td className="px-3 py-3 font-bold">{item.weight}</td>
                     <td className="px-3 py-3">
                       {item.teacherCanConfigureCalculation ? (
                         <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
@@ -743,11 +743,11 @@ function GradeComponentConfiguration({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
-              label="Mã thành phần"
+              label="Mã thành phần (TX, GK hoặc CK)"
               required
               value={form.code}
               onChange={(event) =>
-                setForm({ ...form, code: event.target.value })
+                setForm({ ...form, code: event.target.value.toUpperCase(), weight: ({ TX: 1, GK: 2, CK: 3 } as Record<string, number>)[event.target.value.toUpperCase()] ?? 1, requiredColumns: event.target.value.toUpperCase() === 'TX' ? 3 : 1 })
               }
             />
             <Input
@@ -764,7 +764,7 @@ function GradeComponentConfiguration({
               label="Số cột điểm yêu cầu"
               type="number"
               min={1}
-              max={20}
+              max={4}
               required
               value={form.requiredColumns}
               onChange={(event) =>
@@ -775,11 +775,12 @@ function GradeComponentConfiguration({
               }
             />
             <Input
-              label="Trọng số (%)"
+              label="Hệ số cố định"
               type="number"
-              min={0.01}
-              max={100}
-              step="0.01"
+              min={1}
+              max={3}
+              step="1"
+              disabled
               required
               value={form.weight}
               onChange={(event) =>
@@ -801,6 +802,7 @@ function GradeComponentConfiguration({
               className="mt-1"
               type="checkbox"
               checked={form.teacherCanConfigureCalculation}
+              disabled
               onChange={(event) =>
                 setForm({
                   ...form,

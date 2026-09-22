@@ -1,4 +1,5 @@
 "use client";
+import { OfficialGradeReport } from "@/components/assessment/official-grade-report";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -125,7 +126,7 @@ const statusLabels: Record<User["status"], string> = {
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: "overview", label: "Tổng quan" },
   { id: "subjects", label: "Môn học & lớp" },
-  { id: "semesters", label: "Điểm học kỳ" },
+  { id: "semesters", label: "Sổ điểm" },
   { id: "exams", label: "Bài kiểm tra" },
   { id: "warnings", label: "Cảnh báo" },
 ];
@@ -216,7 +217,7 @@ export function StudentDetailPanel({
       : backHref;
   const [data, setData] = useState<StudentOverview | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>(
-    requestedTab === "subjects" || requestedTab === "exams"
+    requestedTab === "subjects" || requestedTab === "exams" || requestedTab === "semesters"
       ? requestedTab
       : "overview",
   );
@@ -230,7 +231,7 @@ export function StudentDetailPanel({
     setError("");
     try {
       const detail = await authenticatedRequest<StudentOverview>(
-        `/users/${encodeURIComponent(studentId)}/student-overview${viewerRole === "ADMIN" && process.env.NODE_ENV === "development" ? "?mockSubjectScores=true" : ""}`,
+        `/users/${encodeURIComponent(studentId)}/student-overview`,
       );
       const defaultTerm =
         detail.semesterResults.find((term) => term.status === "ACTIVE") ??
@@ -250,7 +251,7 @@ export function StudentDetailPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [onStudentNameChange, studentId, viewerRole]);
+  }, [onStudentNameChange, studentId]);
 
   useEffect(() => {
     void loadDetail();
@@ -392,51 +393,7 @@ export function StudentDetailPanel({
       <EmptyState message="Học sinh chưa được phân môn trong lớp học." />
     );
 
-  const renderSemesters = () =>
-    data.semesterResults.length ? (
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[720px] text-left text-[13px]">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Năm học</th>
-              <th className="px-4 py-3">Học kỳ</th>
-              <th className="px-4 py-3">Thời gian</th>
-              <th className="px-4 py-3">Bài đã chấm</th>
-              <th className="px-4 py-3">Điểm trung bình</th>
-              <th className="px-4 py-3">Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-700">
-            {data.semesterResults.map((term) => (
-              <tr key={term.id}>
-                <td className="px-4 py-3 font-semibold text-slate-900">
-                  {term.academicYearName}
-                </td>
-                <td className="px-4 py-3">{term.name}</td>
-                <td className="px-4 py-3">
-                  {formatDate(term.startsAt)} – {formatDate(term.endsAt)}
-                </td>
-                <td className="px-4 py-3">{term.examCount}</td>
-                <td className="px-4 py-3">
-                  <ScoreBadge value={term.averagePercentage} />
-                </td>
-                <td className="px-4 py-3">
-                  {term.status === "ACTIVE"
-                    ? "Đang diễn ra"
-                    : term.status === "COMPLETED"
-                      ? "Đã kết thúc"
-                      : term.status === "LOCKED"
-                        ? "Đã khóa"
-                        : "Sắp diễn ra"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ) : (
-      <EmptyState message="Chưa có học kỳ gắn với lớp của học sinh." />
-    );
+  const renderSemesters = () => <OfficialGradeReport studentId={studentId} />;
 
   const renderExams = () =>
     visibleExamResults.length ? (
@@ -663,7 +620,7 @@ export function StudentDetailPanel({
                 tone: "bg-emerald-50 text-emerald-700",
               },
               {
-                label: "Điểm trung bình",
+                label: "TB bài kiểm tra",
                 value:
                   summary.averagePercentage === null
                     ? "--"
@@ -725,7 +682,7 @@ export function StudentDetailPanel({
                 <div className="flex min-h-0 flex-col">
                   <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
                     <h3 className="text-sm font-extrabold text-slate-900">
-                      Kết quả theo học kỳ
+                      Thống kê bài kiểm tra theo học kỳ
                     </h3>
                     <CustomSelect
                       value={selectedTermId}

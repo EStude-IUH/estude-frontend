@@ -17,6 +17,7 @@ test("parent sees the dedicated reviewed learning alert even when it is outside 
   const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id === "@/lib/subject-localization") return { toVietnameseSubjectName: (name) => name };
     if (id === "lucide-react") return new Proxy({}, { get: () => () => React.createElement("svg") });
     if (id === "@/lib/engagement-api") return { parentEngagementService: { getOverview: async () => { refreshed++; return {
       attendance: [], upcomingExams: [], notifications: [], learningAlerts: [{ id: 'notice', title: 'Cần phối hợp học tập: An', senderName: 'Cô Lan', createdAt: '2026-09-21', message: 'Môn Lịch sử\nCần ôn lại Hội nghị Ianta.', actionUrl: '/parent#learning-alerts' }],
@@ -32,4 +33,36 @@ test("parent sees the dedicated reviewed learning alert even when it is outside 
   assert.match(JSON.stringify(renderer.toJSON()), /Cô Lan/);
   await act(async () => { handlers.focus(); await new Promise(setImmediate); });
   assert.equal(refreshed, 2);
+});
+
+test("parent attendance filtering keeps students separate and sections show their own content", async (t) => {
+  global.window = { addEventListener() {}, removeEventListener() {}, setInterval: () => 1, clearInterval() {} };
+  const filename = path.resolve("components/parent/parent-overview-panels.tsx");
+  const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename));
+  const originalRequire = loaded.require.bind(loaded);
+  loaded.require = (id) => {
+    if (id === "lucide-react") return new Proxy({}, { get: () => () => React.createElement("svg") });
+    if (id === "@/lib/subject-localization") return { toVietnameseSubjectName: (name) => name };
+    if (id === "@/lib/engagement-api") return { parentEngagementService: { getOverview: () => assert.fail("supplied overview must not fetch again") } };
+    return originalRequire(id);
+  };
+  loaded._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText, filename);
+  const overview = {
+    notifications: [], upcomingExams: [{ id: "exam", title: "Kiểm tra Toán", subjectName: "Toán", className: "10A", startsAt: "2026-10-01T01:00:00Z" }],
+    attendance: [
+      { id: "one", studentId: "an", studentName: "Nguyễn An", sessionDate: "2026-09-22", status: "PRESENT" },
+      { id: "two", studentId: "binh", studentName: "Trần Bình", sessionDate: "2026-09-22", status: "ABSENT" },
+    ],
+  };
+  const Panels = loaded.exports.ParentOverviewPanels;
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(Panels, { overview, section: "attendance" })); });
+  t.after(async () => { await act(async () => renderer.unmount()); delete global.window; });
+  assert.equal(renderer.root.findAllByType("article").length, 2);
+  await act(async () => renderer.root.findByProps({ "aria-label": "Lọc điểm danh theo học sinh" }).props.onChange({ target: { value: "binh" } }));
+  assert.equal(renderer.root.findAllByType("article").length, 1);
+  assert.ok(renderer.root.findByType("article").findAllByType("p").some((paragraph) => paragraph.children.includes("Trần Bình")));
+  await act(async () => renderer.update(React.createElement(Panels, { overview, section: "exams" })));
+  assert.match(JSON.stringify(renderer.toJSON()), /Kiểm tra Toán/);
+  assert.doesNotMatch(JSON.stringify(renderer.toJSON()), /Nguyễn An/);
 });

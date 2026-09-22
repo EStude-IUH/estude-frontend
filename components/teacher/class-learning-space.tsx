@@ -27,6 +27,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
+import { GradebookPanel } from "@/components/teacher/gradebook-panel";
 import { academicDataService, examService } from "@/lib/assessment-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type { ClassTopic, ClassTopicInput, Exam, ExamListAiAnalysis, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
@@ -284,6 +285,7 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
         )}
       </section>
 
+      {schoolClass ? <GradebookPanel key={schoolClass.id} schoolClass={schoolClass} /> : null}
       <ClassChatPanel classId={classId} className={schoolClass?.name} />
 
       <Modal
