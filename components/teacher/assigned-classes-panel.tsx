@@ -138,6 +138,7 @@ export function TeacherAssignedClassesPanel() {
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
+                  {item.isHomeroomTeacher ? <span className="rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700">Giáo viên chủ nhiệm</span> : null}
                   {item.subjects.map((subject) => (
                     <span key={subject.id} className="rounded-md bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-700">
                       {subject.code}
@@ -154,7 +155,7 @@ export function TeacherAssignedClassesPanel() {
             <div className="min-w-0">
               <h2 className="truncate font-black text-slate-900">{selectedClass?.name ?? "Danh sách học viên"}</h2>
               <p className="mt-1 truncate text-xs text-slate-500">
-                {selectedClass ? `${selectedClass.code} · ${selectedClass.subjects.map(getVietnameseSubjectName).join(", ")}` : "Chọn một lớp để xem chi tiết"}
+                {selectedClass ? `${selectedClass.code} · ${selectedClass.subjects.length ? selectedClass.subjects.map(getVietnameseSubjectName).join(", ") : "Lớp chủ nhiệm"}` : "Chọn một lớp để xem chi tiết"}
               </p>
             </div>
             {selectedClass ? <div className="flex shrink-0 items-center gap-2">

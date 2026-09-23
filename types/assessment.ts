@@ -254,6 +254,7 @@ export interface TeacherAssignedClass {
   academicYearId: string;
   keyword?: string | null;
   studentCount: number;
+  isHomeroomTeacher: boolean;
   subjects: Array<Pick<Subject, "id" | "code" | "name" | "vietnameseName">>;
 }
 

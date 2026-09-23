@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle, Plus, Search, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/form-control";
+import { CustomSelect, Input, type CustomSelectOption } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/data-table";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { academicDataService } from "@/lib/assessment-api";
-import { ApiError } from "@/lib/auth-api";
+import { ApiError, authenticatedRequest } from "@/lib/auth-api";
 import { normalizeSearchKeyword } from "@/lib/search-keyword";
 import type { ClassRoster } from "@/types/assessment";
+import type { UsersPage } from "@/types/users";
 
 const AVAILABLE_STUDENT_LIMIT = 20;
 
@@ -43,6 +44,9 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
   const [availableStudentTotal, setAvailableStudentTotal] = useState(0);
   const [availableStudentOffset, setAvailableStudentOffset] = useState(0);
   const [roster, setRoster] = useState<ClassRoster | null>(null);
+  const [teacherOptions, setTeacherOptions] = useState<CustomSelectOption[]>([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [isTeacherSearching, setIsTeacherSearching] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [rosterSearch, setRosterSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
@@ -53,6 +57,7 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
   const [saving, setSaving] = useState("");
   const [error, setError] = useState("");
   const availableRequestId = useRef(0);
+  const teacherRequestId = useRef(0);
   const studentSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadAvailableStudents = useCallback(async (offset = 0, search = "") => {
@@ -82,7 +87,9 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
     setIsRosterLoading(true);
     setError("");
     try {
-      setRoster(await academicDataService.getClassRoster(classId));
+      const result = await academicDataService.getClassRoster(classId);
+      setRoster(result);
+      setSelectedTeacherId(result.teachers[0]?.id ?? "");
     } catch (cause) {
       setError(getErrorMessage(cause, "Không thể tải danh sách phân công"));
     } finally {
@@ -90,10 +97,29 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
     }
   }, [classId]);
 
+  const loadTeachers = useCallback(async (search = "") => {
+    const requestId = ++teacherRequestId.current;
+    setIsTeacherSearching(true);
+    try {
+      const params = new URLSearchParams({ role: "TEACHER", status: "ACTIVE", limit: "20" });
+      if (search.trim()) params.set("search", search.trim());
+      const result = await authenticatedRequest<UsersPage>(`/users?${params.toString()}`);
+      if (requestId === teacherRequestId.current) {
+        setTeacherOptions(result.items.map((teacher) => ({ value: teacher.id, label: `${teacher.fullName} · ${teacher.accountName}` })));
+      }
+    } catch (cause) {
+      if (requestId === teacherRequestId.current) setError(getErrorMessage(cause, "Không thể tải danh sách giáo viên"));
+    } finally {
+      if (requestId === teacherRequestId.current) setIsTeacherSearching(false);
+    }
+  }, []);
+
   useEffect(() => {
     setIsLoading(true);
     void loadRoster().finally(() => setIsLoading(false));
   }, [loadRoster]);
+
+  useEffect(() => { void loadTeachers(); }, [loadTeachers]);
 
   useEffect(() => () => {
     if (studentSearchTimerRef.current) clearTimeout(studentSearchTimerRef.current);
@@ -183,9 +209,66 @@ export function ClassStudentAssignmentContent({ classId }: { classId: string }) 
     }
   }
 
+  async function assignHomeroomTeacher() {
+    if (!selectedTeacherId || selectedTeacherId === roster?.teachers[0]?.id) return;
+    setSaving("homeroom");
+    setError("");
+    try {
+      await academicDataService.assignClassHomeroomTeacher(classId, selectedTeacherId);
+      await loadRoster();
+      notify("Đã phân công giáo viên chủ nhiệm", { key: "class-homeroom-assigned" });
+    } catch (cause) {
+      setError(getErrorMessage(cause, "Không thể phân công giáo viên chủ nhiệm"));
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function removeHomeroomTeacher() {
+    const teacherId = roster?.teachers[0]?.id;
+    if (!teacherId) return;
+    setSaving("homeroom");
+    setError("");
+    try {
+      await academicDataService.removeClassHomeroomTeacher(classId, teacherId);
+      await loadRoster();
+      notify("Đã hủy phân công giáo viên chủ nhiệm", { key: "class-homeroom-removed" });
+    } catch (cause) {
+      setError(getErrorMessage(cause, "Không thể hủy phân công giáo viên chủ nhiệm"));
+    } finally {
+      setSaving("");
+    }
+  }
+
   return (
     <div className="mt-5 grid gap-5 border-t border-slate-100 pt-5">
       {error ? <p className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
+      <section className="rounded-xl border border-slate-200 p-4">
+        <h3 className="font-black text-slate-900">Giáo viên chủ nhiệm</h3>
+        <p className="mt-1 text-xs text-slate-500">Mỗi lớp có một giáo viên chủ nhiệm; người được phân công có thể theo dõi học sinh của lớp.</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <CustomSelect
+              label="Giáo viên"
+              value={selectedTeacherId}
+              options={[
+                { value: "", label: "Chọn giáo viên chủ nhiệm" },
+                ...(roster?.teachers[0] && !teacherOptions.some((option) => option.value === roster.teachers[0].id)
+                  ? [{ value: roster.teachers[0].id, label: `${roster.teachers[0].fullName} · ${roster.teachers[0].accountName}` }]
+                  : []),
+                ...teacherOptions,
+              ]}
+              searchable
+              isSearching={isTeacherSearching}
+              onSearchChange={(value) => void loadTeachers(value)}
+              searchPlaceholder="Tìm giáo viên..."
+              onValueChange={setSelectedTeacherId}
+            />
+          </div>
+          <Button permission="classes.assign" size="sm" disabled={!selectedTeacherId || selectedTeacherId === roster?.teachers[0]?.id || Boolean(saving)} onClick={() => void assignHomeroomTeacher()}>{saving === "homeroom" ? <LoaderCircle className="size-4 animate-spin" /> : null}Phân công</Button>
+          {roster?.teachers[0] ? <Button permission="classes.assign" variant="outline" size="sm" disabled={Boolean(saving)} onClick={() => void removeHomeroomTeacher()}>Hủy phân công</Button> : null}
+        </div>
+      </section>
       {isLoading || isRosterLoading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-sm font-semibold text-slate-500"><LoaderCircle className="size-4 animate-spin" />Đang tải danh sách học sinh...</div>
       ) : (

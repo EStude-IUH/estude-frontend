@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { io, type Socket } from "socket.io-client";
 import { FileImage, FileText, LoaderCircle, Paperclip, Send, Wifi, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/context/permissions-context";
 import { ApiError, authenticatedRequest, getRealtimeAccessToken, subscribeAccessToken } from "@/lib/auth-api";
 import type { User } from "@/types/auth";
 
@@ -75,6 +76,8 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function ClassChatPanel(props: { classId: string; className?: string }) {
+  const { can } = usePermissions();
+  if (!can("class_chat.read")) return null;
   return <ClassChatContent key={props.classId} {...props} />;
 }
 

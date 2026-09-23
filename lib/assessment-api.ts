@@ -285,6 +285,12 @@ export const academicDataService = {
   getTeacherAssignedClassRoster(classId: string): Promise<ClassRoster> {
     return authenticatedRequest<ClassRoster>(`/teacher/assigned-classes/${encodeURIComponent(classId)}/roster`);
   },
+  assignClassHomeroomTeacher(classId: string, teacherId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers`, { method: "POST", body: JSON.stringify({ userId: teacherId }) });
+  },
+  removeClassHomeroomTeacher(classId: string, teacherId: string): Promise<Record<string, unknown>> {
+    return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/teachers/${encodeURIComponent(teacherId)}`, { method: "DELETE" });
+  },
   createSubjectTeacherAssignment(payload: Pick<SubjectTeacherAssignment, "classId" | "subjectId" | "teacherId">): Promise<SubjectTeacherAssignment> {
     return authenticatedRequest<SubjectTeacherAssignment>("/subject-teacher-assignments", { method: "POST", body: JSON.stringify(payload) });
   },

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   BookOpenCheck,
   BrainCircuit,
   CalendarClock,
@@ -14,12 +13,15 @@ import {
   FileText,
   LoaderCircle,
   Plus,
+  Search,
+  School,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Minus,
   Trash2,
   Upload,
+  UsersRound,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,11 +30,23 @@ import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
 import { GradebookPanel } from "@/components/teacher/gradebook-panel";
+import { usePermissions } from "@/context/permissions-context";
+import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader, TableLoadingBarRow } from "@/components/ui/data-table";
 import { academicDataService, examService } from "@/lib/assessment-api";
+import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
-import type { ClassTopic, ClassTopicInput, Exam, ExamListAiAnalysis, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
+import type { ClassRoster, ClassTopic, ClassTopicInput, Exam, ExamListAiAnalysis, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
 
 const emptyForm: ClassTopicInput = { subjectId: "", name: "", description: "", sortOrder: 0 };
+type ClassTab = "topics" | "students" | "exams" | "grades" | "chat";
+
+const classTabs: Array<{ id: ClassTab; label: string }> = [
+  { id: "topics", label: "Chủ đề môn học" },
+  { id: "students", label: "Danh sách học sinh" },
+  { id: "exams", label: "Bài kiểm tra" },
+  { id: "grades", label: "Điểm số" },
+  { id: "chat", label: "Trao đổi lớp" },
+];
 
 function formatFileSize(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -51,12 +65,26 @@ function examStatus(exam: Exam): { label: string; className: string } {
   return { label: "Sắp diễn ra", className: "bg-amber-50 text-amber-700" };
 }
 
-export function TeacherClassLearningSpace({ classId }: { classId: string }) {
+function studentStatus(status: string): { label: string; className: string } {
+  if (status === "ACTIVE") return { label: "Đang hoạt động", className: "bg-emerald-50 text-emerald-700" };
+  if (status === "PENDING") return { label: "Chờ đăng nhập", className: "bg-amber-50 text-amber-700" };
+  if (status === "LOCKED") return { label: "Đã khóa", className: "bg-rose-50 text-rose-700" };
+  return { label: "Ngừng hoạt động", className: "bg-slate-100 text-slate-600" };
+}
+
+export function TeacherClassLearningSpace({ classId, onClassNameChange }: { classId: string; onClassNameChange: (value: { id: string; name: string }) => void }) {
   const router = useRouter();
   const { notify } = useActionNotification();
+  const { can } = usePermissions();
+  const canReadExams = can("exams.read");
+  const [activeTab, setActiveTab] = useState<ClassTab>("topics");
   const [schoolClass, setSchoolClass] = useState<TeacherAssignedClass | null>(null);
   const [topics, setTopics] = useState<ClassTopic[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [roster, setRoster] = useState<ClassRoster | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingTopicId, setUploadingTopicId] = useState("");
@@ -75,12 +103,15 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
     setIsLoading(true);
     setError("");
     try {
-      const [loadedClass, loadedTopics, loadedExams] = await Promise.all([
-        academicDataService.getTeacherAssignedClass(classId),
-        academicDataService.getClassTopics(classId),
-        examService.getExams(),
+      const loadedClass = await academicDataService.getTeacherAssignedClass(classId);
+      const hasSubject = loadedClass.subjects.length > 0;
+      const [loadedTopics, loadedExams] = await Promise.all([
+        hasSubject ? academicDataService.getClassTopics(classId) : Promise.resolve([]),
+        hasSubject && canReadExams ? examService.getExams() : Promise.resolve([]),
       ]);
       setSchoolClass(loadedClass);
+      onClassNameChange({ id: loadedClass.id, name: loadedClass.name });
+      if (loadedClass.isHomeroomTeacher && loadedClass.subjects.length === 0) setActiveTab("students");
       setTopics(loadedTopics);
       setExams(loadedExams.filter((exam) => exam.classId === classId));
     } catch (cause) {
@@ -88,11 +119,40 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
     } finally {
       setIsLoading(false);
     }
-  }, [classId]);
+  }, [canReadExams, classId, onClassNameChange]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setRoster(null);
+    setRosterError("");
+    setStudentSearch("");
+    setActiveTab("topics");
+  }, [classId]);
+
+  useEffect(() => {
+    if (activeTab !== "students") return;
+    let active = true;
+    setRosterLoading(true);
+    setRosterError("");
+    void academicDataService.getTeacherAssignedClassRoster(classId)
+      .then((result) => { if (active) setRoster(result); })
+      .catch((cause) => { if (active) setRosterError(errorMessage(cause, "Không thể tải danh sách học sinh")); })
+      .finally(() => { if (active) setRosterLoading(false); });
+    return () => { active = false; };
+  }, [activeTab, classId]);
+
+  const canReadChat = can("class_chat.read");
+  const visibleTab = activeTab === "chat" && !canReadChat
+    ? (schoolClass?.subjects.length ? "topics" : "students")
+    : activeTab === "exams" && !canReadExams
+      ? (schoolClass?.subjects.length ? "topics" : "students")
+    : activeTab;
+  const filteredStudents = (roster?.students ?? []).filter((student) =>
+    matchesSearchKeyword(student.keyword, studentSearch),
+  );
 
   function openCreateTopic() {
     setEditingTopic(null);
@@ -226,19 +286,48 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
 
   return (
     <div className="space-y-3">
-      <section className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <Button variant="ghost" size="sm" className="shrink-0" onClick={() => router.push("/teacher/classes")}><ArrowLeft className="size-4" />Quay lại</Button>
-          <div className="min-w-0">
-            <h2 className="truncate text-xl font-black text-slate-950">{schoolClass?.name ?? "Lớp học"}</h2>
-            <p className="mt-1 text-sm text-slate-500">{schoolClass?.code} · {schoolClass?.studentCount ?? 0} học viên</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">{schoolClass?.subjects.map((subject) => <span key={subject.id} className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-brand-700">{subject.code} · {getVietnameseSubjectName(subject)}</span>)}</div>
-          </div>
-        </div>
-        <Button permission="teaching.create" className="shrink-0" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button>
-      </section>
+      {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
 
-      <section data-testid="class-exam-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+      <div className="grid items-start gap-3 xl:grid-cols-[310px_minmax(0,1fr)]">
+        <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-card xl:sticky xl:top-3 xl:h-[calc(100dvh-112px)] xl:overflow-y-auto">
+          <div className="text-center">
+            <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-2xl font-extrabold text-brand-700">{schoolClass?.code.charAt(0).toUpperCase() || "L"}</div>
+            <h2 className="mt-3 break-words text-lg font-extrabold text-slate-950">{schoolClass?.name ?? "Lớp học"}</h2>
+            <p className="mt-1 font-mono text-xs font-bold text-brand-700">{schoolClass?.code ?? "--"}</p>
+            <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{schoolClass?.isHomeroomTeacher ? "Giáo viên chủ nhiệm" : "Đang phụ trách"}</span>
+          </div>
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-extrabold text-slate-900">Thông tin chung</h3>
+            <dl className="mt-3 space-y-3 text-[13px]">
+              <div className="flex items-start gap-2.5"><School className="mt-0.5 size-4 shrink-0 text-slate-400" /><div><dt className="text-xs text-slate-400">Mã lớp</dt><dd className="mt-0.5 font-semibold text-slate-700">{schoolClass?.code ?? "--"}</dd></div></div>
+              <div className="flex items-start gap-2.5"><UsersRound className="mt-0.5 size-4 shrink-0 text-slate-400" /><div><dt className="text-xs text-slate-400">Sĩ số</dt><dd className="mt-0.5 font-semibold text-slate-700">{schoolClass?.studentCount ?? 0} học sinh</dd></div></div>
+              <div className="flex items-start gap-2.5"><BookOpenCheck className="mt-0.5 size-4 shrink-0 text-slate-400" /><div className="min-w-0"><dt className="text-xs text-slate-400">Môn học phụ trách</dt><dd className="mt-0.5 font-semibold leading-5 text-slate-700">{schoolClass?.subjects.length ? schoolClass.subjects.map(getVietnameseSubjectName).join(", ") : "Chưa có môn học"}</dd></div></div>
+            </dl>
+          </div>
+        </aside>
+
+      <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+        <nav className="overflow-x-auto border-b border-slate-100 px-3" aria-label="Nội dung lớp học">
+          <div className="flex min-w-max gap-1">
+            {classTabs.filter((tab) =>
+              (tab.id !== "chat" || canReadChat)
+              && (tab.id !== "exams" || canReadExams)
+              && (Boolean(schoolClass?.subjects.length) || !(["topics", "exams", "grades"] as ClassTab[]).includes(tab.id)),
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-pressed={visibleTab === tab.id}
+                className={`border-b-2 px-4 py-3 text-[13px] font-bold transition ${visibleTab === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </nav>
+        <div className="p-4 sm:p-5">
+          {visibleTab === "exams" ? <section data-testid="class-exam-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="flex items-center gap-2 font-black text-slate-900"><ClipboardList className="size-5 text-brand-600" />Bài kiểm tra của lớp</h3>
@@ -283,36 +372,49 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
         ) : (
           <div className="px-5 py-7 text-center text-sm text-slate-500">Lớp chưa có bài kiểm tra. Tạo và công bố bài kiểm tra để bắt đầu theo dõi kết quả.</div>
         )}
-      </section>
+          </section> : null}
 
-      {schoolClass ? <GradebookPanel key={schoolClass.id} schoolClass={schoolClass} /> : null}
-      <ClassChatPanel classId={classId} className={schoolClass?.name} />
+          {visibleTab === "grades" && schoolClass ? <GradebookPanel key={schoolClass.id} schoolClass={schoolClass} /> : null}
+          {visibleTab === "chat" ? <ClassChatPanel classId={classId} className={schoolClass?.name} /> : null}
 
-      <Modal
-        open={examAnalysisOpen}
-        title="AI phân tích các bài kiểm tra của lớp"
-        description={`${schoolClass?.name ?? "Lớp học"} · ${exams.length} bài kiểm tra`}
-        onClose={() => setExamAnalysisOpen(false)}
-        width="max-w-5xl"
-        bodyClassName="max-h-[calc(100dvh-10rem)] overflow-y-auto !p-5"
-      >
-        {analyzingExams ? (
-          <div className="flex min-h-52 items-center justify-center gap-3 text-sm font-semibold text-slate-500">
-            <LoaderCircle className="size-6 animate-spin text-brand-600" />
-            Đang tổng hợp xu hướng qua các bài kiểm tra...
-          </div>
-        ) : examAnalysisError ? (
-          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{examAnalysisError}</div>
-        ) : examAnalysis ? (
-          <ClassExamAiAnalysis analysis={examAnalysis} />
-        ) : null}
-      </Modal>
+          {visibleTab === "students" ? (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><h3 className="font-black text-slate-900">Danh sách học sinh</h3><p className="mt-1 text-sm text-slate-500">{roster?.students.length ?? schoolClass?.studentCount ?? 0} học sinh trong lớp</p></div>
+                <div className="relative w-full sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                  <input value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="Tìm học sinh hoặc tài khoản" className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-blue-100" />
+                </div>
+              </header>
+              {rosterError ? <p className="m-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{rosterError}</p> : null}
+              <div className="overflow-x-auto">
+                <Table className="min-w-[650px]">
+                  <TableHeader className="!bg-brand-600 !text-white"><tr><TableHead className="w-14 text-center">#</TableHead><TableHead>Học sinh</TableHead><TableHead>Tài khoản</TableHead><TableHead>Trạng thái</TableHead><TableHead className="text-right">Hồ sơ</TableHead></tr></TableHeader>
+                  <TableBody>
+                    {rosterLoading ? <TableLoadingBarRow colSpan={5} /> : null}
+                    {!rosterLoading && !rosterError && !roster?.students.length ? <TableEmptyRow colSpan={5} message="Lớp chưa có học sinh" /> : null}
+                    {!rosterLoading && !rosterError && Boolean(roster?.students.length) && !filteredStudents.length ? <TableEmptyRow colSpan={5} message="Không tìm thấy học sinh phù hợp" /> : null}
+                    {!rosterLoading && !rosterError ? filteredStudents.map((student, index) => {
+                      const status = studentStatus(student.status);
+                      return <tr key={student.id} className="hover:bg-slate-50/70">
+                        <TableCell className="text-center text-xs text-slate-400">{index + 1}</TableCell>
+                        <TableCell><div className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-brand-700">{student.fullName.trim().charAt(0).toUpperCase()}</span><span className="font-bold text-slate-900">{student.fullName}</span></div></TableCell>
+                        <TableCell className="font-mono text-xs font-semibold text-brand-700">{student.accountName}</TableCell>
+                        <TableCell><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${status.className}`}>{status.label}</span></TableCell>
+                        <TableCell className="text-right"><Button permission="student_reports.read" variant="ghost" size="sm" onClick={() => router.push(`/teacher/students/${encodeURIComponent(student.id)}`)}>Xem hồ sơ</Button></TableCell>
+                      </tr>;
+                    }) : null}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          ) : null}
 
-      {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
-
+      {visibleTab === "topics" ? <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-900">Chủ đề môn học</h3><p className="mt-1 text-sm text-slate-500">Tài liệu và nội dung học tập theo từng môn.</p></div><Button permission="teaching.create" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button></div>
       {topics.length === 0 ? (
         <section className="grid min-h-[320px] place-items-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <div><BookOpenCheck className="mx-auto size-10 text-slate-300" /><h3 className="mt-4 font-black text-slate-800">Chưa có chủ đề học tập</h3><p className="mt-2 text-sm text-slate-500">Tạo chủ đề đầu tiên để tải tài liệu cho lớp.</p><Button permission="teaching.create" className="mt-5" onClick={openCreateTopic}><Plus className="size-4" />Tạo chủ đề</Button></div>
+          <div><BookOpenCheck className="mx-auto size-10 text-slate-300" /><h3 className="mt-4 font-black text-slate-800">Chưa có chủ đề học tập</h3><p className="mt-2 text-sm text-slate-500">Tạo chủ đề đầu tiên để tải tài liệu cho lớp.</p></div>
         </section>
       ) : (
         <div className="space-y-3">
@@ -343,6 +445,30 @@ export function TeacherClassLearningSpace({ classId }: { classId: string }) {
           ))}
         </div>
       )}
+      </div> : null}
+        </div>
+      </div>
+      </div>
+
+      <Modal
+        open={examAnalysisOpen}
+        title="AI phân tích các bài kiểm tra của lớp"
+        description={`${schoolClass?.name ?? "Lớp học"} · ${exams.length} bài kiểm tra`}
+        onClose={() => setExamAnalysisOpen(false)}
+        width="max-w-5xl"
+        bodyClassName="max-h-[calc(100dvh-10rem)] overflow-y-auto !p-5"
+      >
+        {analyzingExams ? (
+          <div className="flex min-h-52 items-center justify-center gap-3 text-sm font-semibold text-slate-500">
+            <LoaderCircle className="size-6 animate-spin text-brand-600" />
+            Đang tổng hợp xu hướng qua các bài kiểm tra...
+          </div>
+        ) : examAnalysisError ? (
+          <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{examAnalysisError}</div>
+        ) : examAnalysis ? (
+          <ClassExamAiAnalysis analysis={examAnalysis} />
+        ) : null}
+      </Modal>
 
       <Modal open={isTopicModalOpen} title={editingTopic ? "Chỉnh sửa chủ đề" : "Tạo chủ đề"} description="Chủ đề được quản lý riêng theo lớp và môn học được phân công." onClose={() => setIsTopicModalOpen(false)} footer={<Button permission={editingTopic ? "teaching.update" : "teaching.create"} type="submit" form="class-topic-form" disabled={saving || !form.subjectId || !form.name.trim()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editingTopic ? "Lưu thay đổi" : "Tạo chủ đề"}</Button>}>
         <form id="class-topic-form" onSubmit={(event) => void saveTopic(event)} className="grid gap-4">

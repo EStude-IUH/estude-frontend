@@ -16,7 +16,7 @@ const message = (n) => ({ id: n.toString(16).padStart(24, '0'), content: `Messag
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
 
-async function setup(t, { history = () => [], ack = () => ({ ok: true }) } = {}) {
+async function setup(t, { history = () => [], ack = () => ({ ok: true }), canRead = true } = {}) {
   const sockets = [], calls = [], authCalls = [];
   let tokenListener;
   class MockSocket extends EventEmitter {
@@ -49,6 +49,7 @@ async function setup(t, { history = () => [], ack = () => ({ ok: true }) } = {})
   loaded.require = (id) => {
     if (id === 'socket.io-client') return { io: (_url, options) => { const socket = new MockSocket(options); sockets.push(socket); return socket; } };
     if (id === '@/components/ui/button') return { Button: (props) => React.createElement('button', props) };
+    if (id === '@/context/permissions-context') return { usePermissions: () => ({ can: (key) => key === 'class_chat.read' && canRead }) };
     if (id === '@/lib/auth-api') return {
       ApiError,
       subscribeAccessToken: (listener) => { tokenListener = listener; return () => { tokenListener = undefined; }; },
@@ -74,6 +75,12 @@ async function setup(t, { history = () => [], ack = () => ({ ok: true }) } = {})
     button: (text) => renderer.root.findAllByType('button').find((button) => button.props.children === text),
   };
 }
+
+test('hides chat without read permission and does not open a socket', async (t) => {
+  const ui = await setup(t, { canRead: false });
+  assert.equal(ui.renderer.toJSON(), null);
+  assert.equal(ui.sockets.length, 0);
+});
 
 test('waits for join acknowledgement before fetching history or enabling send', async (t) => {
   const join = deferred();

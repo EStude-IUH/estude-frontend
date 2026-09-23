@@ -211,6 +211,7 @@ export function StaffDashboardView() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [studentDetailName, setStudentDetailName] = useState("");
+  const [teacherClassDetail, setTeacherClassDetail] = useState<{ id: string; name: string } | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -403,6 +404,25 @@ export function StaffDashboardView() {
               <ChevronRight className="hidden size-4 shrink-0 text-slate-400 sm:block" />
               <span className="truncate font-bold text-brand-700">
                 {studentDetailName || "Đang tải..."}
+              </span>
+            </nav>
+          ) : isTeacherClassDetailPage ? (
+            <nav
+              className="flex min-w-0 items-center gap-2 text-[13px] font-semibold sm:gap-3 sm:text-sm"
+              aria-label="Vị trí hiện tại"
+            >
+              <button
+                type="button"
+                onClick={() => router.push("/teacher/classes")}
+                className="shrink-0 text-slate-500 transition hover:text-brand-700"
+              >
+                Lớp học
+              </button>
+              <ChevronRight className="size-4 shrink-0 text-slate-400" />
+              <span className="hidden shrink-0 text-slate-500 sm:inline">Chi tiết lớp học</span>
+              <ChevronRight className="hidden size-4 shrink-0 text-slate-400 sm:block" />
+              <span className="truncate font-bold text-brand-700">
+                {teacherClassDetail?.id === teacherClassId ? teacherClassDetail.name : "Đang tải..."}
               </span>
             </nav>
           ) : (
@@ -737,7 +757,7 @@ export function StaffDashboardView() {
             ) : isTeacherStudentsPage ? (
               <TeacherStudentsPanel />
             ) : isTeacherClassDetailPage ? (
-              <TeacherClassLearningSpace classId={teacherClassId} />
+              <TeacherClassLearningSpace classId={teacherClassId} onClassNameChange={setTeacherClassDetail} />
             ) : isTeacherClassesPage ? (
               <TeacherAssignedClassesPanel />
             ) : isTeacherMaterialsPage ? (

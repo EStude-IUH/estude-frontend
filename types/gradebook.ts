@@ -32,6 +32,8 @@ export interface GradebookView {
   book: Gradebook | null;
   requiredRegular: number | null;
   term: { status: string };
+  year?: { status: string };
+  schoolClass?: { isActive: boolean };
   students: Array<{
     id: string;
     fullName: string;
@@ -39,6 +41,21 @@ export interface GradebookView {
     record: GradeRecord | null;
     outcome: GradeOutcome | null;
   }>;
+}
+
+export interface GradeImportPreview {
+  revision: number;
+  totalRows: number;
+  changedRows: number;
+  rows: Array<{
+    row: number;
+    studentId: string;
+    fullName: string;
+    accountName: string;
+    marks: GradeMarks;
+    comment: string;
+  }>;
+  errors: Array<{ row: number; message: string }>;
 }
 export interface LearningLevel {
   level: "TOT" | "KHA" | "DAT" | "CHUA_DAT" | "INCOMPLETE";

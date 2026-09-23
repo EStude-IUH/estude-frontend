@@ -25,6 +25,7 @@ import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-she
 import { StudentExamList } from "@/components/assessment/student-exam-pages";
 import { StudentShell } from "@/components/student/student-shell";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
+import { usePermissions } from "@/context/permissions-context";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -212,6 +213,7 @@ type CourseSection = "overview" | "materials" | "exams" | "review" | "chat";
 export function StudentCourseDetailPage() {
   const params = useParams<{ classId: string; subjectId: string }>();
   const router = useRouter();
+  const { can } = usePermissions();
   const [course, setCourse] = useState<StudentCourseDetail | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
   const [activeSection, setActiveSection] = useState<CourseSection>("overview");
@@ -246,6 +248,8 @@ export function StudentCourseDetailPage() {
   );
   const completedExams = exams.filter((exam) => exam.currentAttempt?.status === "SUBMITTED").length;
   const availableExams = exams.filter((exam) => exam.studentStatus === "AVAILABLE" || exam.studentStatus === "IN_PROGRESS").length;
+  const canReadClassChat = can("class_chat.read");
+  const visibleSection = activeSection === "chat" && !canReadClassChat ? "overview" : activeSection;
 
   async function openPreview(material: StudentCourseMaterial) {
     setPreviewMaterial(material);
@@ -314,25 +318,25 @@ export function StudentCourseDetailPage() {
               </div>
             </div>
             <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 sm:px-6" aria-label="Nội dung môn học">
-              <CourseTab active={activeSection === "overview"} icon={BookOpen} label="Tổng quan" onClick={() => setActiveSection("overview")} />
-              <CourseTab active={activeSection === "materials"} icon={FileText} label="Tài liệu" count={materials.length} onClick={() => setActiveSection("materials")} />
-              <CourseTab active={activeSection === "exams"} icon={ClipboardCheck} label="Bài kiểm tra" count={exams.length} onClick={() => setActiveSection("exams")} />
-              <CourseTab active={activeSection === "review"} icon={BrainCircuit} label="Ôn tập" onClick={() => setActiveSection("review")} />
-              <CourseTab active={activeSection === "chat"} icon={MessagesSquare} label="Trao đổi lớp" onClick={() => setActiveSection("chat")} />
+              <CourseTab active={visibleSection === "overview"} icon={BookOpen} label="Tổng quan" onClick={() => setActiveSection("overview")} />
+              <CourseTab active={visibleSection === "materials"} icon={FileText} label="Tài liệu" count={materials.length} onClick={() => setActiveSection("materials")} />
+              <CourseTab active={visibleSection === "exams"} icon={ClipboardCheck} label="Bài kiểm tra" count={exams.length} onClick={() => setActiveSection("exams")} />
+              <CourseTab active={visibleSection === "review"} icon={BrainCircuit} label="Ôn tập" onClick={() => setActiveSection("review")} />
+              {canReadClassChat ? <CourseTab active={visibleSection === "chat"} icon={MessagesSquare} label="Trao đổi lớp" onClick={() => setActiveSection("chat")} /> : null}
             </nav>
           </section>
 
           <div className="mt-4">
-            {activeSection === "overview" ? (
+            {visibleSection === "overview" ? (
               <CourseOverview course={course} examCount={exams.length} completedExamCount={completedExams} availableExamCount={availableExams} materialCount={materials.length} onOpenMaterials={() => setActiveSection("materials")} />
-            ) : activeSection === "materials" ? (
+            ) : visibleSection === "materials" ? (
               <CourseMaterials items={materials} error={materialError} onPreview={openPreview} onDownload={downloadMaterial} />
-            ) : activeSection === "exams" ? (
+            ) : visibleSection === "exams" ? (
               <section>
                 <div className="mb-4"><h2 className="text-xl font-black text-slate-950">Bài kiểm tra</h2><p className="mt-1 text-sm text-slate-500">Các bài kiểm tra của môn học và lớp này.</p></div>
                 <StudentExamList classId={course.classId} subjectId={course.subjectId} />
               </section>
-            ) : activeSection === "chat" ? <ClassChatPanel classId={course.classId} className={course.schoolClass.name} /> : <StudentReviewList classId={course.classId} subjectId={course.subjectId} />}
+            ) : visibleSection === "chat" ? <ClassChatPanel classId={course.classId} className={course.schoolClass.name} /> : <StudentReviewList classId={course.classId} subjectId={course.subjectId} />}
           </div>
 
           <Modal open={previewMaterial !== null} title={previewMaterial?.originalName ?? "Xem trước tài liệu"} width="max-w-[1600px]" bodyClassName="max-h-[calc(100dvh-5rem)] overflow-y-auto !p-2" compact onClose={() => { setPreviewMaterial(null); setPreviewUrl(""); setMaterialError(""); }}>
