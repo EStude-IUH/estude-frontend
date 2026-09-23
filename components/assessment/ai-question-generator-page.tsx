@@ -488,14 +488,14 @@ export function AiQuestionGeneratorPage() {
               ) : (
                 <Sparkles className="size-4" />
               )}
-              {generating ? "Gemini đang tạo..." : "Tạo câu hỏi"}
+              {generating ? "Đang xử lý tài liệu..." : "Tạo câu hỏi"}
             </Button>
           </div>
           <div className="mt-3 flex gap-2 rounded-lg bg-slate-50 p-2.5 text-xs leading-5 text-slate-500">
             <Info className="mt-0.5 size-4 shrink-0" />
             <span>
-              Lần đầu dùng một PDF sẽ lâu hơn vì hệ thống cần trích xuất, chia
-              đoạn và tạo embedding.
+              Lần đầu dùng một PDF sẽ lâu hơn vì hệ thống cần đọc và lập chỉ mục.
+              PDF scan cần nhận dạng chữ (OCR), có thể mất vài phút.
             </span>
           </div>
         </form>
@@ -506,10 +506,10 @@ export function AiQuestionGeneratorPage() {
               <div>
                 <LoaderCircle className="mx-auto size-9 animate-spin text-violet-600" />
                 <p className="mt-4 font-black text-slate-800">
-                  Gemini đang tạo bộ câu hỏi...
+                  Đang đọc tài liệu và tạo câu hỏi...
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Đang truy xuất ngữ cảnh và kiểm tra kết quả có cấu trúc.
+                  PDF scan cần OCR trong lần đầu; sau đó hệ thống dùng lại nội dung đã đọc.
                 </p>
               </div>
             </div>
