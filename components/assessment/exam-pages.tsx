@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowUp,
   BookOpen,
-  BrainCircuit,
   CalendarClock,
   Check,
   ChevronRight,
@@ -16,15 +15,11 @@ import {
   FileCheck2,
   FileQuestion,
   ListChecks,
-  LoaderCircle,
-  Minus,
   Plus,
   Search,
   ShieldCheck,
   Settings2,
   Send,
-  Sparkles,
-  TrendingDown,
   TrendingUp,
   Trash2,
 } from "lucide-react";
@@ -77,7 +72,6 @@ import {
   QUESTION_TYPE_LABELS,
   type Exam,
   type ExamInput,
-  type ExamListAiAnalysis,
   type ExamQuestion,
   type ExamSettings,
   type Question,
@@ -209,7 +203,6 @@ function formatClassLabel(
 
 export function TeacherExamsPage() {
   const router = useRouter();
-  const { notify } = useActionNotification();
   const [exams, setExams] = useState<Exam[]>([]);
   const [assignedClasses, setAssignedClasses] = useState<TeacherAssignedClass[]>(
     [],
@@ -222,11 +215,6 @@ export function TeacherExamsPage() {
     "ALL",
   );
   const [classFilter, setClassFilter] = useState("ALL");
-  const [analyzingList, setAnalyzingList] = useState(false);
-  const [analysisOpen, setAnalysisOpen] = useState(false);
-  const [analysisError, setAnalysisError] = useState("");
-  const [listAnalysis, setListAnalysis] = useState<ExamListAiAnalysis | null>(null);
-  const [analysisScope, setAnalysisScope] = useState({ className: "", examCount: 0 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [publishingId, setPublishingId] = useState("");
@@ -302,41 +290,6 @@ export function TeacherExamsPage() {
     }
   }
 
-  async function analyzeVisibleExams() {
-    if (classFilter === "ALL" || visibleExams.length === 0 || visibleExams.length > 30) return;
-    const selectedClass = assignedClasses.find((item) => item.id === classFilter);
-    setAnalyzingList(true);
-    setAnalysisError("");
-    setListAnalysis(null);
-    setAnalysisScope({
-      className: selectedClass
-        ? formatClassLabel(assignedClasses, selectedClass.id, selectedClass.name)
-        : visibleExams[0]?.className ?? "Lớp đã chọn",
-      examCount: visibleExams.length,
-    });
-    setAnalysisOpen(true);
-    try {
-      const analysis = await examService.analyzeExamList({
-        classId: classFilter,
-        examIds: visibleExams.map((exam) => exam.id),
-      });
-      setListAnalysis(analysis);
-      notify(
-        analysis.source === "AI"
-          ? "AI đã hoàn tất phân tích danh sách bài kiểm tra"
-          : "Đã tạo phân tích dự phòng từ số liệu lớp",
-      );
-    } catch (cause) {
-      setAnalysisError(
-        cause instanceof Error
-          ? cause.message
-          : "Không thể phân tích danh sách bài kiểm tra",
-      );
-    } finally {
-      setAnalyzingList(false);
-    }
-  }
-
   const visibleExams = exams.filter((exam) => {
     const matchesStatus =
       statusFilter === "ALL" || exam.status === statusFilter;
@@ -360,7 +313,7 @@ export function TeacherExamsPage() {
       <div className="flex max-h-[calc(100dvh-106px)] min-h-0 w-full flex-col overflow-hidden">
         <div className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,1fr)_180px_220px]">
+            <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(220px,420px)_180px_220px]">
               <DebouncedSearchInput
                 className="!h-[42px] !rounded-lg focus:!ring-0"
                 value={query}
@@ -368,7 +321,6 @@ export function TeacherExamsPage() {
                 onSearch={(value) => {
                   setPage(1);
                   setSubmittedQuery(value);
-                  setListAnalysis(null);
                 }}
                 placeholder="Tìm theo tên bài, môn học hoặc lớp"
               />
@@ -386,7 +338,6 @@ export function TeacherExamsPage() {
                 onValueChange={(value) => {
                   setStatusFilter(value as "ALL" | Exam["status"]);
                   setPage(1);
-                  setListAnalysis(null);
                 }}
               />
               <CustomSelect
@@ -407,37 +358,10 @@ export function TeacherExamsPage() {
                 onValueChange={(value) => {
                   setClassFilter(value);
                   setPage(1);
-                  setListAnalysis(null);
                 }}
               />
             </div>
             <div className="flex shrink-0 flex-nowrap justify-end gap-2">
-              <Button
-                permission="exams.submissions"
-                variant="secondary"
-                className="!h-[42px] !rounded-lg whitespace-nowrap"
-                disabled={
-                  analyzingList ||
-                  classFilter === "ALL" ||
-                  visibleExams.length === 0 ||
-                  visibleExams.length > 30
-                }
-                onClick={() => void analyzeVisibleExams()}
-                title={
-                  classFilter === "ALL"
-                    ? "Chọn một lớp để phân tích"
-                    : visibleExams.length > 30
-                      ? "Thu hẹp bộ lọc còn tối đa 30 bài kiểm tra"
-                      : "Phân tích các bài kiểm tra đang khớp bộ lọc"
-                }
-              >
-                {analyzingList ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <Sparkles className="size-4" />
-                )}
-                {analyzingList ? "Đang phân tích..." : "AI phân tích"}
-              </Button>
               <Button permission="exams.create"
                 className="!h-[42px] !rounded-lg"
                 onClick={() => router.push("/teacher/exams/new")}
@@ -632,26 +556,6 @@ export function TeacherExamsPage() {
         </section>
 
       <Modal
-        open={analysisOpen}
-        title="AI phân tích danh sách bài kiểm tra"
-        description={`${analysisScope.className} · ${analysisScope.examCount} bài đang khớp bộ lọc`}
-        onClose={() => setAnalysisOpen(false)}
-        width="max-w-5xl"
-        bodyClassName="max-h-[calc(100dvh-10rem)] overflow-y-auto !p-5"
-      >
-        {analyzingList ? (
-          <div className="flex min-h-52 items-center justify-center gap-3 text-sm font-semibold text-slate-500">
-            <LoaderCircle className="size-6 animate-spin text-brand-600" />
-            Đang tổng hợp xu hướng qua các bài kiểm tra...
-          </div>
-        ) : analysisError ? (
-          <ErrorPanel message={analysisError} />
-        ) : listAnalysis ? (
-          <ExamListAiAnalysisPanel analysis={listAnalysis} />
-        ) : null}
-      </Modal>
-
-      <Modal
         open={isEditorOpen}
         title="Chỉnh sửa bài kiểm tra"
         description="Cập nhật các bước thiết lập và lưu thay đổi ngay tại đây."
@@ -672,89 +576,6 @@ export function TeacherExamsPage() {
       </Modal>
       </div>
     </AssessmentShell>
-  );
-}
-
-function ExamListAiAnalysisPanel({ analysis }: { analysis: ExamListAiAnalysis }) {
-  const trend = {
-    IMPROVING: { label: "Đang cải thiện", icon: TrendingUp, className: "bg-emerald-50 text-emerald-700" },
-    DECLINING: { label: "Có xu hướng giảm", icon: TrendingDown, className: "bg-rose-50 text-rose-700" },
-    STABLE: { label: "Tương đối ổn định", icon: Minus, className: "bg-blue-50 text-brand-700" },
-    INSUFFICIENT_DATA: { label: "Chưa đủ dữ liệu", icon: Minus, className: "bg-slate-100 text-slate-600" },
-  }[analysis.trend.direction];
-  const TrendIcon = trend.icon;
-  return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
-              <BrainCircuit className="size-5" />
-            </span>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-black text-slate-950">{analysis.headline}</h3>
-                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${analysis.source === "AI" ? "bg-violet-100 text-violet-700" : "bg-amber-100 text-amber-700"}`}>
-                  {analysis.source === "AI" ? "Gemini AI" : "Phân tích dự phòng"}
-                </span>
-              </div>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{analysis.summary}</p>
-            </div>
-          </div>
-        </div>
-        <div className={`mt-4 flex items-start gap-3 rounded-xl p-4 ${trend.className}`}>
-          <TrendIcon className="mt-0.5 size-5 shrink-0" />
-          <div><p className="font-black">{trend.label}</p><p className="mt-1 text-sm leading-6 opacity-90">{analysis.trend.evidence}</p></div>
-        </div>
-      </section>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <AiExamListGroup title="Điểm tích cực" items={analysis.strengths} tone="success" />
-        <AiExamListGroup title="Điểm cần chú ý" items={analysis.concerns} tone="warning" />
-      </div>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="font-black text-slate-950">Đề xuất ưu tiên</h3>
-        <div className="mt-3 space-y-3">
-          {analysis.recommendations.map((item, index) => (
-            <div key={`${item.title}-${index}`} className="flex gap-3 rounded-xl bg-slate-50 p-4">
-              <span className={`mt-0.5 h-fit rounded-full px-2 py-1 text-[10px] font-black ${item.priority === "HIGH" ? "bg-rose-100 text-rose-700" : item.priority === "MEDIUM" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-brand-700"}`}>
-                {item.priority === "HIGH" ? "CAO" : item.priority === "MEDIUM" ? "VỪA" : "THẤP"}
-              </span>
-              <div><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.action}</p></div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-black text-slate-950">Gợi ý hoạt động tiếp theo</h3>
-          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-brand-700">{analysis.lessonPlan.durationMinutes} phút</span>
-        </div>
-        <p className="mt-2 font-bold text-brand-800">{analysis.lessonPlan.focus}</p>
-        <p className="mt-1 text-sm leading-6 text-slate-600">{analysis.lessonPlan.objective}</p>
-        <ol className="mt-3 space-y-2">
-          {analysis.lessonPlan.activities.map((activity, index) => (
-            <li key={`${activity}-${index}`} className="flex gap-3 text-sm leading-6 text-slate-700"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-black text-brand-700">{index + 1}</span>{activity}</li>
-          ))}
-        </ol>
-      </section>
-      <p className="text-xs leading-5 text-slate-400">AI chỉ nhận số liệu tổng hợp đã ẩn danh của các bài đang khớp bộ lọc. Giáo viên cần đối chiếu với bối cảnh lớp trước khi áp dụng.</p>
-    </div>
-  );
-}
-
-function AiExamListGroup({ title, items, tone }: { title: string; items: Array<{ title: string; evidence: string }>; tone: "success" | "warning" }) {
-  return (
-    <section className={`rounded-2xl border p-5 ${tone === "success" ? "border-emerald-100 bg-emerald-50/50" : "border-amber-100 bg-amber-50/50"}`}>
-      <h3 className="font-black text-slate-950">{title}</h3>
-      <div className="mt-3 space-y-3">
-        {items.length ? items.map((item, index) => (
-          <div key={`${item.title}-${index}`}><p className="font-bold text-slate-900">{item.title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{item.evidence}</p></div>
-        )) : <p className="text-sm text-slate-500">Chưa có tín hiệu đủ rõ trong phạm vi lọc.</p>}
-      </div>
-    </section>
   );
 }
 
