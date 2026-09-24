@@ -243,7 +243,9 @@ export interface SubjectTeacherAssignment {
     avatarUrl: string | null;
     status: string;
   };
-  subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName"> & { description?: string };
+  subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName"> & {
+    description?: string;
+  };
   schoolClass: Pick<SchoolClass, "id" | "code" | "name" | "academicYearId">;
 }
 
@@ -271,10 +273,7 @@ export interface TeacherManagedStudent {
 
 export type StudentCourse = SubjectTeacherAssignment;
 
-export type StudentCourseMaterial = Omit<
-  LearningMaterial,
-  "s3Key" | "keyword" | "deletedAt"
->;
+export type StudentCourseMaterial = Omit<LearningMaterial, "s3Key" | "keyword" | "deletedAt">;
 
 export interface StudentCourseTopic {
   id: string;
@@ -291,16 +290,8 @@ export interface StudentCourseTopic {
 
 export interface StudentCourseDetail extends StudentCourse {
   enrollment: { joinedAt: string };
-  academicYear: Pick<
-    AcademicYear,
-    "id" | "name" | "startsAt" | "endsAt" | "status"
-  > | null;
-  terms: Array<
-    Pick<
-      Term,
-      "id" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status" | "isActive"
-    >
-  >;
+  academicYear: Pick<AcademicYear, "id" | "name" | "startsAt" | "endsAt" | "status"> | null;
+  terms: Array<Pick<Term, "id" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status" | "isActive">>;
   studentCount: number;
   topics: StudentCourseTopic[];
 }
@@ -504,6 +495,7 @@ export interface ExamAttempt {
   correctCount: number | null;
   durationSeconds: number | null;
   examCode: string | null;
+  teacherReview?: ExamClassReportReview | null;
 }
 
 export type ExamClassParticipationStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED";
@@ -518,6 +510,9 @@ export interface ExamClassReportAttempt {
   maxScore: number;
   percentage: number | null;
   durationSeconds: number | null;
+  gradingStatus: "COMPLETE" | "PARTIAL";
+  scoredPointsPossible: number | null;
+  ungradedPointsPossible: number | null;
 }
 
 export interface ExamClassReportReview {
@@ -568,7 +563,35 @@ export interface ExamClassQuestionPerformance {
     label: string;
     text: string;
     selectedCount: number;
+    selectedRate: number;
+    isCorrect: boolean;
+    functioningDistractor: boolean | null;
   }>;
+  itemAnalysis: {
+    sampleSize: number;
+    discriminationSampleSize: number;
+    discriminationMethod: "CORRECTED_ITEM_TOTAL_CORRELATION";
+    evidenceLevel: "LIMITED" | "DEVELOPING" | "ESTABLISHED";
+    difficultyLevel: "NOT_APPLICABLE" | "VERY_DIFFICULT" | "DIFFICULT" | "MODERATE" | "EASY" | "VERY_EASY";
+    discriminationIndex: number | null;
+    discriminationLevel: "INSUFFICIENT_DATA" | "NEGATIVE" | "POOR" | "ACCEPTABLE" | "GOOD" | "EXCELLENT";
+    flags: Array<"LOW_SAMPLE" | "TOO_DIFFICULT" | "TOO_EASY" | "NEGATIVE_DISCRIMINATION" | "LOW_DISCRIMINATION" | "NON_FUNCTIONING_DISTRACTOR">;
+  };
+}
+
+export interface ExamInsightActionInput {
+  kind: "ASSIGNMENT" | "NOTIFICATION";
+  studentIds: string[];
+  title: string;
+  message: string;
+  groupLabel: string;
+  dueAt?: string;
+}
+
+export interface ExamInsightActionResult {
+  id: string;
+  recipientCount: number;
+  alreadySent: boolean;
 }
 
 export interface ExamClassTopicPerformance {
@@ -602,6 +625,7 @@ export interface ExamClassReport {
     inProgressStudentCount: number;
     submittedStudentCount: number;
     selectedSubmittedAttemptCount: number;
+    ungradedSubmittedAttemptCount: number;
     averageScore: number | null;
     medianScore: number | null;
     averagePercentage: number | null;
@@ -615,7 +639,12 @@ export interface ExamClassReport {
 }
 
 export interface ExamClassAiAnalysis {
-  knowledgeGaps?: Array<{ knowledge: string; questionNumbers: number[]; evidence: string; remediation: string }>;
+  knowledgeGaps?: Array<{
+    knowledge: string;
+    questionNumbers: number[];
+    evidence: string;
+    remediation: string;
+  }>;
   generatedAt: string;
   source: "AI" | "FALLBACK";
   model: string | null;
@@ -640,7 +669,15 @@ export interface ExamClassAnalysisState {
   status: "NOT_STARTED" | "QUEUED" | "PROCESSING" | "READY" | "FAILED";
   analysis: ExamClassAiAnalysis | null;
   snapshot: {
-    questions?: Array<{ order: number; content?: string; topicName: string; opportunityCount: number; accuracy: number | null; incorrectCount?: number | null; unansweredCount: number }>;
+    questions?: Array<{
+      order: number;
+      content?: string;
+      topicName: string;
+      opportunityCount: number;
+      accuracy: number | null;
+      incorrectCount?: number | null;
+      unansweredCount: number;
+    }>;
     title: string;
     className: string;
     subjectName: string;
@@ -673,8 +710,23 @@ export interface SubjectSupportStudent {
   submittedExamCount: number;
   overdueExamCount: number;
   reasons: string[];
-  history: Array<{ examId: string; title: string; endsAt: string; attemptId: string | null; status: string; percentage: number | null; awaitingGrading: boolean }>;
-  gaps: Array<{ examId: string; examTitle: string; questionId: string; questionNumber: number; content: string; topicName: string }>;
+  history: Array<{
+    examId: string;
+    title: string;
+    endsAt: string;
+    attemptId: string | null;
+    status: string;
+    percentage: number | null;
+    awaitingGrading: boolean;
+  }>;
+  gaps: Array<{
+    examId: string;
+    examTitle: string;
+    questionId: string;
+    questionNumber: number;
+    content: string;
+    topicName: string;
+  }>;
 }
 
 export interface SubjectSupportReport {
@@ -687,6 +739,11 @@ export interface SubjectSupportReport {
   examCount: number;
   policy: string;
   students: SubjectSupportStudent[];
+  cache?: {
+    source: "CACHE" | "COMPUTED";
+    stale: boolean;
+    expiresAt: string;
+  };
 }
 
 export interface ExamListAiAnalysis extends ExamClassAiAnalysis {
@@ -733,11 +790,7 @@ export interface StudyWeakArea {
   sourceReferences: Array<{ documentName: string; page: number }>;
 }
 
-export type StudyPerformanceLevel =
-  | "PENDING"
-  | "BELOW_AVERAGE"
-  | "AVERAGE_TO_GOOD"
-  | "STRONG";
+export type StudyPerformanceLevel = "PENDING" | "BELOW_AVERAGE" | "AVERAGE_TO_GOOD" | "STRONG";
 
 export interface StudyLearningPathStep {
   order: number;

@@ -1,54 +1,5 @@
-import {
-  authenticatedBlobRequest,
-  authenticatedRequest,
-  authenticatedUploadRequest,
-  type UploadProgressPhase,
-} from "@/lib/auth-api";
-import type {
-  Exam,
-  ExamAttempt,
-  ExamClassAnalysisState,
-  SubjectSupportReport,
-  ExamClassReport,
-  ExamClassReportReview,
-  ExamListAiAnalysis,
-  ExamInput,
-  ExamAnswer,
-  AcademicYear,
-  ClassRoster,
-  AvailableStudentsPage,
-  GradeComponent,
-  SchoolClass,
-  Question,
-  QuestionFilters,
-  QuestionInput,
-  BulkMoveQuestionsInput,
-  BulkMoveQuestionsResult,
-  Subject,
-  SubjectImportResult,
-  SubjectTeacherAssignment,
-  StudentCourse,
-  StudentCourseDetail,
-  TeacherAssignedClass,
-  TeacherManagedStudent,
-  ClassTopic,
-  ClassTopicInput,
-  LearningMaterial,
-  MaterialAssignmentTarget,
-  BulkMaterialAssignmentResult,
-  Term,
-  Topic,
-  GeneratedQuestion,
-  GenerateAiQuestionsInput,
-  UpdateGeneratedQuestionInput,
-  DifficultyLevelDefinition,
-  SystemDifficultySettings,
-  StudyAnalysis,
-  StudyPracticeSet,
-  TeacherDifficultySettings,
-  TeacherExamDefaults,
-  TeacherExamDefaultSettings,
-} from "@/types/assessment";
+import { authenticatedBlobRequest, authenticatedRequest, authenticatedUploadRequest, type UploadProgressPhase } from "@/lib/auth-api";
+import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
 import type { StudentOverview } from "@/types/student-overview";
 
 export const academicDataService = {
@@ -73,17 +24,10 @@ export const academicDataService = {
   downloadSubjectImportTemplate(): Promise<Blob> {
     return authenticatedBlobRequest("/subjects/import-template");
   },
-  importSubjects(
-    file: File,
-    onProgress: (percent: number, phase: UploadProgressPhase) => void,
-  ): Promise<SubjectImportResult> {
+  importSubjects(file: File, onProgress: (percent: number, phase: UploadProgressPhase) => void): Promise<SubjectImportResult> {
     const formData = new FormData();
     formData.append("file", file);
-    return authenticatedUploadRequest<SubjectImportResult>(
-      "/subjects/import",
-      formData,
-      onProgress,
-    );
+    return authenticatedUploadRequest<SubjectImportResult>("/subjects/import", formData, onProgress);
   },
   getClasses(academicYearId?: string, includeInactive = false, search?: string, limit?: number): Promise<SchoolClass[]> {
     const params = new URLSearchParams();
@@ -99,7 +43,10 @@ export const academicDataService = {
     return authenticatedRequest<Topic[]>(`/topics${query}`);
   },
   createAcademicYear(payload: Pick<AcademicYear, "name" | "startsAt" | "endsAt" | "status">): Promise<AcademicYear> {
-    return authenticatedRequest<AcademicYear>("/academic-years", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<AcademicYear>("/academic-years", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateAcademicYear(id: string, payload: Partial<Pick<AcademicYear, "name" | "startsAt" | "endsAt" | "status">>): Promise<AcademicYear> {
     return authenticatedRequest<AcademicYear>(`/academic-years/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -108,16 +55,30 @@ export const academicDataService = {
     return authenticatedRequest<Record<string, never>>(`/academic-years/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   createTerm(payload: Pick<Term, "academicYearId" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status">): Promise<Term> {
-    return authenticatedRequest<Term>("/terms", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<Term>("/terms", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateTerm(id: string, payload: Partial<Pick<Term, "academicYearId" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status">>): Promise<Term> {
-    return authenticatedRequest<Term>(`/terms/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    return authenticatedRequest<Term>(`/terms/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
   deleteTerm(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(`/terms/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
-  createSubject(payload: Pick<Subject, "code" | "name"> & { vietnameseName: string; description?: string }): Promise<Subject> {
-    return authenticatedRequest<Subject>("/subjects", { method: "POST", body: JSON.stringify(payload) });
+  createSubject(
+    payload: Pick<Subject, "code" | "name"> & {
+      vietnameseName: string;
+      description?: string;
+    },
+  ): Promise<Subject> {
+    return authenticatedRequest<Subject>("/subjects", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateSubject(id: string, payload: Partial<Pick<Subject, "code" | "name" | "vietnameseName" | "description" | "isActive">>): Promise<Subject> {
     return authenticatedRequest<Subject>(`/subjects/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -127,12 +88,21 @@ export const academicDataService = {
   },
   getGradeComponents(filters: { subjectId?: string; includeInactive?: boolean } = {}): Promise<GradeComponent[]> {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, String(value)); });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, String(value));
+    });
     const query = params.toString();
     return authenticatedRequest<GradeComponent[]>(`/grade-components${query ? `?${query}` : ""}`);
   },
-  createGradeComponent(payload: Omit<GradeComponent, "id" | "isActive" | "deletedAt"> & { isActive?: boolean }): Promise<GradeComponent> {
-    return authenticatedRequest<GradeComponent>("/grade-components", { method: "POST", body: JSON.stringify(payload) });
+  createGradeComponent(
+    payload: Omit<GradeComponent, "id" | "isActive" | "deletedAt"> & {
+      isActive?: boolean;
+    },
+  ): Promise<GradeComponent> {
+    return authenticatedRequest<GradeComponent>("/grade-components", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateGradeComponent(id: string, payload: Partial<Pick<GradeComponent, "code" | "name" | "requiredColumns" | "weight" | "teacherCanConfigureCalculation" | "sortOrder" | "isActive">>): Promise<GradeComponent> {
     return authenticatedRequest<GradeComponent>(`/grade-components/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -141,10 +111,20 @@ export const academicDataService = {
     return authenticatedRequest<Record<string, never>>(`/grade-components/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   validateGradeConfiguration(subjectId: string): Promise<{ subjectId: string; totalWeight: number; valid: true }> {
-    return authenticatedRequest<{ subjectId: string; totalWeight: number; valid: true }>("/grade-components/validate", { method: "POST", body: JSON.stringify({ subjectId }) });
+    return authenticatedRequest<{
+      subjectId: string;
+      totalWeight: number;
+      valid: true;
+    }>("/grade-components/validate", {
+      method: "POST",
+      body: JSON.stringify({ subjectId }),
+    });
   },
   createClass(payload: Pick<SchoolClass, "academicYearId" | "code" | "name" | "isActive">): Promise<SchoolClass> {
-    return authenticatedRequest<SchoolClass>("/classes", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<SchoolClass>("/classes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateClass(id: string, payload: Partial<Pick<SchoolClass, "academicYearId" | "code" | "name" | "isActive">>): Promise<SchoolClass> {
     return authenticatedRequest<SchoolClass>(`/classes/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -155,10 +135,7 @@ export const academicDataService = {
   getClassRoster(classId: string): Promise<ClassRoster> {
     return authenticatedRequest<ClassRoster>(`/classes/${encodeURIComponent(classId)}/roster`);
   },
-  getAvailableStudents(
-    classId: string,
-    filters: { offset?: number; limit?: number; search?: string } = {},
-  ): Promise<AvailableStudentsPage> {
+  getAvailableStudents(classId: string, filters: { offset?: number; limit?: number; search?: string } = {}): Promise<AvailableStudentsPage> {
     const params = new URLSearchParams({
       offset: String(filters.offset ?? 0),
       limit: String(filters.limit ?? 20),
@@ -172,9 +149,18 @@ export const academicDataService = {
   removeClassStudent(classId: string, studentId: string): Promise<Record<string, unknown>> {
     return authenticatedRequest<Record<string, unknown>>(`/classes/${encodeURIComponent(classId)}/students/${encodeURIComponent(studentId)}`, { method: "DELETE" });
   },
-  getSubjectTeacherAssignments(filters: { classId?: string; subjectId?: string; teacherId?: string; search?: string } = {}): Promise<SubjectTeacherAssignment[]> {
+  getSubjectTeacherAssignments(
+    filters: {
+      classId?: string;
+      subjectId?: string;
+      teacherId?: string;
+      search?: string;
+    } = {},
+  ): Promise<SubjectTeacherAssignment[]> {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
     const query = params.toString();
     return authenticatedRequest<SubjectTeacherAssignment[]>(`/subject-teacher-assignments${query ? `?${query}` : ""}`);
   },
@@ -188,19 +174,13 @@ export const academicDataService = {
     return authenticatedRequest<StudentCourse[]>("/student/courses");
   },
   getStudentCourse(classId: string, subjectId: string): Promise<StudentCourseDetail> {
-    return authenticatedRequest<StudentCourseDetail>(
-      `/student/courses/${encodeURIComponent(classId)}/${encodeURIComponent(subjectId)}`,
-    );
+    return authenticatedRequest<StudentCourseDetail>(`/student/courses/${encodeURIComponent(classId)}/${encodeURIComponent(subjectId)}`);
   },
   getStudentMaterialDownloadUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
-    return authenticatedRequest<{ url: string; expiresIn: number }>(
-      `/student/materials/${encodeURIComponent(materialId)}/download-url`,
-    );
+    return authenticatedRequest<{ url: string; expiresIn: number }>(`/student/materials/${encodeURIComponent(materialId)}/download-url`);
   },
   getStudentMaterialPreviewUrl(materialId: string): Promise<{ url: string; expiresIn: number }> {
-    return authenticatedRequest<{ url: string; expiresIn: number }>(
-      `/student/materials/${encodeURIComponent(materialId)}/preview-url`,
-    );
+    return authenticatedRequest<{ url: string; expiresIn: number }>(`/student/materials/${encodeURIComponent(materialId)}/preview-url`);
   },
   getTeacherAssignedClass(classId: string): Promise<TeacherAssignedClass> {
     return authenticatedRequest<TeacherAssignedClass>(`/teacher/assigned-classes/${encodeURIComponent(classId)}`);
@@ -232,7 +212,11 @@ export const academicDataService = {
       expiresIn: number;
     }>(`/teacher/class-topics/${encodeURIComponent(topicId)}/materials/upload-url`, {
       method: "POST",
-      body: JSON.stringify({ fileName: file.name, contentType, fileSize: file.size }),
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType,
+        fileSize: file.size,
+      }),
     });
     const uploadResponse = await fetch(session.uploadUrl, {
       method: session.method,
@@ -254,7 +238,11 @@ export const academicDataService = {
       expiresIn: number;
     }>("/teacher/material-library/upload-url", {
       method: "POST",
-      body: JSON.stringify({ fileName: file.name, contentType, fileSize: file.size }),
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType,
+        fileSize: file.size,
+      }),
     });
     const uploadResponse = await fetch(session.uploadUrl, {
       method: session.method,
@@ -301,7 +289,10 @@ export const academicDataService = {
     return authenticatedRequest<SubjectTeacherAssignment>(`/subject-teacher-assignments/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
   createTopic(payload: Pick<Topic, "subjectId" | "name"> & { description?: string }): Promise<Topic> {
-    return authenticatedRequest<Topic>("/topics", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<Topic>("/topics", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };
 
@@ -318,7 +309,10 @@ export const questionBankService = {
     return authenticatedRequest<Question>(`/question-bank/${encodeURIComponent(id)}`);
   },
   createQuestion(payload: QuestionInput): Promise<Question> {
-    return authenticatedRequest<Question>("/question-bank", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<Question>("/question-bank", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateQuestion(id: string, payload: Partial<QuestionInput>): Promise<Question> {
     return authenticatedRequest<Question>(`/question-bank/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
@@ -364,10 +358,10 @@ export const aiQuestionService = {
     });
   },
   approve(id: string): Promise<{ generatedQuestion: GeneratedQuestion; question: Question }> {
-    return authenticatedRequest<{ generatedQuestion: GeneratedQuestion; question: Question }>(
-      `/ai-questions/${encodeURIComponent(id)}/approve`,
-      { method: "POST" },
-    );
+    return authenticatedRequest<{
+      generatedQuestion: GeneratedQuestion;
+      question: Question;
+    }>(`/ai-questions/${encodeURIComponent(id)}/approve`, { method: "POST" });
   },
   reject(id: string): Promise<GeneratedQuestion> {
     return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}/reject`, {
@@ -380,10 +374,7 @@ export const aiQuestionSettingsService = {
   getSystem(): Promise<SystemDifficultySettings> {
     return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system");
   },
-  updateSystem(
-    levels: DifficultyLevelDefinition[],
-    maxQuestionsPerGeneration: number,
-  ): Promise<SystemDifficultySettings> {
+  updateSystem(levels: DifficultyLevelDefinition[], maxQuestionsPerGeneration: number): Promise<SystemDifficultySettings> {
     return authenticatedRequest<SystemDifficultySettings>("/ai-question-settings/system", {
       method: "PUT",
       body: JSON.stringify({ levels, maxQuestionsPerGeneration }),
@@ -392,10 +383,7 @@ export const aiQuestionSettingsService = {
   getMine(): Promise<TeacherDifficultySettings> {
     return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me");
   },
-  updateMine(settings: {
-    levels?: DifficultyLevelDefinition[];
-    defaultQuantity?: number;
-  }): Promise<TeacherDifficultySettings> {
+  updateMine(settings: { levels?: DifficultyLevelDefinition[]; defaultQuantity?: number }): Promise<TeacherDifficultySettings> {
     return authenticatedRequest<TeacherDifficultySettings>("/ai-question-settings/me", {
       method: "PUT",
       body: JSON.stringify(settings),
@@ -411,20 +399,13 @@ export const studentOverviewService = {
 
 export const teacherSettingsService = {
   getExamDefaults(): Promise<TeacherExamDefaultSettings> {
-    return authenticatedRequest<TeacherExamDefaultSettings>(
-      "/teacher-settings/exam-defaults",
-    );
+    return authenticatedRequest<TeacherExamDefaultSettings>("/teacher-settings/exam-defaults");
   },
-  updateExamDefaults(
-    examDefaults: TeacherExamDefaults,
-  ): Promise<TeacherExamDefaultSettings> {
-    return authenticatedRequest<TeacherExamDefaultSettings>(
-      "/teacher-settings/exam-defaults",
-      {
-        method: "PUT",
-        body: JSON.stringify(examDefaults),
-      },
-    );
+  updateExamDefaults(examDefaults: TeacherExamDefaults): Promise<TeacherExamDefaultSettings> {
+    return authenticatedRequest<TeacherExamDefaultSettings>("/teacher-settings/exam-defaults", {
+      method: "PUT",
+      body: JSON.stringify(examDefaults),
+    });
   },
 };
 
@@ -436,10 +417,16 @@ export const examService = {
     return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}`);
   },
   createExam(payload: ExamInput): Promise<Exam> {
-    return authenticatedRequest<Exam>("/exams", { method: "POST", body: JSON.stringify(payload) });
+    return authenticatedRequest<Exam>("/exams", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   updateExam(id: string, payload: ExamInput): Promise<Exam> {
-    return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
   publishExam(id: string): Promise<Exam> {
     return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}/publish`, { method: "POST" });
@@ -451,24 +438,27 @@ export const examService = {
     return authenticatedRequest<ExamAttempt[]>(`/exams/${encodeURIComponent(id)}/submissions`);
   },
   getClassReport(id: string): Promise<ExamClassReport> {
-    return authenticatedRequest<ExamClassReport>(
-      `/exams/${encodeURIComponent(id)}/class-report`,
-    );
+    return authenticatedRequest<ExamClassReport>(`/exams/${encodeURIComponent(id)}/class-report`);
   },
-  getClassAnalysis(id: string): Promise<ExamClassAnalysisState> {
-    return authenticatedRequest<ExamClassAnalysisState>(`/exams/${encodeURIComponent(id)}/class-report/ai-analysis`);
+  getClassAnalysis(id: string, fresh = false): Promise<ExamClassAnalysisState> {
+    return authenticatedRequest<ExamClassAnalysisState>(`/exams/${encodeURIComponent(id)}/class-report/ai-analysis${fresh ? "?fresh=true" : ""}`);
   },
-  getSubjectSupport(id: string): Promise<SubjectSupportReport> {
-    return authenticatedRequest<SubjectSupportReport>(`/exams/${encodeURIComponent(id)}/subject-support`);
+  getSubjectSupport(id: string, fresh = false): Promise<SubjectSupportReport> {
+    return authenticatedRequest<SubjectSupportReport>(`/exams/${encodeURIComponent(id)}/subject-support${fresh ? "?fresh=true" : ""}`);
   },
-  sendSupportAlert(id: string, payload: { studentId: string; audience: "STUDENT" | "PARENTS"; version: string; message: string }): Promise<{ id: string; recipientCount: number; alreadySent: boolean }> {
+  sendSupportAlert(
+    id: string,
+    payload: {
+      studentId: string;
+      audience: "STUDENT" | "PARENTS";
+      version: string;
+      message: string;
+    },
+  ): Promise<{ id: string; recipientCount: number; alreadySent: boolean }> {
     return authenticatedRequest(`/exams/${encodeURIComponent(id)}/subject-support/alerts`, { method: "POST", body: JSON.stringify(payload) });
   },
   analyzeClassReport(id: string, refresh = false): Promise<ExamClassAnalysisState> {
-    return authenticatedRequest<ExamClassAnalysisState>(
-      `/exams/${encodeURIComponent(id)}/class-report/ai-analysis`,
-      { method: "POST", body: JSON.stringify({ refresh }) },
-    );
+    return authenticatedRequest<ExamClassAnalysisState>(`/exams/${encodeURIComponent(id)}/class-report/ai-analysis`, { method: "POST", body: JSON.stringify({ refresh }) });
   },
   analyzeExamList(payload: { classId: string; examIds: string[] }): Promise<ExamListAiAnalysis> {
     return authenticatedRequest<ExamListAiAnalysis>("/exams/list/ai-analysis", {
@@ -476,21 +466,23 @@ export const examService = {
       body: JSON.stringify(payload),
     });
   },
-  updateStudentReview(
-    examId: string,
-    studentId: string,
-    payload: { comment: string; status: "DRAFT" | "PUBLISHED" },
-  ): Promise<ExamClassReportReview> {
-    return authenticatedRequest<ExamClassReportReview>(
-      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/review`,
-      { method: "PATCH", body: JSON.stringify(payload) },
-    );
+  updateStudentReview(examId: string, studentId: string, payload: { comment: string; status: "DRAFT" | "PUBLISHED" }): Promise<ExamClassReportReview> {
+    return authenticatedRequest<ExamClassReportReview>(`/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/review`, { method: "PATCH", body: JSON.stringify(payload) });
+  },
+  createInsightAction(examId: string, payload: ExamInsightActionInput): Promise<ExamInsightActionResult> {
+    return authenticatedRequest<ExamInsightActionResult>(`/exams/${encodeURIComponent(examId)}/class-report/actions`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };
 
 export const examAttemptService = {
   startExam(examId: string, accessCode?: string): Promise<ExamAttempt> {
-    return authenticatedRequest<ExamAttempt>(`/exams/${encodeURIComponent(examId)}/attempts`, { method: "POST", body: JSON.stringify(accessCode ? { accessCode } : {}) });
+    return authenticatedRequest<ExamAttempt>(`/exams/${encodeURIComponent(examId)}/attempts`, {
+      method: "POST",
+      body: JSON.stringify(accessCode ? { accessCode } : {}),
+    });
   },
   getAttempt(id: string): Promise<ExamAttempt & { exam: Exam }> {
     return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}`);
@@ -508,37 +500,18 @@ export const examAttemptService = {
     });
   },
   createStudyAnalysis(id: string): Promise<StudyAnalysis> {
-    return authenticatedRequest<StudyAnalysis>(
-      `/exam-attempts/${encodeURIComponent(id)}/study-analysis`,
-      { method: "POST" },
-    );
+    return authenticatedRequest<StudyAnalysis>(`/exam-attempts/${encodeURIComponent(id)}/study-analysis`, { method: "POST" });
   },
   getStudyAnalysis(id: string): Promise<StudyAnalysis> {
-    return authenticatedRequest<StudyAnalysis>(
-      `/exam-attempts/${encodeURIComponent(id)}/study-analysis`,
-    );
+    return authenticatedRequest<StudyAnalysis>(`/exam-attempts/${encodeURIComponent(id)}/study-analysis`);
   },
-  submitStudyPractice(
-    id: string,
-    answers: Array<{ questionId: string; selectedOptionIds: string[] }>,
-  ): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(
-      `/study-practice-sets/${encodeURIComponent(id)}/submit`,
-      { method: "POST", body: JSON.stringify({ answers }) },
-    );
+  submitStudyPractice(id: string, answers: Array<{ questionId: string; selectedOptionIds: string[] }>): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
   },
   retryStudyPractice(id: string): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(
-      `/study-practice-sets/${encodeURIComponent(id)}/retry`,
-      { method: "POST" },
-    );
+    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/retry`, { method: "POST" });
   },
-  getStudyPracticeHint(
-    practiceSetId: string,
-    questionId: string,
-  ): Promise<{ questionId: string; message: string }> {
-    return authenticatedRequest<{ questionId: string; message: string }>(
-      `/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`,
-    );
+  getStudyPracticeHint(practiceSetId: string, questionId: string): Promise<{ questionId: string; message: string }> {
+    return authenticatedRequest<{ questionId: string; message: string }>(`/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`);
   },
 };

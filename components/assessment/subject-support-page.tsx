@@ -50,7 +50,7 @@ function SupportContent({ examId }: { examId: string }) {
     let active = true;
     setLoading(true);
     setError("");
-    void examService.getSubjectSupport(examId).then((data) => { if (active) setReport(data); }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Không thể tải đánh giá theo môn"); }).finally(() => { if (active) setLoading(false); });
+    void examService.getSubjectSupport(examId, reload > 0).then((data) => { if (active) setReport(data); }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Không thể tải đánh giá theo môn"); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [examId, allowed, permissionsLoading, reload]);
 
@@ -81,6 +81,7 @@ function SupportContent({ examId }: { examId: string }) {
   return <AssessmentShell>
     <ExamDetailTabs examId={examId} active="support" />
     {!permissionsLoading && !allowed ? <p className="p-4 text-sm text-slate-500">Bạn chưa có quyền xem đánh giá học tập.</p> : loading ? <div role="status" className="flex items-center gap-2 rounded-lg bg-white p-6 text-sm"><LoaderCircle className="size-4 animate-spin" />Đang tổng hợp các bài kiểm tra cùng môn...</div> : error ? <div role="alert" className="rounded-lg bg-white p-4 text-sm text-rose-600">{error}<Button className="ml-3" size="sm" variant="outline" onClick={() => setReload((value) => value + 1)}>Thử lại</Button></div> : report ? <div className="space-y-3 text-[13px]">
+      {report.cache?.stale ? <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">Đang hiển thị bản tổng hợp gần nhất vì lần làm mới vừa rồi chưa thành công. Hãy thử tải lại sau.</p> : null}
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-card"><div><h1 className="text-lg font-bold text-slate-900">{toVietnameseSubjectName(report.subjectName)} · {report.className}</h1><p className="mt-1 text-slate-500">Theo dõi từ {report.examCount} bài kiểm tra đã mở · {report.students.length} học sinh · Cập nhật {new Date(report.generatedAt).toLocaleString("vi-VN")}</p></div><Button variant="outline" className="!text-[13px]" onClick={() => { setSelected(null); setReload((value) => value + 1); }}><RefreshCw className="size-4" />Tải lại đánh giá</Button></header>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[
         ["Cần ưu tiên hỗ trợ", report.students.filter((student) => student.level === "HIGH").length],
