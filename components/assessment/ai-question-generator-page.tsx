@@ -28,6 +28,7 @@ import {
   aiQuestionService,
   aiQuestionSettingsService,
 } from "@/lib/assessment-api";
+import { ApiError } from "@/lib/auth-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   Difficulty,
@@ -110,7 +111,53 @@ export function AiQuestionGeneratorPage() {
   const [savingDifficulty, setSavingDifficulty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const savedJobId = window.sessionStorage.getItem("ai-question-generation-job");
+    if (savedJobId) {
+      setGenerationJobId(savedJobId);
+      setGenerating(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!generationJobId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const job = await aiQuestionService.getJob(generationJobId);
+        if (cancelled) return;
+        if (job.status === "SUCCEEDED") {
+          setQuestions(job.questions);
+          setGenerating(false);
+          setGenerationJobId(null);
+          window.sessionStorage.removeItem("ai-question-generation-job");
+        } else if (job.status === "FAILED") {
+          setError(job.error || "Không thể tạo câu hỏi bằng AI.");
+          setGenerating(false);
+          setGenerationJobId(null);
+          window.sessionStorage.removeItem("ai-question-generation-job");
+        } else {
+          timer = setTimeout(poll, 3000);
+        }
+      } catch (cause) {
+        if (cancelled) return;
+        setError(errorMessage(cause, "Không thể kiểm tra trạng thái tạo câu hỏi"));
+        if (cause instanceof ApiError && cause.status === 404) {
+          setGenerating(false);
+          setGenerationJobId(null);
+          window.sessionStorage.removeItem("ai-question-generation-job");
+          return;
+        }
+        timer = setTimeout(poll, 5000);
+      }
+    };
+    void poll();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [generationJobId]);
 
   useEffect(() => {
     Promise.all([
@@ -194,10 +241,11 @@ export function AiQuestionGeneratorPage() {
     setGenerating(true);
     setQuestions([]);
     try {
-      setQuestions(await aiQuestionService.generate(form));
+      const job = await aiQuestionService.generate(form);
+      window.sessionStorage.setItem("ai-question-generation-job", job.id);
+      setGenerationJobId(job.id);
     } catch (cause) {
       setError(errorMessage(cause, "Không thể tạo câu hỏi bằng AI"));
-    } finally {
       setGenerating(false);
     }
   }

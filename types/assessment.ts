@@ -52,6 +52,13 @@ export interface GeneratedQuestion extends Omit<Question, "createdAt" | "updated
   updatedAt: string;
 }
 
+export interface AiQuestionJob {
+  id: string;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  error?: string | null;
+  questions: GeneratedQuestion[];
+}
+
 export interface GenerateAiQuestionsInput {
   materialId: string;
   subjectId?: string;

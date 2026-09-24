@@ -1,5 +1,5 @@
 import { authenticatedBlobRequest, authenticatedRequest, authenticatedUploadRequest, type UploadProgressPhase } from "@/lib/auth-api";
-import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
+import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, AiQuestionJob, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
 import type { StudentOverview } from "@/types/student-overview";
 
 export const academicDataService = {
@@ -340,11 +340,14 @@ export const questionBankService = {
 };
 
 export const aiQuestionService = {
-  generate(payload: GenerateAiQuestionsInput): Promise<GeneratedQuestion[]> {
-    return authenticatedRequest<GeneratedQuestion[]>("/ai-questions/generate", {
+  generate(payload: GenerateAiQuestionsInput): Promise<Pick<AiQuestionJob, "id" | "status">> {
+    return authenticatedRequest<Pick<AiQuestionJob, "id" | "status">>("/ai-questions/generate-async", {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+  getJob(id: string): Promise<AiQuestionJob> {
+    return authenticatedRequest<AiQuestionJob>(`/ai-questions/jobs/${encodeURIComponent(id)}`);
   },
   update(id: string, payload: UpdateGeneratedQuestionInput): Promise<GeneratedQuestion> {
     return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}`, {
