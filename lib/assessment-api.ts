@@ -1,5 +1,7 @@
+import type { AiQuestionDraft, AiQuestionDraftInput, ApprovedAiQuestion } from "@/types/assessment";
+import type { BaselineSelection, StudentEvidenceResult, StudyPracticeAttemptResult, StudyPracticeMode } from "@/types/assessment";
 import { authenticatedBlobRequest, authenticatedRequest, authenticatedUploadRequest, type UploadProgressPhase } from "@/lib/auth-api";
-import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
+import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFolder, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
 import type { StudentOverview } from "@/types/student-overview";
 
 export const academicDataService = {
@@ -297,6 +299,21 @@ export const academicDataService = {
 };
 
 export const questionBankService = {
+  getFolders(): Promise<QuestionFolder[]> {
+    return authenticatedRequest<QuestionFolder[]>("/question-bank/folders");
+  },
+  createFolder(payload: { name: string; parentId?: string }): Promise<QuestionFolder> {
+    return authenticatedRequest<QuestionFolder>("/question-bank/folders", { method: "POST", body: JSON.stringify(payload) });
+  },
+  renameFolder(id: string, name: string): Promise<QuestionFolder> {
+    return authenticatedRequest<QuestionFolder>(`/question-bank/folders/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) });
+  },
+  deleteFolder(id: string): Promise<Record<string, never>> {
+    return authenticatedRequest<Record<string, never>>(`/question-bank/folders/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  moveQuestionsToFolder(payload: { questionIds: string[]; folderId: string | null }): Promise<{ movedCount: number; folderId: string | null }> {
+    return authenticatedRequest<{ movedCount: number; folderId: string | null }>("/question-bank/move-folder", { method: "POST", body: JSON.stringify(payload) });
+  },
   getQuestions(filters: QuestionFilters = {}): Promise<Question[]> {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
@@ -340,6 +357,12 @@ export const questionBankService = {
 };
 
 export const aiQuestionService = {
+  getDraft(): Promise<AiQuestionDraft | null> {
+    return authenticatedRequest<AiQuestionDraft | null>("/ai-questions/draft");
+  },
+  saveDraft(payload: AiQuestionDraftInput): Promise<{ version: number; savedAt: string }> {
+    return authenticatedRequest("/ai-questions/draft", { method: "POST", body: JSON.stringify(payload) });
+  },
   generate(payload: GenerateAiQuestionsInput): Promise<GeneratedQuestion[]> {
     return authenticatedRequest<GeneratedQuestion[]>("/ai-questions/generate", {
       method: "POST",
@@ -362,6 +385,11 @@ export const aiQuestionService = {
       generatedQuestion: GeneratedQuestion;
       question: Question;
     }>(`/ai-questions/${encodeURIComponent(id)}/approve`, { method: "POST" });
+  },
+  approveMany(questionIds: string[]): Promise<ApprovedAiQuestion[]> {
+    return authenticatedRequest<ApprovedAiQuestion[]>("/ai-questions/approve-bulk", {
+      method: "POST", body: JSON.stringify({ questionIds }),
+    });
   },
   reject(id: string): Promise<GeneratedQuestion> {
     return authenticatedRequest<GeneratedQuestion>(`/ai-questions/${encodeURIComponent(id)}/reject`, {
@@ -410,6 +438,24 @@ export const teacherSettingsService = {
 };
 
 export const examService = {
+  getStudentEvidence(
+    examId: string,
+    studentId: string,
+  ): Promise<StudentEvidenceResult> {
+    return authenticatedRequest(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/evidence`,
+    );
+  },
+  selectStudentBaseline(
+    examId: string,
+    studentId: string,
+    input: { evidenceId: string; reason: string; expectedVersion: number },
+  ): Promise<BaselineSelection> {
+    return authenticatedRequest(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/baseline`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  },
   getExams(): Promise<Exam[]> {
     return authenticatedRequest<Exam[]>("/exams");
   },
@@ -478,6 +524,24 @@ export const examService = {
 };
 
 export const examAttemptService = {
+  startStudyPractice(
+    id: string,
+    attemptId: string,
+    mode: StudyPracticeMode,
+  ): Promise<StudyPracticeSet> {
+    return authenticatedRequest(
+      `/study-practice-sets/${encodeURIComponent(id)}/start`,
+      { method: "POST", body: JSON.stringify({ attemptId, mode }) },
+    );
+  },
+  getStudyPracticeAttempt(
+    id: string,
+    attemptId: string,
+  ): Promise<StudyPracticeAttemptResult> {
+    return authenticatedRequest(
+      `/study-practice-sets/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`,
+    );
+  },
   startExam(examId: string, accessCode?: string): Promise<ExamAttempt> {
     return authenticatedRequest<ExamAttempt>(`/exams/${encodeURIComponent(examId)}/attempts`, {
       method: "POST",
@@ -505,13 +569,30 @@ export const examAttemptService = {
   getStudyAnalysis(id: string): Promise<StudyAnalysis> {
     return authenticatedRequest<StudyAnalysis>(`/exam-attempts/${encodeURIComponent(id)}/study-analysis`);
   },
-  submitStudyPractice(id: string, answers: Array<{ questionId: string; selectedOptionIds: string[] }>): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
+  submitStudyPractice(
+    id: string,
+    answers: Array<{ questionId: string; selectedOptionIds: string[] }>,
+    attemptId: string,
+  ): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(
+      `/study-practice-sets/${encodeURIComponent(id)}/submit`,
+      { method: "POST", body: JSON.stringify({ answers, attemptId }) },
+    );
   },
-  retryStudyPractice(id: string): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  retryStudyPractice(id: string, attemptId: string): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(
+      `/study-practice-sets/${encodeURIComponent(id)}/retry`,
+      { method: "POST", body: JSON.stringify({ attemptId }) },
+    );
   },
-  getStudyPracticeHint(practiceSetId: string, questionId: string): Promise<{ questionId: string; message: string }> {
-    return authenticatedRequest<{ questionId: string; message: string }>(`/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`);
+  getStudyPracticeHint(
+    practiceSetId: string,
+    questionId: string,
+    attemptId: string,
+  ): Promise<{ questionId: string; message: string }> {
+    return authenticatedRequest<{ questionId: string; message: string }>(
+      `/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`,
+      { method: "POST", body: JSON.stringify({ attemptId }) },
+    );
   },
 };

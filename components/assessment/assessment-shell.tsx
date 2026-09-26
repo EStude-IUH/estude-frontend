@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { requestWorkspaceNavigation } from "@/lib/workspace-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
 import { StudentShell } from "@/components/student/student-shell";
@@ -223,7 +224,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
+                  onClick={() => { setIsAccountMenuOpen(false); requestWorkspaceNavigation(() => router.push("/help")); }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   <CircleHelp className="size-4" /> Trợ giúp
@@ -233,7 +234,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                   role="menuitem"
                   onClick={() => {
                     setIsAccountMenuOpen(false);
-                    if (user) router.push(getRoleSessionSettings(user.role));
+                    if (user) requestWorkspaceNavigation(() => router.push(getRoleSessionSettings(user.role)));
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
@@ -243,7 +244,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleSignOut()}
+                  onClick={() => requestWorkspaceNavigation(() => void handleSignOut())}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-rose-600 hover:bg-rose-50"
                 >
                   <LogOut className="size-4" /> Đăng xuất
@@ -300,7 +301,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (href) router.push(href);
+                    if (href) requestWorkspaceNavigation(() => router.push(href));
                     setIsMenuOpen(false);
                   }}
                   title={isSidebarCollapsed ? label : undefined}

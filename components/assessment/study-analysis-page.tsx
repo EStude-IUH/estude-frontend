@@ -27,6 +27,7 @@ import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { examAttemptService } from "@/lib/assessment-api";
 import { ApiError } from "@/lib/auth-api";
+import { PracticeAttemptHistory } from "./practice-attempt-history";
 import type {
   StudyAnalysis,
   StudyLearningPath,
@@ -146,6 +147,7 @@ export function StudentStudyAnalysisPage() {
           questionId: question.id,
           selectedOptionIds: answers[question.id] ?? [],
         })),
+        practice.attemptId,
       );
       setAnalysis((current) =>
         current ? { ...current, practiceSet: updated } : current,
@@ -172,11 +174,20 @@ export function StudentStudyAnalysisPage() {
     setRetrying(true);
     setError("");
     try {
-      const updated = await examAttemptService.retryStudyPractice(practice.id);
+      const updated = await examAttemptService.retryStudyPractice(
+        practice.id,
+        practice.attemptId,
+      );
       setAnalysis((current) =>
         current ? { ...current, practiceSet: updated } : current,
       );
-      setAnswers({});
+      setAnswers(
+        updated.status === "SUBMITTED"
+          ? Object.fromEntries(
+              updated.questions.map((q) => [q.id, q.selectedOptionIds ?? []]),
+            )
+          : {},
+      );
       setHints({});
     } catch (cause) {
       setError(
@@ -193,10 +204,36 @@ export function StudentStudyAnalysisPage() {
       const hint = await examAttemptService.getStudyPracticeHint(
         practice.id,
         questionId,
+        practice.attemptId,
       );
       setHints((current) => ({ ...current, [questionId]: hint.message }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể lấy gợi ý cách giải");
+      setError(
+        cause instanceof Error ? cause.message : "Không thể lấy gợi ý cách giải",
+      );
+    }
+  }
+
+  async function startPractice(mode: StudyPracticeMode) {
+    if (!practice) return false;
+    try {
+      const updated = await examAttemptService.startStudyPractice(
+        practice.id,
+        practice.attemptId,
+        mode,
+      );
+      setAnalysis((current) =>
+        current ? { ...current, practiceSet: updated } : current,
+      );
+      setError("");
+      return true;
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể bắt đầu lượt ôn tập",
+      );
+      return false;
     }
   }
 
@@ -206,10 +243,21 @@ export function StudentStudyAnalysisPage() {
     try {
       const updated = await examAttemptService.createStudyAnalysis(params.id);
       setAnalysis(updated);
-      setAnswers({});
+      setAnswers(
+        updated.practiceSet?.status === "SUBMITTED"
+          ? Object.fromEntries(
+              updated.practiceSet.questions.map((q) => [
+                q.id,
+                q.selectedOptionIds ?? [],
+              ]),
+            )
+          : {},
+      );
       setHints({});
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Chưa thể tạo lại nội dung ôn tập");
+      setError(
+        cause instanceof Error ? cause.message : "Chưa thể tạo lại nội dung ôn tập",
+      );
     } finally {
       setGenerating(false);
     }
@@ -284,7 +332,7 @@ export function StudentStudyAnalysisPage() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-blue-50 p-4">
-              <p className="text-xs font-semibold text-brand-600">Độ chính xác</p>
+              <p className="text-xs font-semibold text-brand-600">{report.performance.ungradedEssayCount ? "Độ chính xác phần đã chấm" : "Độ chính xác"}</p>
               <p className="mt-1 text-2xl font-black text-brand-800">
                 {report.performance.accuracy}%
               </p>
@@ -297,12 +345,15 @@ export function StudentStudyAnalysisPage() {
               </p>
             </div>
             <div className="rounded-xl bg-violet-50 p-4">
-              <p className="text-xs font-semibold text-violet-700">Điểm bài làm</p>
+              <p className="text-xs font-semibold text-violet-700">{report.performance.ungradedEssayCount ? "Điểm phần đã chấm" : "Điểm bài làm"}</p>
               <p className="mt-1 text-2xl font-black text-violet-800">{report.performance.score ?? "—"}/{report.performance.totalPoints}</p>
             </div>
           </div>
         </div>
       </section>
+
+      {report.performance.ungradedEssayCount > 0 ? <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Còn {report.performance.ungradedEssayCount} câu tự luận chờ chấm. Chưa có kết luận về tổng điểm hoàn chỉnh.</p> : null}
+      {report.performance.snapshotOrigin === "LEGACY_INCOMPLETE" ? <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Dữ liệu bài làm cũ chưa đủ để xác nhận tiến bộ. Hãy làm bài đánh giá mới để giáo viên chọn mốc ban đầu.</p> : null}
 
       <nav className="mt-5 flex w-full gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card sm:w-fit">
         <Button
@@ -343,7 +394,12 @@ export function StudentStudyAnalysisPage() {
             và các nguồn đã đối chiếu; chưa có bộ câu hỏi AI đạt kiểm tra chất lượng.
           </p>
           <Button variant="ghost" disabled={generating} onClick={() => void retryAnalysis()}>
-            {generating ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} Thử lại AI
+            {generating ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}{" "}
+            Thử lại AI
           </Button>
         </div>
       ) : null}
@@ -356,11 +412,17 @@ export function StudentStudyAnalysisPage() {
               <p className="mt-1 text-sm text-slate-500">Dựa trên bài này và {report.historyAnalysisCount ?? 0} bài đã được phân tích trước đó cùng môn/lớp. Mức nắm vững là ước lượng để chọn bài ôn, không phải điểm kiểm tra.</p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {report.learningProfile.map((topic) => (
-                  <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
+                  <div key={topic.objectiveId ?? topic.topicName} className="rounded-xl bg-slate-50 p-4">
                     <div className="flex justify-between gap-3"><h3 className="font-bold">{topic.topicName}</h3><span className="font-bold text-blue-700">{topic.masteryEstimate}%</span></div>
-                    <p className="mt-2 text-xs text-slate-500">{topic.sampleSize} câu quan sát · {topic.evidenceLevel === "LIMITED" ? "Cần thêm dữ liệu" : topic.trend === "IMPROVING" ? "Đang tiến bộ" : topic.trend === "DECLINING" ? "Cần củng cố lại" : topic.trend === "STABLE" ? "Tương đối ổn định" : "Chưa đủ dữ liệu so sánh"}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {topic.sampleSize} câu quan sát ·{" "}
+                      {topic.evidenceLevel === "LIMITED" ? "Cần thêm dữ liệu" : topic.trend === "IMPROVING" ? "Đang tiến bộ" : topic.trend === "DECLINING" ? "Cần củng cố lại" : topic.trend === "STABLE" ? "Tương đối ổn định" : "Chưa đủ dữ liệu so sánh"}
+                    </p>
                     <p className="mt-2 text-sm leading-6 text-slate-700">{topic.recommendation}</p>
-                    <p className="mt-2 text-xs font-semibold text-blue-700">Mức luyện đề xuất: {topic.recommendedDifficulty === "EASY" ? "Nền tảng" : topic.recommendedDifficulty === "MEDIUM" ? "Vận dụng" : "Nâng cao"}</p>
+                    <p className="mt-2 text-xs font-semibold text-blue-700">
+                      Mức luyện đề xuất: {" "}
+                      {topic.recommendedDifficulty === "EASY" ? "Nền tảng" : topic.recommendedDifficulty === "MEDIUM" ? "Vận dụng" : "Nâng cao"}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -369,7 +431,7 @@ export function StudentStudyAnalysisPage() {
           <LearningPathSection learningPath={report.learningPath} />
 
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-brand-700">
               <FileSearch className="size-5" />
             </span>
@@ -378,10 +440,10 @@ export function StudentStudyAnalysisPage() {
               <p className="text-xs text-slate-500">Ưu tiên phần có tỷ lệ thấp</p>
             </div>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {report.topicPerformance.map((topic) => (
-              <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3 text-sm">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {report.topicPerformance.map((topic) => (
+                <div key={topic.objectiveId ?? topic.topicName} className="rounded-xl bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="font-bold text-slate-700">
                     {topic.topicName}
                   </span>
@@ -389,29 +451,29 @@ export function StudentStudyAnalysisPage() {
                     {topic.accuracy}%
                   </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full ${topic.accuracy >= 80 ? "bg-emerald-500" : topic.accuracy >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
-                    style={{ width: `${topic.accuracy}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full ${topic.accuracy >= 80 ? "bg-emerald-500" : topic.accuracy >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
+                      style={{ width: `${topic.accuracy}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
                   {topic.correctCount}/{topic.totalQuestions} câu đúng
                 </p>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
           </section>
 
-        <div className="mt-6 space-y-4">
-          <div>
+          <div className="mt-6 space-y-4">
+            <div>
             <h2 className="text-xl font-black">Nội dung cần ôn lại</h2>
             <p className="mt-1 text-sm text-slate-500">
               Gợi ý được tách rõ theo nguồn để bạn biết nội dung nào thuộc tài
               liệu chính thức của lớp.
             </p>
           </div>
-          {report.weakAreas.length === 0 ? (
+            {report.weakAreas.length === 0 ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
               <CheckCircle2 className="mx-auto size-10 text-emerald-600" />
               <h3 className="mt-3 font-black text-emerald-800">
@@ -422,32 +484,32 @@ export function StudentStudyAnalysisPage() {
               </p>
             </div>
           ) : (
-            report.weakAreas.map((area) => {
-              const meta = sourceMeta[area.sourceType];
-              return (
-                <article
+              report.weakAreas.map((area) => {
+                const meta = sourceMeta[area.sourceType];
+                return (
+                  <article
                   key={area.id}
                   className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${meta.tone}`}
-                      >
-                        {meta.label}
-                      </span>
-                      <h3 className="mt-3 text-lg font-black">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${meta.tone}`}
+                        >
+                          {meta.label}
+                        </span>
+                        <h3 className="mt-3 text-lg font-black">
                         {area.topicName}
                       </h3>
-                    </div>
-                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                      </div>
+                      <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
                       Sai {area.missedCount}/{area.totalQuestions} câu
                     </span>
-                  </div>
-                  <p className="mt-4 text-sm font-semibold leading-6 text-slate-700">
+                    </div>
+                    <p className="mt-4 text-sm font-semibold leading-6 text-slate-700">
                     {area.diagnosis}
                   </p>
-                  <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                    <div className="mt-4 rounded-xl bg-slate-50 p-4">
                     <div className="flex items-center gap-2 text-sm font-black text-slate-800">
                       <Lightbulb className="size-4 text-amber-500" /> Gợi ý ôn tập
                     </div>
@@ -465,28 +527,28 @@ export function StudentStudyAnalysisPage() {
                       </ul>
                     ) : null}
                   </div>
-                  {area.sourceReferences.length ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {area.sourceReferences.map((source) => (
-                        <span
-                          key={`${source.documentName}-${source.page}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700"
-                        >
-                          <BookOpen className="size-3.5" /> {source.documentName} ·
-                          trang {source.page}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
+                    {area.sourceReferences.length ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {area.sourceReferences.map((source) => (
+                          <span
+                            key={`${source.documentName}-${source.page}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700"
+                          >
+                            <BookOpen className="size-3.5" />{" "}
+                            {source.documentName} · trang {source.page}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
                     <p className="mt-4 text-xs font-medium text-amber-700">
                       {meta.description}
                     </p>
                   )}
-                </article>
-              );
-            })
-          )}
-        </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
         </>
       ) : null}
 
@@ -502,6 +564,7 @@ export function StudentStudyAnalysisPage() {
           onSubmit={() => void submitPractice()}
           onRetry={() => void retryPractice()}
           onGetHint={(questionId) => void getHint(questionId)}
+          onStart={startPractice}
         />
       ) : null}
     </StudentShell>
@@ -590,6 +653,7 @@ function PracticeSection({
   onSubmit,
   onRetry,
   onGetHint,
+  onStart,
 }: {
   practice: StudyPracticeSet | null;
   answers: Record<string, string[]>;
@@ -601,19 +665,38 @@ function PracticeSection({
   onSubmit: () => void;
   onRetry: () => void;
   onGetHint: (questionId: string) => void;
+  onStart: (mode: StudyPracticeMode) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<StudyPracticeMode>("EASY");
   const [started, setStarted] = useState(false);
   const [index, setIndex] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [starting, setStarting] = useState(false);
   const submitted = practice?.status === "SUBMITTED";
   const practiceDuration = Math.max(300, (practice?.totalQuestions ?? 0) * 120);
 
   useEffect(() => {
-    setStarted(false);
+    setStarted(
+      Boolean(practice?.startedAt) && practice?.status !== "SUBMITTED",
+    );
+    setMode(practice?.mode === "HARD" ? "HARD" : "EASY");
     setIndex(0);
-    setRemainingSeconds(practiceDuration);
-  }, [practice?.id, practice?.status, practiceDuration]);
+    setRemainingSeconds(
+      practice?.startedAt
+        ? Math.max(
+            0,
+            practiceDuration -
+              Math.floor((Date.now() - Date.parse(practice.startedAt)) / 1000),
+          )
+        : practiceDuration,
+    );
+  }, [
+    practice?.attemptId,
+    practice?.status,
+    practiceDuration,
+    practice?.mode,
+    practice?.startedAt,
+  ]);
 
   useEffect(() => {
     if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0) return;
@@ -633,12 +716,20 @@ function PracticeSection({
   const currentQuestion = practice.questions[index];
   return (
     <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
+      <PracticeAttemptHistory
+        key={practice.id}
+        practiceSetId={practice.id}
+        items={practice.attemptHistory ?? []}
+      />
       {submitted && practice.feedback?.length ? (
         <div className="mb-5 space-y-3 rounded-xl bg-emerald-50 p-4">
           <h3 className="font-black text-emerald-900">Bước học tiếp theo</h3>
           {practice.feedback.map((item) => (
-            <div key={item.topicName} className="text-sm leading-6 text-emerald-900">
-              <p className="font-bold">{item.topicName}: {item.correctCount}/{item.totalQuestions} câu đúng · Ôn lại ngày {new Date(item.reviewAt).toLocaleDateString("vi-VN")}</p>
+            <div key={item.objectiveId ?? item.topicName} className="text-sm leading-6 text-emerald-900">
+              <p className="font-bold">
+                {item.topicName}: {item.correctCount}/{item.totalQuestions} câu đúng · Ôn lại ngày {" "}
+                {new Date(item.reviewAt).toLocaleDateString("vi-VN")}
+              </p>
               <p>{item.recommendation}</p>
             </div>
           ))}
@@ -665,11 +756,17 @@ function PracticeSection({
             </p>
           </div>
         ) : mode === "HARD" && started ? (
-          <div className={`rounded-xl px-4 py-3 text-right ${timeExpired ? "bg-rose-50" : "bg-slate-100"}`}>
-            <p className={`text-xs font-bold ${timeExpired ? "text-rose-600" : "text-slate-500"}`}>
+          <div
+            className={`rounded-xl px-4 py-3 text-right ${timeExpired ? "bg-rose-50" : "bg-slate-100"}`}
+          >
+            <p
+              className={`text-xs font-bold ${timeExpired ? "text-rose-600" : "text-slate-500"}`}
+            >
               {timeExpired ? "Đã hết thời gian" : "Thời gian còn lại"}
             </p>
-            <p className={`text-2xl font-black ${timeExpired ? "text-rose-700" : "text-slate-800"}`}>
+            <p
+              className={`text-2xl font-black ${timeExpired ? "text-rose-700" : "text-slate-800"}`}
+            >
               {formattedRemaining}
             </p>
           </div>
@@ -734,13 +831,44 @@ function PracticeSection({
           {!started ? (
             <div className="mt-4 flex justify-end">
               <Button
-                onClick={() => {
-                  setRemainingSeconds(practiceDuration);
-                  setStarted(true);
+                disabled={starting}
+                onClick={async () => {
+                  setStarting(true);
+                  try {
+                    if (await onStart(mode)) {
+                      setRemainingSeconds(
+                        practice.startedAt
+                          ? Math.max(
+                              0,
+                              practiceDuration -
+                                Math.floor(
+                                  (Date.now() -
+                                    Date.parse(practice.startedAt)) /
+                                    1000,
+                                ),
+                            )
+                          : practiceDuration,
+                      );
+                      setStarted(true);
+                    }
+                  } finally {
+                    setStarting(false);
+                  }
                 }}
               >
-                {mode === "HARD" ? <TimerReset className="size-4" /> : <BrainCircuit className="size-4" />}
-                Bắt đầu luyện tập {mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}
+                {mode === "HARD" ? (
+                  <TimerReset className="size-4" />
+                ) : (
+                  <BrainCircuit className="size-4" />
+                )}
+                {starting
+                  ? "Đang bắt đầu..."
+                  : practice.startedAt
+                    ? "Tiếp tục luyện tập"
+                    : "Bắt đầu luyện tập"}{" "}
+                {mode === "HARD"
+                  ? `(${Math.ceil(practiceDuration / 60)} phút)`
+                  : ""}
               </Button>
             </div>
           ) : null}
@@ -765,32 +893,33 @@ function PracticeSection({
         />
       ) : null}
 
-      {submitted ? <div className="mt-6 space-y-5">
-        {practice.questions.map((question, index) => (
-          <article
+      {submitted ? (
+        <div className="mt-6 space-y-5">
+          {practice.questions.map((question, index) => (
+            <article
             key={question.id}
             className="rounded-2xl border border-slate-200 p-5"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
                 <p className="text-xs font-black text-brand-600">
                   Câu {index + 1} · {question.topicName}
                 </p>
                 <h3 className="mt-2 font-bold leading-6">{question.content}</h3>
               </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}
-              >
-                {sourceMeta[question.sourceType].label}
-              </span>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {question.options.map((option) => {
-                const selected = answers[question.id]?.includes(option.id);
-                const isCorrectOption = question.correctOptionIds?.includes(
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}
+                >
+                  {sourceMeta[question.sourceType].label}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {question.options.map((option) => {
+                  const selected = answers[question.id]?.includes(option.id);
+                  const isCorrectOption = question.correctOptionIds?.includes(
                   option.id,
                 );
-                const tone = submitted
+                  const tone = submitted
                   ? isCorrectOption
                     ? "border-emerald-400 bg-emerald-50 text-emerald-800"
                     : selected
@@ -799,32 +928,32 @@ function PracticeSection({
                   : selected
                     ? "border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-100"
                     : "border-slate-200 text-slate-700 hover:border-brand-300";
-                return (
-                  <button
-                    type="button"
+                  return (
+                    <button
+                      type="button"
                     key={option.id}
                     disabled={locked}
                     onClick={() => onChoose(question.id, option.id)}
                     className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-semibold transition ${tone}`}
-                  >
-                    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/80 text-xs font-black">
+                    >
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/80 text-xs font-black">
                       {option.label}
                     </span>
-                    {option.text}
-                  </button>
-                );
-              })}
-            </div>
-            {submitted ? (
-              <div
-                className={`mt-4 rounded-xl p-4 text-sm ${question.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}
-              >
-                <p className="font-black">
+                      {option.text}
+                    </button>
+                  );
+                })}
+              </div>
+              {submitted ? (
+                <div
+                  className={`mt-4 rounded-xl p-4 text-sm ${question.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}
+                >
+                  <p className="font-black">
                   {question.correct ? "Trả lời đúng" : "Cần ôn lại phần này"}
                 </p>
-                <p className="mt-1 leading-6">{question.explanation}</p>
-              </div>
-            ) : mode === "EASY" ? (
+                  <p className="mt-1 leading-6">{question.explanation}</p>
+                </div>
+              ) : mode === "EASY" ? (
               <div className="mt-4">
                 {hints[question.id] ? (
                   <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
@@ -842,9 +971,10 @@ function PracticeSection({
                 )}
               </div>
             ) : null}
-          </article>
-        ))}
-      </div> : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       {submitted && practice.correctCount !== practice.totalQuestions ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
@@ -854,7 +984,11 @@ function PracticeSection({
               : "Bạn có thể bắt đầu một lượt mô phỏng mới nếu muốn thử lại."}
           </p>
           <Button variant="outline" disabled={retrying} onClick={onRetry}>
-            {retrying ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+            {retrying ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}
             {retrying ? "Đang tạo lượt mới..." : "Làm lại"}
           </Button>
         </div>

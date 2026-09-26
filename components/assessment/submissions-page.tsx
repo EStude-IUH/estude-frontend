@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader } fr
 import { Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { examService } from "@/lib/assessment-api";
+import { StudentEvidencePanel } from "./student-evidence-panel";
 import { matchesSearchKeyword, normalizeSearchKeyword } from "@/lib/search-keyword";
 import type { Exam, ExamAttempt, ExamClassAiAnalysis, ExamClassReport, ExamClassReportStudent, TeacherReviewStatus } from "@/types/assessment";
 
@@ -971,7 +972,7 @@ export function SubmissionDetailPage() {
               </span>
             ) : null}
             <span>
-              Điểm:{" "}
+              {data.exam.questions.some((q) => q.question?.type === "ESSAY") ? "Điểm phần đã chấm" : "Điểm"}:{" "}
               <b>
                 {data.score ?? "—"}/{data.exam.totalPoints}
               </b>
@@ -985,6 +986,7 @@ export function SubmissionDetailPage() {
           </div>
         </section>
 
+        <StudentEvidencePanel key={`${params.id}:${data.studentId}`} examId={params.id} studentId={data.studentId} />
         <div className="space-y-4">
           {orderedQuestions.map((examQuestion, index) => {
             const question = examQuestion.question;

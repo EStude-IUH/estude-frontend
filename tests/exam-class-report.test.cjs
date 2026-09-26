@@ -203,6 +203,7 @@ test("teacher class report separates students from attempts and supports reviewe
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id === "./student-evidence-panel") return { StudentEvidencePanel: () => null };
     if (id === "@/lib/search-keyword") {
       const searchFile = path.resolve("lib/search-keyword.ts");
       const searchModule = new Module(searchFile, module);

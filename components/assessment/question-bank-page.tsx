@@ -17,6 +17,7 @@ import {
   PageHeading,
 } from "@/components/assessment/assessment-shell";
 import { QuestionEditorForm } from "@/components/assessment/question-editor-page";
+import { QuestionFolderTree, folderDescendantIds, type FolderSelection } from "@/components/assessment/question-folder-tree";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -43,6 +44,7 @@ import {
   QUESTION_TYPE_LABELS,
   type Difficulty,
   type Question,
+  type QuestionFolder,
   type QuestionType,
   type Subject,
   type Topic,
@@ -58,6 +60,14 @@ const difficultyTone: Record<Difficulty, string> = {
 export function QuestionBankPage() {
   const { can } = usePermissions();
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [folders, setFolders] = useState<QuestionFolder[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<FolderSelection>("all");
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; parentId: string | null } | { mode: "rename"; folder: QuestionFolder } | null>(null);
+  const [folderName, setFolderName] = useState("");
+  const [folderBusy, setFolderBusy] = useState(false);
+  const [folderError, setFolderError] = useState("");
+  const [folderMoveOpen, setFolderMoveOpen] = useState(false);
+  const [targetFolderId, setTargetFolderId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -110,8 +120,32 @@ export function QuestionBankPage() {
     void load();
   }, [load]);
 
-  const totalPages = Math.max(1, Math.ceil(questions.length / pageSize));
-  const sortedQuestions = [...questions].sort(
+  useEffect(() => {
+    void questionBankService.getFolders().then(setFolders).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : "Không thể tải thư mục câu hỏi");
+    });
+  }, []);
+
+  useEffect(() => {
+    const folderId = new URLSearchParams(window.location.search).get("folderId");
+    if (folderId) setSelectedFolder(folderId);
+  }, []);
+
+  const folderIds = selectedFolder !== "all" && selectedFolder !== "unfiled"
+    ? folderDescendantIds(folders, selectedFolder) : null;
+  const visibleQuestions = questions.filter((question) =>
+    selectedFolder === "all" ? true
+      : selectedFolder === "unfiled" ? !question.folderId
+        : folderIds?.has(question.folderId ?? "") ?? false,
+  );
+  const folderCounts: Record<string, number> = { all: questions.length, unfiled: 0 };
+  for (const question of questions) {
+    if (question.folderId) folderCounts[question.folderId] = (folderCounts[question.folderId] ?? 0) + 1;
+    else folderCounts.unfiled += 1;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visibleQuestions.length / pageSize));
+  const sortedQuestions = [...visibleQuestions].sort(
     (left, right) =>
       Number(Boolean(left.disabled)) - Number(Boolean(right.disabled)),
   );
@@ -119,7 +153,7 @@ export function QuestionBankPage() {
     (page - 1) * pageSize,
     page * pageSize,
   );
-  const selectedQuestions = questions.filter((question) =>
+  const selectedQuestions = visibleQuestions.filter((question) =>
     selectedIds.includes(question.id),
   );
   const allPageQuestionsSelected =
@@ -163,6 +197,65 @@ export function QuestionBankPage() {
         ? ids.filter((id) => !pageIds.includes(id))
         : [...new Set([...ids, ...pageIds])],
     );
+  }
+
+  function selectFolder(id: FolderSelection) {
+    setSelectedFolder(id);
+    setSelectedIds([]);
+    setPage(1);
+  }
+
+  function openCreateFolder(parentId: string | null) {
+    setFolderDialog({ mode: "create", parentId });
+    setFolderName("");
+    setFolderError("");
+  }
+
+  async function saveFolder() {
+    if (!folderDialog) return;
+    setFolderBusy(true);
+    setFolderError("");
+    try {
+      if (folderDialog.mode === "create") {
+        const created = await questionBankService.createFolder({ name: folderName.trim(), ...(folderDialog.parentId ? { parentId: folderDialog.parentId } : {}) });
+        setFolders((items) => [...items, created]);
+        selectFolder(created.id);
+      } else {
+        const updated = await questionBankService.renameFolder(folderDialog.folder.id, folderName.trim());
+        setFolders((items) => items.map((item) => item.id === updated.id ? updated : item));
+      }
+      setFolderDialog(null);
+    } catch (cause) {
+      setFolderError(cause instanceof Error ? cause.message : "Không thể lưu thư mục");
+    } finally {
+      setFolderBusy(false);
+    }
+  }
+
+  async function deleteFolder(folder: QuestionFolder) {
+    if (!window.confirm(`Xóa thư mục trống “${folder.name}”?`)) return;
+    try {
+      await questionBankService.deleteFolder(folder.id);
+      setFolders((items) => items.filter((item) => item.id !== folder.id));
+      if (selectedFolder === folder.id) selectFolder("all");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể xóa thư mục");
+    }
+  }
+
+  async function moveSelectedToFolder() {
+    setFolderBusy(true);
+    setFolderError("");
+    try {
+      await questionBankService.moveQuestionsToFolder({ questionIds: selectedIds, folderId: targetFolderId || null });
+      setQuestions((items) => items.map((item) => selectedIds.includes(item.id) ? { ...item, folderId: targetFolderId || null } : item));
+      setSelectedIds([]);
+      setFolderMoveOpen(false);
+    } catch (cause) {
+      setFolderError(cause instanceof Error ? cause.message : "Không thể chuyển câu hỏi");
+    } finally {
+      setFolderBusy(false);
+    }
   }
 
   async function openMoveModal() {
@@ -334,16 +427,17 @@ export function QuestionBankPage() {
               />
             </div>
 
-            <div className="flex shrink-0 flex-nowrap justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
               {selectedIds.length ? (
-                <Button permission="questions.update"
-                  variant="outline"
-                  className="!h-[42px] !rounded-lg"
-                  onClick={() => void openMoveModal()}
-                >
-                  <FolderInput className="size-4" />
-                  Di chuyển môn ({selectedIds.length})
-                </Button>
+                <>
+                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg" onClick={() => { setFolderError(""); setTargetFolderId(selectedFolder === "all" || selectedFolder === "unfiled" ? "" : selectedFolder); setFolderMoveOpen(true); }}>
+                    <FolderInput className="size-4" />
+                    Chuyển vào thư mục ({selectedIds.length})
+                  </Button>
+                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg" onClick={() => void openMoveModal()}>
+                    Di chuyển môn
+                  </Button>
+                </>
               ) : null}
               <Link href="/teacher/question-bank/generate">
                 <Button permission="ai_questions.create" variant="secondary" className="!h-[42px] !rounded-lg">
@@ -351,7 +445,7 @@ export function QuestionBankPage() {
                   Tạo bằng AI
                 </Button>
               </Link>
-              <Link href="/teacher/question-bank/new">
+              <Link href={selectedFolder === "all" || selectedFolder === "unfiled" ? "/teacher/question-bank/new" : `/teacher/question-bank/new?folderId=${encodeURIComponent(selectedFolder)}`}>
                 <Button permission="questions.create" className="!h-[42px] !rounded-lg">
                   <Plus className="size-4" />
                   Tạo câu hỏi
@@ -361,7 +455,31 @@ export function QuestionBankPage() {
           </div>
         </section>
 
-        <section className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
+        <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
+        <aside className="flex max-h-64 shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card lg:max-h-none lg:w-64">
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Thư mục câu hỏi</h2>
+              <p className="text-xs text-slate-500">Tối đa 3 cấp</p>
+            </div>
+            {can("questions.create") ? <button type="button" className="rounded-lg p-2 text-brand-600 hover:bg-blue-50" title="Tạo thư mục gốc" aria-label="Tạo thư mục gốc" onClick={() => openCreateFolder(null)}><Plus className="size-4" /></button> : null}
+          </div>
+          <div className="overflow-y-auto p-2">
+            <QuestionFolderTree
+              folders={folders}
+              selected={selectedFolder}
+              counts={folderCounts}
+              canCreate={can("questions.create")}
+              canUpdate={can("questions.update")}
+              canDelete={can("questions.delete")}
+              onSelect={selectFolder}
+              onCreate={openCreateFolder}
+              onRename={(folder) => { setFolderDialog({ mode: "rename", folder }); setFolderName(folder.name); setFolderError(""); }}
+              onDelete={(folder) => void deleteFolder(folder)}
+            />
+          </div>
+        </aside>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-card">
           {error ? (
             <div className="m-4">
               <ErrorPanel message={error} />
@@ -390,7 +508,7 @@ export function QuestionBankPage() {
               </TableHeader>
               <TableBody>
                 {loading ? <TableLoadingBarRow colSpan={7} /> : null}
-                {!loading && questions.length === 0 ? (
+                {!loading && visibleQuestions.length === 0 ? (
                   <TableEmptyRow
                     colSpan={7}
                     icon={<FileQuestion className="size-5 text-slate-400" />}
@@ -505,7 +623,7 @@ export function QuestionBankPage() {
           <DataTableFooter
             className="shrink-0 bg-white"
             rowCount={pagedQuestions.length}
-            totalItems={questions.length}
+            totalItems={visibleQuestions.length}
             itemLabel="câu hỏi"
             page={page}
             totalPages={totalPages}
@@ -517,6 +635,7 @@ export function QuestionBankPage() {
             }}
           />
         </section>
+        </div>
       </div>
       {editingQuestion ? (
         <Modal
@@ -545,6 +664,41 @@ export function QuestionBankPage() {
           />
         </Modal>
       ) : null}
+      <Modal
+        open={folderDialog !== null}
+        title={folderDialog?.mode === "rename" ? "Đổi tên thư mục" : "Tạo thư mục"}
+        description={folderDialog?.mode === "create" ? `Cấp ${folderDialog.parentId ? (folders.find((folder) => folder.id === folderDialog.parentId)?.depth ?? 0) + 1 : 1} trên tối đa 3 cấp.` : undefined}
+        onClose={() => { if (!folderBusy) setFolderDialog(null); }}
+        footer={<>
+          <Button variant="outline" disabled={folderBusy} onClick={() => setFolderDialog(null)}>Hủy</Button>
+          <Button disabled={folderBusy || !folderName.trim()} onClick={() => void saveFolder()}>{folderBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}Lưu thư mục</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          {folderError ? <ErrorPanel message={folderError} /> : null}
+          <Input label="Tên thư mục" value={folderName} maxLength={80} autoFocus placeholder="Ví dụ: Sinh học 12" onChange={(event) => setFolderName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && folderName.trim()) void saveFolder(); }} />
+        </div>
+      </Modal>
+      <Modal
+        open={folderMoveOpen}
+        title={`Chuyển ${selectedIds.length} câu hỏi vào thư mục`}
+        description="Có thể chọn thư mục ở bất kỳ cấp nào hoặc đưa câu hỏi về Chưa xếp thư mục."
+        onClose={() => { if (!folderBusy) setFolderMoveOpen(false); }}
+        footer={<>
+          <Button variant="outline" disabled={folderBusy} onClick={() => setFolderMoveOpen(false)}>Hủy</Button>
+          <Button permission="questions.update" disabled={folderBusy || !selectedIds.length} onClick={() => void moveSelectedToFolder()}>{folderBusy ? <LoaderCircle className="size-4 animate-spin" /> : <FolderInput className="size-4" />}Chuyển câu hỏi</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          {folderError ? <ErrorPanel message={folderError} /> : null}
+          <CustomSelect
+            label="Thư mục đích"
+            value={targetFolderId}
+            options={[{ value: "", label: "Chưa xếp thư mục" }, ...folders.map((folder) => ({ value: folder.id, label: `${"　".repeat(folder.depth - 1)}${folder.name}` }))]}
+            onValueChange={setTargetFolderId}
+          />
+        </div>
+      </Modal>
       <Modal
         open={moveModalOpen}
         title={`Di chuyển môn cho ${selectedIds.length} câu hỏi`}

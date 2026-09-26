@@ -9,6 +9,7 @@ export interface QuestionOption {
 
 export interface Question {
   id: string;
+  folderId?: string | null;
   subjectId: string;
   subjectName: string;
   topicId: string | null;
@@ -27,6 +28,15 @@ export interface Question {
   generatedByAi?: boolean;
   sourceMaterialId?: string | null;
   source?: QuestionSource | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuestionFolder {
+  id: string;
+  parentId: string | null;
+  name: string;
+  depth: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +62,11 @@ export interface GeneratedQuestion extends Omit<Question, "createdAt" | "updated
   updatedAt: string;
 }
 
+export interface ApprovedAiQuestion {
+  generatedQuestion: GeneratedQuestion;
+  question: Question;
+}
+
 export interface GenerateAiQuestionsInput {
   materialId: string;
   subjectId?: string;
@@ -62,6 +77,27 @@ export interface GenerateAiQuestionsInput {
   difficulty: Difficulty;
   quantity: number;
   includeExplanation: boolean;
+}
+
+export interface AiQuestionEditDraft {
+  questionId: string;
+  content: string;
+  difficulty: Difficulty;
+  options: QuestionOption[];
+  correctOptionIds: string[];
+  explanation: string;
+}
+export interface AiQuestionDraftInput {
+  form: GenerateAiQuestionsInput;
+  questionIds: string[];
+  edits: AiQuestionEditDraft[];
+  expectedVersion: number;
+}
+export interface AiQuestionDraft extends Omit<AiQuestionDraftInput, "expectedVersion"> {
+  questions: GeneratedQuestion[];
+  version: number;
+  savedAt: string;
+  missingQuestionIds: string[];
 }
 
 export interface DifficultyLevelDefinition {
@@ -104,6 +140,7 @@ export interface QuestionFilters {
 }
 
 export interface QuestionInput {
+  folderId?: string | null;
   subjectId: string;
   subjectName: string;
   topicId: string | null;
@@ -291,7 +328,18 @@ export interface StudentCourseTopic {
 export interface StudentCourseDetail extends StudentCourse {
   enrollment: { joinedAt: string };
   academicYear: Pick<AcademicYear, "id" | "name" | "startsAt" | "endsAt" | "status"> | null;
-  terms: Array<Pick<Term, "id" | "name" | "startsAt" | "endsAt" | "displayOrder" | "status" | "isActive">>;
+  terms: Array<
+    Pick<
+      Term,
+      | "id"
+      | "name"
+      | "startsAt"
+      | "endsAt"
+      | "displayOrder"
+      | "status"
+      | "isActive"
+    >
+  >;
   studentCount: number;
   topics: StudentCourseTopic[];
 }
@@ -572,10 +620,29 @@ export interface ExamClassQuestionPerformance {
     discriminationSampleSize: number;
     discriminationMethod: "CORRECTED_ITEM_TOTAL_CORRELATION";
     evidenceLevel: "LIMITED" | "DEVELOPING" | "ESTABLISHED";
-    difficultyLevel: "NOT_APPLICABLE" | "VERY_DIFFICULT" | "DIFFICULT" | "MODERATE" | "EASY" | "VERY_EASY";
+    difficultyLevel:
+      | "NOT_APPLICABLE"
+      | "VERY_DIFFICULT"
+      | "DIFFICULT"
+      | "MODERATE"
+      | "EASY"
+      | "VERY_EASY";
     discriminationIndex: number | null;
-    discriminationLevel: "INSUFFICIENT_DATA" | "NEGATIVE" | "POOR" | "ACCEPTABLE" | "GOOD" | "EXCELLENT";
-    flags: Array<"LOW_SAMPLE" | "TOO_DIFFICULT" | "TOO_EASY" | "NEGATIVE_DISCRIMINATION" | "LOW_DISCRIMINATION" | "NON_FUNCTIONING_DISTRACTOR">;
+    discriminationLevel:
+      | "INSUFFICIENT_DATA"
+      | "NEGATIVE"
+      | "POOR"
+      | "ACCEPTABLE"
+      | "GOOD"
+      | "EXCELLENT";
+    flags: Array<
+      | "LOW_SAMPLE"
+      | "TOO_DIFFICULT"
+      | "TOO_EASY"
+      | "NEGATIVE_DISCRIMINATION"
+      | "LOW_DISCRIMINATION"
+      | "NON_FUNCTIONING_DISTRACTOR"
+    >;
   };
 }
 
@@ -756,6 +823,7 @@ export interface ExamListAiAnalysis extends ExamClassAiAnalysis {
 export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
 
 export interface StudyLearningProfile {
+  objectiveId?: string;
   topicName: string;
   masteryEstimate: number;
   sampleSize: number;
@@ -768,6 +836,7 @@ export interface StudyLearningProfile {
 }
 
 export interface StudyTopicPerformance {
+  objectiveId?: string;
   topicName: string;
   totalQuestions: number;
   correctCount: number;
@@ -778,6 +847,7 @@ export interface StudyTopicPerformance {
 }
 
 export interface StudyWeakArea {
+  objectiveId?: string;
   id: string;
   topicName: string;
   sourceType: StudySourceType;
@@ -793,6 +863,7 @@ export interface StudyWeakArea {
 export type StudyPerformanceLevel = "PENDING" | "BELOW_AVERAGE" | "AVERAGE_TO_GOOD" | "STRONG";
 
 export interface StudyLearningPathStep {
+  objectiveId?: string;
   order: number;
   topicName: string;
   title: string;
@@ -827,6 +898,8 @@ export interface StudyAnalysisReport {
     correctCount: number;
     totalQuestions: number;
     ungradedEssayCount: number;
+    gradingStatus?: "COMPLETE" | "PARTIAL";
+    snapshotOrigin?: "ORIGINAL" | "LEGACY_INCOMPLETE";
     scorePercentage: number | null;
     level: StudyPerformanceLevel;
     needsWarning: boolean;
@@ -838,6 +911,7 @@ export interface StudyAnalysisReport {
 
 export interface StudyPracticeQuestion {
   id: string;
+  objectiveId?: string;
   topicName: string;
   sourceType: StudySourceType;
   content: string;
@@ -850,6 +924,7 @@ export interface StudyPracticeQuestion {
 
 export interface StudyPracticeSet {
   feedback?: Array<{
+    objectiveId?: string;
     topicName: string;
     accuracy: number;
     correctCount: number;
@@ -859,6 +934,12 @@ export interface StudyPracticeSet {
     recommendation: string;
   }>;
   id: string;
+  attemptId: string;
+  attemptNumber: number;
+  startedAt: string | null;
+  mode: StudyPracticeMode | "UNSPECIFIED";
+  assistance: string;
+  attemptHistory: StudyPracticeAttemptSummary[];
   analysisId: string;
   status: "READY" | "SUBMITTED";
   score: number | null;
@@ -866,6 +947,93 @@ export interface StudyPracticeSet {
   submittedAt: string | null;
   questions: StudyPracticeQuestion[];
   totalQuestions: number;
+}
+
+export interface StudyPracticeAttemptSummary {
+  id: string;
+  attemptNumber: number;
+  status: "READY" | "SUBMITTED";
+  score: number | null;
+  correctCount: number | null;
+  totalQuestions: number;
+  startedAt: string | null;
+  submittedAt: string | null;
+  durationSeconds: number | null;
+  mode: StudyPracticeMode | "UNSPECIFIED";
+  assistance: string;
+  hintQuestionIds: string[];
+  legacy: boolean;
+  snapshotVersion: string;
+  gradingVersion: string;
+}
+
+export interface StudyPracticeAttemptResult extends StudyPracticeAttemptSummary {
+  questions: StudyPracticeQuestion[];
+}
+
+export interface AssessmentEvidence {
+  id: string;
+  objectiveId: string;
+  source: "ASSIGNED_EXAM" | "STUDY_PRACTICE";
+  sourceTitle: string;
+  sourceAttemptId: string;
+  observedAt: string;
+  gradingStatus: "COMPLETE" | "PARTIAL";
+  snapshotOrigin: string;
+  assistance: string;
+  totalQuestions: number;
+  scorableCount: number;
+  correctCount: number;
+  accuracy: number | null;
+  baselineEligible: boolean;
+  ineligibleReason: string | null;
+  objective: {
+    id: string;
+    title: string;
+    granularity: string;
+    version: number;
+  };
+  questionSnapshot: Array<{
+    questionId: string;
+    order: number;
+    content: string;
+    type: QuestionType;
+    difficulty: string;
+    imageEnabled?: boolean;
+    imageUrl?: string | null;
+    options: Array<{ id: string; label: string; text: string }>;
+    correctOptionIds: string[];
+    explanation: string;
+  }>;
+  answers: Array<{
+    questionId: string;
+    selectedOptionIds: string[];
+    essayText?: string;
+  }>;
+}
+
+export interface BaselineSelection {
+  id: string;
+  studentId: string;
+  objectiveId: string;
+  evidenceId: string;
+  reason: string;
+  version: number;
+  selectedAt: string;
+}
+
+export interface StudentEvidenceResult {
+  items: AssessmentEvidence[];
+  baselines: BaselineSelection[];
+  baselineHistory: Array<{
+    id: string;
+    selectionId: string;
+    evidenceId: string;
+    reason: string;
+    version: number;
+    selectedAt: string;
+  }>;
+  missingSnapshotAttemptIds: string[];
 }
 
 export type StudyPracticeMode = "EASY" | "HARD";

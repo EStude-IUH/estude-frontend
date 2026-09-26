@@ -13,7 +13,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AssessmentShell,
   ErrorPanel,
@@ -28,8 +28,10 @@ import {
   aiQuestionService,
   aiQuestionSettingsService,
 } from "@/lib/assessment-api";
+import { UnsavedQuestionChanges } from "./unsaved-question-changes";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
+  AiQuestionEditDraft,
   Difficulty,
   DifficultyLevelDefinition,
   GenerateAiQuestionsInput,
@@ -110,15 +112,59 @@ export function AiQuestionGeneratorPage() {
   const [savingDifficulty, setSavingDifficulty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [bulkQuantity, setBulkQuantity] = useState(0);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [reviewingIds, setReviewingIds] = useState<string[]>([]);
+  const [busyQuestionIds, setBusyQuestionIds] = useState<string[]>([]);
+  const bulkInFlight = useRef(false);
+  const onReviewingChange = useCallback((id: string, active: boolean, busy = false) => {
+    setBusyQuestionIds((current) => busy ? (current.includes(id) ? current : [...current, id]) : current.filter((value) => value !== id));
+    setReviewingIds((current) => active
+      ? (current.includes(id) ? current : [...current, id])
+      : current.filter((value) => value !== id));
+  }, []);
   const [error, setError] = useState("");
+  const [editDrafts, setEditDrafts] = useState<Record<string, AiQuestionEditDraft>>({});
+  const [draftVersion, setDraftVersion] = useState(0);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const draftSaveInFlight = useRef(false);
+  const [draftAvailable, setDraftAvailable] = useState(true);
+  const [draftMessage, setDraftMessage] = useState("");
+  const onEditDraftChange = useCallback((id: string, draft: AiQuestionEditDraft | null) => {
+    setEditDrafts((current) => {
+      if (JSON.stringify(current[id] ?? null) === JSON.stringify(draft)) return current;
+      const next = { ...current };
+      if (draft) next[id] = draft; else delete next[id];
+      return next;
+    });
+  }, []);
+  const workspace = { form, questionIds: questions.map((q) => q.id),
+    edits: questions.flatMap((q) => editDrafts[q.id] ? [editDrafts[q.id]] : []) };
+  const snapshot = JSON.stringify(workspace);
+  const dirty = savedSnapshot !== null && snapshot !== savedSnapshot;
+  const allQuestionsApproved = questions.length > 0 && questions.every((question) => question.status === "APPROVED");
+  const warnOnLeave = (!allQuestionsApproved && dirty) || generating || bulkApproving || savingDraft;
+  const workspaceBusy = generating || bulkApproving || savingDraft || savingDifficulty || busyQuestionIds.length > 0;
 
   useEffect(() => {
+    let active = true;
     Promise.all([
       academicDataService.getMaterialLibrary(),
       academicDataService.getSubjects(),
       aiQuestionSettingsService.getMine(),
+      aiQuestionService.getDraft().catch((cause) => {
+        if (active) {
+          setDraftAvailable(false);
+          setError(errorMessage(cause, "Không thể đọc bản nháp; chưa thể lưu để tránh ghi đè."));
+        }
+        return null;
+      }),
     ])
-      .then(([materialItems, subjectItems, teacherSettings]) => {
+      .then(([materialItems, subjectItems, teacherSettings, storedDraft]) => {
+        if (!active) return;
         const pdfs = materialItems.filter(
           (item) =>
             item.mimeType === "application/pdf" ||
@@ -128,24 +174,32 @@ export function AiQuestionGeneratorPage() {
         setSubjects(subjectItems);
         setDifficultySettings(teacherSettings);
         setDifficultyDraft(createDifficultyDraft(teacherSettings));
-        setForm((current) => ({
-          ...current,
-          materialId: current.materialId || pdfs[0]?.id || "",
-          quantity: teacherSettings.defaultQuantity,
-          difficulty: teacherSettings.effectiveLevels.some(
-            (level) => level.code === current.difficulty,
-          )
-            ? current.difficulty
-            : (teacherSettings.effectiveLevels[0]?.code ?? "MEDIUM"),
-        }));
+        const nextForm = storedDraft?.form ?? {
+          ...initialForm, materialId: pdfs[0]?.id || "", quantity: teacherSettings.defaultQuantity,
+          difficulty: teacherSettings.effectiveLevels.some((level) => level.code === initialForm.difficulty)
+            ? initialForm.difficulty : (teacherSettings.effectiveLevels[0]?.code ?? "MEDIUM"),
+        };
+        const restoredQuestions = storedDraft?.questions ?? [];
+        const restoredEdits = (storedDraft?.edits ?? []).filter((edit) => restoredQuestions.some((q) => q.id === edit.questionId && q.status === "PENDING"));
+        setForm(nextForm);
+        setQuestions(restoredQuestions);
+        setEditDrafts(Object.fromEntries(restoredEdits.map((edit) => [edit.questionId, edit])));
+        setDraftVersion(storedDraft?.version ?? 0);
+        setSavedAt(storedDraft?.savedAt ?? null);
+        setSavedSnapshot(JSON.stringify({ form: nextForm, questionIds: restoredQuestions.map((q) => q.id), edits: restoredEdits }));
+        if (storedDraft) setDraftMessage("Đã khôi phục bản nháp. Các câu hỏi vẫn cần được duyệt trước khi vào ngân hàng.");
+        if (storedDraft && restoredEdits.length !== storedDraft.edits.length) setDraftMessage("Đã khôi phục bản nháp. Một số bản sửa không áp dụng vì câu hỏi đã được duyệt hoặc từ chối ở phiên khác.");
+        if (storedDraft?.missingQuestionIds.length) setError("Một số câu hỏi trong bản nháp không còn khả dụng. Đã giữ lại các câu còn truy cập được.");
       })
       .catch((cause) => {
-        setError(errorMessage(cause, "Không thể tải dữ liệu tạo câu hỏi"));
+        if (active) setError(errorMessage(cause, "Không thể tải dữ liệu tạo câu hỏi"));
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
+    if (loading) return;
     if (!form.subjectId) {
       setTopics([]);
       setForm((current) =>
@@ -165,7 +219,7 @@ export function AiQuestionGeneratorPage() {
         }));
       })
       .catch((cause) => setError(errorMessage(cause, "Không thể tải chủ đề")));
-  }, [form.subjectId]);
+  }, [form.subjectId, loading]);
 
   function update<K extends keyof GenerateAiQuestionsInput>(
     key: K,
@@ -176,6 +230,8 @@ export function AiQuestionGeneratorPage() {
 
   async function generate(event: React.FormEvent) {
     event.preventDefault();
+    if (bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
+    setBulkMessage("");
     setError("");
     if (!form.materialId) {
       setError("Thư viện chưa có tài liệu PDF để tạo câu hỏi.");
@@ -193,6 +249,8 @@ export function AiQuestionGeneratorPage() {
     }
     setGenerating(true);
     setQuestions([]);
+    setEditDrafts({});
+    setDraftMessage("");
     try {
       setQuestions(await aiQuestionService.generate(form));
     } catch (cause) {
@@ -259,6 +317,45 @@ export function AiQuestionGeneratorPage() {
     );
   }
 
+  async function saveWorkspaceDraft() {
+    if (!draftAvailable || workspaceBusy || draftSaveInFlight.current) return false;
+    draftSaveInFlight.current = true;
+    const savingSnapshot = snapshot;
+    setSavingDraft(true); setError("");
+    try {
+      const saved = await aiQuestionService.saveDraft({ ...workspace, expectedVersion: draftVersion });
+      setDraftVersion(saved.version); setSavedAt(saved.savedAt); setSavedSnapshot(savingSnapshot);
+      setDraftMessage("Đã lưu bản nháp vào tài khoản của bạn.");
+      return true;
+    } catch (cause) {
+      setError(errorMessage(cause, "Không thể lưu bản nháp. Các thay đổi vẫn được giữ trên trang."));
+      return false;
+    } finally { draftSaveInFlight.current = false; setSavingDraft(false); }
+  }
+
+  async function approveAll() {
+    if (bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
+    const pending = questions.filter((item) => item.status === "PENDING");
+    if (!pending.length) return;
+    bulkInFlight.current = true;
+    setBulkApproving(true);
+    setBulkQuantity(pending.length);
+    setBulkMessage("");
+    setError("");
+    try {
+      const results = await aiQuestionService.approveMany(pending.map((question) => question.id));
+      const approved = new Map(results.map((result) => [result.generatedQuestion.id, result.generatedQuestion]));
+      setQuestions((current) => current.map((question) => approved.get(question.id) ?? question));
+      setBulkMessage(`Đã duyệt ${results.length} câu vào ngân hàng.`);
+    } catch (cause) {
+      setBulkMessage("Chưa duyệt được bộ câu hỏi. Kiểm tra lỗi rồi thử lại.");
+      setError(errorMessage(cause, "Không thể duyệt bộ câu hỏi. Các câu vẫn được giữ để thử lại."));
+    } finally {
+      bulkInFlight.current = false;
+      setBulkApproving(false);
+    }
+  }
+
   if (loading)
     return (
       <AssessmentShell>
@@ -268,16 +365,29 @@ export function AiQuestionGeneratorPage() {
   const approvedCount = questions.filter(
     (item) => item.status === "APPROVED",
   ).length;
+  const pendingCount = questions.filter((item) => item.status === "PENDING").length;
   const activeDifficultyLevels =
     difficultySettings?.effectiveLevels ?? builtInDifficultyLevels.slice(0, 3);
 
   return (
     <AssessmentShell>
+      <UnsavedQuestionChanges dirty={warnOnLeave} busy={workspaceBusy}
+        canSave={draftAvailable} onSave={saveWorkspaceDraft} />
       <PageHeading
         eyebrow="RAG · Gemini"
         title="Tạo câu hỏi tự động"
         description="Chọn PDF từ thư viện của bạn. AI chỉ dùng nội dung trong tài liệu và mọi câu đều cần được duyệt trước khi vào ngân hàng."
       />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+        <div className="text-sm text-slate-600">
+          <p role="status">{allQuestionsApproved ? "Tất cả câu hỏi đã vào ngân hàng" : dirty ? "Có thay đổi chưa lưu" : savedAt ? `Bản nháp đã lưu lúc ${new Date(savedAt).toLocaleString("vi-VN")}` : "Chưa có bản nháp"}</p>
+          <p className="mt-1 text-xs text-slate-500">{draftMessage || "Lưu cấu hình và các câu đang duyệt để tiếp tục sau. Mỗi tài khoản giữ một bản nháp gần nhất."}</p>
+        </div>
+        <Button permission="ai_questions.create" disabled={workspaceBusy || !draftAvailable || !dirty} onClick={() => void saveWorkspaceDraft()}>
+          {savingDraft ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+          {savingDraft ? "Đang lưu nháp..." : "Lưu bản nháp"}
+        </Button>
+      </div>
       {error ? (
         <div className="mb-3">
           <ErrorPanel message={error} />
@@ -288,6 +398,7 @@ export function AiQuestionGeneratorPage() {
           onSubmit={(event) => void generate(event)}
           className="rounded-lg border border-slate-200 bg-white p-4 shadow-card xl:sticky xl:top-20 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto"
         >
+          <fieldset disabled={savingDraft} className="contents">
           <div className="mb-4 flex items-center gap-3 border-b border-slate-100 pb-3">
             <span className="grid size-9 place-items-center rounded-lg bg-violet-50 text-violet-600">
               <Sparkles className="size-[18px]" />
@@ -480,7 +591,7 @@ export function AiQuestionGeneratorPage() {
             </div>
             <Button permission="ai_questions.create"
               type="submit"
-              disabled={generating || !materials.length}
+              disabled={generating || bulkApproving || savingDraft || reviewingIds.length > 0 || !materials.length}
               className="w-full"
             >
               {generating ? (
@@ -495,9 +606,10 @@ export function AiQuestionGeneratorPage() {
             <Info className="mt-0.5 size-4 shrink-0" />
             <span>
               Lần đầu dùng một PDF sẽ lâu hơn vì hệ thống cần đọc và lập chỉ mục.
-              PDF scan cần nhận dạng chữ (OCR), có thể mất vài phút.
+              Chỉ hỗ trợ lớp chữ trong PDF; nội dung trong ảnh scan không được xử lý.
             </span>
           </div>
+          </fieldset>
         </form>
 
         <section className="min-w-0">
@@ -506,24 +618,31 @@ export function AiQuestionGeneratorPage() {
               <div>
                 <LoaderCircle className="mx-auto size-9 animate-spin text-violet-600" />
                 <p className="mt-4 font-black text-slate-800">
-                  Đang đọc tài liệu và tạo câu hỏi...
+                  Đang chuẩn bị tài liệu, tạo và kiểm tra câu hỏi...
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  PDF scan cần OCR trong lần đầu; sau đó hệ thống dùng lại nội dung đã đọc.
+                  Tài liệu đã lập chỉ mục sẽ được dùng lại. AI cần thêm thời gian để tạo câu hỏi và kiểm tra đáp án.
                 </p>
               </div>
             </div>
           ) : questions.length ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-card">
+              <div className="sticky top-20 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-card">
                 <div>
                   <p className="font-black text-slate-900">
                     Kết quả kiểm duyệt
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {questions.length} câu · {approvedCount} đã vào ngân hàng
+                    {questions.length} câu · {approvedCount} đã vào ngân hàng · {pendingCount} chờ duyệt
                   </p>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button permission="ai_questions.approve" size="sm"
+                    disabled={bulkApproving || savingDraft || reviewingIds.length > 0 || pendingCount === 0}
+                    onClick={() => void approveAll()}>
+                    {bulkApproving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
+                    {bulkApproving ? `Đang duyệt ${bulkQuantity} câu...` : `Duyệt tất cả (${pendingCount})`}
+                  </Button>
                 {approvedCount ? (
                   <Link href="/teacher/question-bank">
                     <Button variant="secondary" size="sm">
@@ -532,6 +651,9 @@ export function AiQuestionGeneratorPage() {
                     </Button>
                   </Link>
                 ) : null}
+                </div>
+                {reviewingIds.length > 0 ? <p className="w-full text-xs text-slate-500">Hoàn tất chỉnh sửa hoặc xử lý câu hỏi trước khi duyệt tất cả.</p> : null}
+                {bulkMessage ? <p role="status" className="w-full text-sm text-slate-700">{bulkMessage}</p> : null}
               </div>
               {questions.map((question, index) => (
                 <GeneratedQuestionCard
@@ -541,6 +663,10 @@ export function AiQuestionGeneratorPage() {
                   difficultyLevels={activeDifficultyLevels}
                   onReplace={replaceQuestion}
                   onError={setError}
+                  bulkApproving={bulkApproving || savingDraft}
+                  onReviewingChange={onReviewingChange}
+                  initialEdit={editDrafts[question.id]}
+                  onEditDraftChange={onEditDraftChange}
                 />
               ))}
             </div>
@@ -705,16 +831,25 @@ function GeneratedQuestionCard({
   difficultyLevels,
   onReplace,
   onError,
+  bulkApproving,
+  onReviewingChange,
+  initialEdit,
+  onEditDraftChange,
 }: {
   question: GeneratedQuestion;
   index: number;
   difficultyLevels: DifficultyLevelDefinition[];
   onReplace: (question: GeneratedQuestion) => void;
   onError: (message: string) => void;
+  bulkApproving: boolean;
+  onReviewingChange: (id: string, active: boolean, busy?: boolean) => void;
+  initialEdit?: AiQuestionEditDraft;
+  onEditDraftChange: (id: string, draft: AiQuestionEditDraft | null) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(Boolean(initialEdit));
+  const sourceQuestionRef = useRef(question);
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState(initialEdit ?? {
     content: question.content,
     difficulty: question.difficulty,
     options: question.options,
@@ -723,6 +858,8 @@ function GeneratedQuestionCard({
   });
 
   useEffect(() => {
+    if (sourceQuestionRef.current === question) return;
+    sourceQuestionRef.current = question;
     setDraft({
       content: question.content,
       difficulty: question.difficulty,
@@ -732,19 +869,32 @@ function GeneratedQuestionCard({
     });
   }, [question]);
 
+  useEffect(() => {
+    onEditDraftChange(question.id, editing ? { ...draft, questionId: question.id } : null);
+  }, [question.id, editing, draft, onEditDraftChange]);
+
+  useEffect(() => {
+    onReviewingChange(question.id, editing || busy, busy);
+    return () => onReviewingChange(question.id, false);
+  }, [question.id, editing, busy, onReviewingChange]);
+
   async function run(action: () => Promise<GeneratedQuestion>) {
+    if (bulkApproving || busy) return;
     setBusy(true);
     onError("");
     try {
       onReplace(await action());
+      return true;
     } catch (cause) {
       onError(errorMessage(cause, "Không thể cập nhật câu hỏi"));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   async function approve() {
+    if (bulkApproving || busy) return;
     setBusy(true);
     onError("");
     try {
@@ -758,8 +908,8 @@ function GeneratedQuestionCard({
   }
 
   async function save() {
-    await run(() => aiQuestionService.update(question.id, draft));
-    setEditing(false);
+    const { content, difficulty, options, correctOptionIds, explanation } = draft;
+    if (await run(() => aiQuestionService.update(question.id, { content, difficulty, options, correctOptionIds, explanation }))) setEditing(false);
   }
 
   function updateOption(indexToUpdate: number, text: string) {
@@ -813,6 +963,7 @@ function GeneratedQuestionCard({
       {editing ? (
         <div className="mt-3 grid gap-3">
           <Textarea
+            disabled={busy || bulkApproving}
             rows={3}
             value={draft.content}
             onChange={(event) =>
@@ -824,6 +975,7 @@ function GeneratedQuestionCard({
             className="font-semibold"
           />
           <CustomSelect
+            disabled={busy || bulkApproving}
             value={draft.difficulty}
             options={difficultyLevels.map((level) => ({
               value: level.code,
@@ -843,6 +995,7 @@ function GeneratedQuestionCard({
               <div key={option.id} className="flex items-center gap-2">
                 <Button
                   variant="outline"
+                  disabled={busy || bulkApproving}
                   size="sm"
                   onClick={() =>
                     setDraft((current) => ({
@@ -856,6 +1009,7 @@ function GeneratedQuestionCard({
                 </Button>
                 <div className="min-w-0 flex-1">
                   <Input
+                    disabled={busy || bulkApproving}
                     value={option.text}
                     onChange={(event) =>
                       updateOption(optionIndex, event.target.value)
@@ -866,6 +1020,7 @@ function GeneratedQuestionCard({
             ))}
           </div>
           <Textarea
+            disabled={busy || bulkApproving}
             rows={3}
             value={draft.explanation}
             onChange={(event) =>
@@ -877,11 +1032,11 @@ function GeneratedQuestionCard({
             placeholder="Lời giải"
           />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            <Button variant="ghost" size="sm" disabled={busy || bulkApproving} onClick={() => setEditing(false)}>
               <X className="size-4" />
               Hủy
             </Button>
-            <Button permission="ai_questions.update" size="sm" disabled={busy} onClick={() => void save()}>
+            <Button permission="ai_questions.update" size="sm" disabled={busy || bulkApproving} onClick={() => void save()}>
               <Save className="size-4" />
               Lưu
             </Button>
@@ -913,8 +1068,9 @@ function GeneratedQuestionCard({
               <Button permission="ai_questions.update"
                 variant="ghost"
                 size="sm"
-                disabled={busy}
-                onClick={() => setEditing(true)}
+                disabled={busy || bulkApproving}
+                onClick={() => { setDraft({ content: question.content, difficulty: question.difficulty,
+                  options: question.options, correctOptionIds: question.correctOptionIds, explanation: question.explanation }); setEditing(true); }}
               >
                 <Pencil className="size-4" />
                 Sửa
@@ -924,7 +1080,7 @@ function GeneratedQuestionCard({
               <Button permission="ai_questions.create"
                 variant="secondary"
                 size="sm"
-                disabled={busy}
+                disabled={busy || bulkApproving}
                 onClick={() =>
                   void run(() => aiQuestionService.regenerate(question.id))
                 }
@@ -937,7 +1093,7 @@ function GeneratedQuestionCard({
               <Button permission="ai_questions.approve"
                 variant="danger"
                 size="sm"
-                disabled={busy}
+                disabled={busy || bulkApproving}
                 onClick={() =>
                   void run(() => aiQuestionService.reject(question.id))
                 }
@@ -947,7 +1103,7 @@ function GeneratedQuestionCard({
               </Button>
             ) : null}
             {pending ? (
-              <Button permission="ai_questions.approve" size="sm" disabled={busy} onClick={() => void approve()}>
+              <Button permission="ai_questions.approve" size="sm" disabled={busy || bulkApproving} onClick={() => void approve()}>
                 <Check className="size-4" />
                 Duyệt vào ngân hàng
               </Button>
