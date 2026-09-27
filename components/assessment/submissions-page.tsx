@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader } fr
 import { Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import { examService } from "@/lib/assessment-api";
+import { StudyEvidencePanel } from "@/components/assessment/study-evidence-panel";
+import { StudentInterventionPanel } from "@/components/assessment/student-intervention-panel";
 import { matchesSearchKeyword, normalizeSearchKeyword } from "@/lib/search-keyword";
 import type { Exam, ExamAttempt, ExamClassAiAnalysis, ExamClassReport, ExamClassReportStudent, TeacherReviewStatus } from "@/types/assessment";
 
@@ -159,6 +161,9 @@ export function SubmissionsPage() {
             <Button permission="exams.submissions" variant="outline" onClick={exportStudentsCsv}>
               <Download className="size-4" />
               Xuất CSV
+            </Button>
+            <Button permission="exams.submissions" variant="outline" onClick={() => router.push(`/teacher/exams/${exam.id}/improvement`)}>
+              Theo dõi cải thiện
             </Button>
             <Button permission="exams.submissions" onClick={() => router.push(`/teacher/exams/${exam.id}/analysis`)}>
               <Sparkles className="size-4" />
@@ -984,6 +989,9 @@ export function SubmissionDetailPage() {
             </span>
           </div>
         </section>
+
+        {data.status === "SUBMITTED" ? <StudyEvidencePanel examId={params.id} studentId={data.studentId} /> : null}
+        {data.status === "SUBMITTED" ? <StudentInterventionPanel examId={params.id} studentId={data.studentId} attemptId={params.attemptId} classId={data.exam.classId} subjectId={data.exam.subjectId} /> : null}
 
         <div className="space-y-4">
           {orderedQuestions.map((examQuestion, index) => {

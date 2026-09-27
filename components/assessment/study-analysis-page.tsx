@@ -27,6 +27,9 @@ import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { examAttemptService } from "@/lib/assessment-api";
 import { ApiError } from "@/lib/auth-api";
+import { StudyPracticeHistory } from "@/components/assessment/study-practice-history";
+import Link from "next/link";
+import type { StudyAiFeedback } from "@/types/assessment";
 import type {
   StudyAnalysis,
   StudyLearningPath,
@@ -65,9 +68,11 @@ export function StudentStudyAnalysisPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [hints, setHints] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -131,8 +136,22 @@ export function StudentStudyAnalysisPage() {
   );
 
   function choose(questionId: string, optionId: string) {
-    if (practice?.status === "SUBMITTED") return;
+    if (practice?.status === "SUBMITTED" || !practice?.startedAt) return;
     setAnswers((current) => ({ ...current, [questionId]: [optionId] }));
+  }
+
+  async function startPractice(mode: StudyPracticeMode) {
+    if (!practice || practice.status === "SUBMITTED" || practice.startedAt) return;
+    setStarting(true);
+    setError("");
+    try {
+      const updated = await examAttemptService.startStudyPractice(practice.id, practice.attemptId, mode);
+      setAnalysis((current) => current ? { ...current, practiceSet: updated } : current);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể bắt đầu lượt luyện tập");
+    } finally {
+      setStarting(false);
+    }
   }
 
   async function submitPractice() {
@@ -142,6 +161,7 @@ export function StudentStudyAnalysisPage() {
     try {
       const updated = await examAttemptService.submitStudyPractice(
         practice.id,
+        practice.attemptId,
         practice.questions.map((question) => ({
           questionId: question.id,
           selectedOptionIds: answers[question.id] ?? [],
@@ -172,7 +192,7 @@ export function StudentStudyAnalysisPage() {
     setRetrying(true);
     setError("");
     try {
-      const updated = await examAttemptService.retryStudyPractice(practice.id);
+      const updated = await examAttemptService.retryStudyPractice(practice.id, practice.attemptId);
       setAnalysis((current) =>
         current ? { ...current, practiceSet: updated } : current,
       );
@@ -193,6 +213,7 @@ export function StudentStudyAnalysisPage() {
       const hint = await examAttemptService.getStudyPracticeHint(
         practice.id,
         questionId,
+        practice.attemptId,
       );
       setHints((current) => ({ ...current, [questionId]: hint.message }));
     } catch (cause) {
@@ -217,6 +238,12 @@ export function StudentStudyAnalysisPage() {
 
   function openTab(tab: "theory" | "practice") {
     router.push(`/student/attempts/${params.id}/study?tab=${tab}`);
+  }
+
+  async function sendFeedback(targetKey: string, reason: StudyAiFeedback["reason"], comment: string) {
+    setFeedbackMessage("");
+    await examAttemptService.submitStudyAiFeedback(params.id, { targetKey, reason, comment });
+    setFeedbackMessage("Đã gửi phản hồi đến giáo viên. Báo cáo chỉ đổi khi giáo viên xử lý.");
   }
 
   if (loading) {
@@ -268,6 +295,8 @@ export function StudentStudyAnalysisPage() {
           <ErrorPanel message={error} />
         </div>
       ) : null}
+      {feedbackMessage ? <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{feedbackMessage}</p> : null}
+      <Link href="/student/learning-plans" className="mb-4 inline-block text-sm font-bold text-brand-700 underline">Xem lộ trình giáo viên đã giao</Link>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)] lg:items-center">
@@ -281,6 +310,8 @@ export function StudentStudyAnalysisPage() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {report.summary}
             </p>
+            <ReviewLabel state={report.reviewStates?.SUMMARY} />
+            <FeedbackControl onSend={(reason, comment) => sendFeedback("SUMMARY", reason, comment)} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-blue-50 p-4">
@@ -447,6 +478,8 @@ export function StudentStudyAnalysisPage() {
                   <p className="mt-4 text-sm font-semibold leading-6 text-slate-700">
                     {area.diagnosis}
                   </p>
+                  <ReviewLabel state={report.reviewStates?.[`AREA:${area.id}:DIAGNOSIS`]} />
+                  <FeedbackControl onSend={(reason, comment) => sendFeedback(`AREA:${area.id}:DIAGNOSIS`, reason, comment)} />
                   <div className="mt-4 rounded-xl bg-slate-50 p-4">
                     <div className="flex items-center gap-2 text-sm font-black text-slate-800">
                       <Lightbulb className="size-4 text-amber-500" /> Gợi ý ôn tập
@@ -454,6 +487,8 @@ export function StudentStudyAnalysisPage() {
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       {area.reviewSummary}
                     </p>
+                    <ReviewLabel state={report.reviewStates?.[`AREA:${area.id}:REVIEW`]} />
+                    <FeedbackControl onSend={(reason, comment) => sendFeedback(`AREA:${area.id}:REVIEW`, reason, comment)} />
                     {area.keyPoints.length ? (
                       <ul className="mt-3 space-y-2 text-sm text-slate-600">
                         {area.keyPoints.map((point) => (
@@ -496,16 +531,33 @@ export function StudentStudyAnalysisPage() {
           answers={answers}
           answeredCount={answeredCount}
           submitting={submitting}
+          starting={starting}
           retrying={retrying}
           hints={hints}
           onChoose={choose}
+          onStart={(mode) => void startPractice(mode)}
           onSubmit={() => void submitPractice()}
           onRetry={() => void retryPractice()}
           onGetHint={(questionId) => void getHint(questionId)}
+          onFeedback={sendFeedback}
         />
       ) : null}
+      {activeTab === "practice" && practice ? <StudyPracticeHistory practice={practice} /> : null}
     </StudentShell>
   );
+}
+
+function ReviewLabel({ state }: { state?: { decision: "CONFIRMED" | "EDITED" | "REJECTED"; version: number; reason: string } }) {
+  return <p className="mt-2 text-xs font-semibold text-blue-700">{!state ? "AI đề xuất · chưa được giáo viên xác nhận" : state.decision === "CONFIRMED" ? "Giáo viên đã xác nhận" : state.decision === "EDITED" ? `Giáo viên đã sửa · ${state.reason}` : `Giáo viên đã bác bỏ · ${state.reason}`}</p>;
+}
+
+function FeedbackControl({ onSend }: { onSend: (reason: StudyAiFeedback["reason"], comment: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<StudyAiFeedback["reason"]>("UNCLEAR");
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <div className="mt-2 text-xs"><button type="button" className="font-semibold text-brand-700 underline" onClick={() => setOpen(!open)}>Báo nhận định chưa đúng/rõ</button>{open ? <div className="mt-2 flex flex-wrap gap-2"><select className="rounded-lg border p-2" value={reason} onChange={(event) => setReason(event.target.value as StudyAiFeedback["reason"])}><option value="WRONG_KNOWLEDGE">Sai kiến thức</option><option value="OUT_OF_SCOPE">Ngoài phạm vi</option><option value="INSUFFICIENT_EVIDENCE">Thiếu bằng chứng</option><option value="UNCLEAR">Chưa rõ</option></select><input className="min-w-40 flex-1 rounded-lg border p-2" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Ghi chú thêm" /><Button size="sm" disabled={busy} onClick={() => { setBusy(true); setError(""); void onSend(reason, comment).then(() => { setOpen(false); setComment(""); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể gửi phản hồi")).finally(() => setBusy(false)); }}>Gửi</Button>{error ? <p role="alert" className="w-full text-rose-700">{error}</p> : null}</div> : null}</div>;
 }
 
 function LearningPathSection({
@@ -584,23 +636,29 @@ function PracticeSection({
   answers,
   answeredCount,
   submitting,
+  starting,
   retrying,
   hints,
   onChoose,
+  onStart,
   onSubmit,
   onRetry,
   onGetHint,
+  onFeedback,
 }: {
   practice: StudyPracticeSet | null;
   answers: Record<string, string[]>;
   answeredCount: number;
   submitting: boolean;
+  starting: boolean;
   retrying: boolean;
   hints: Record<string, string>;
   onChoose: (questionId: string, optionId: string) => void;
+  onStart: (mode: StudyPracticeMode) => void;
   onSubmit: () => void;
   onRetry: () => void;
   onGetHint: (questionId: string) => void;
+  onFeedback: (targetKey: string, reason: StudyAiFeedback["reason"], comment: string) => Promise<void>;
 }) {
   const [mode, setMode] = useState<StudyPracticeMode>("EASY");
   const [started, setStarted] = useState(false);
@@ -610,21 +668,30 @@ function PracticeSection({
   const practiceDuration = Math.max(300, (practice?.totalQuestions ?? 0) * 120);
 
   useEffect(() => {
-    setStarted(false);
+    const persistedMode = practice?.mode;
+    setMode(persistedMode === "EASY" || persistedMode === "HARD" ? persistedMode : "EASY");
+    setStarted(Boolean(practice?.startedAt));
     setIndex(0);
-    setRemainingSeconds(practiceDuration);
-  }, [practice?.id, practice?.status, practiceDuration]);
+    setRemainingSeconds(practice?.startedAt && persistedMode === "HARD"
+      ? Math.max(0, Math.ceil((new Date(practice.startedAt).getTime() + practiceDuration * 1000 - Date.now()) / 1000))
+      : practiceDuration);
+  }, [practice?.attemptId, practice?.startedAt, practice?.mode, practiceDuration]);
 
   useEffect(() => {
     if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0) return;
-    const timer = window.setInterval(
-      () => setRemainingSeconds((current) => Math.max(0, current - 1)),
-      1000,
-    );
-    return () => window.clearInterval(timer);
-  }, [mode, remainingSeconds, started, submitted]);
+    const updateTime = () => setRemainingSeconds(Math.max(0, Math.ceil(
+      (new Date(practice?.startedAt ?? 0).getTime() + practiceDuration * 1000 - Date.now()) / 1000,
+    )));
+    const timer = window.setInterval(updateTime, 1000);
+    document.addEventListener("visibilitychange", updateTime);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", updateTime);
+    };
+  }, [mode, remainingSeconds, started, submitted, practice?.startedAt, practiceDuration]);
 
   if (!practice) return null;
+  const rejected = practice.questions.some((question) => question.reviewDecision === "REJECTED");
   const timeExpired = mode === "HARD" && started && remainingSeconds === 0;
   const locked = submitted || timeExpired;
   const formattedRemaining = `${Math.floor(remainingSeconds / 60)
@@ -734,21 +801,20 @@ function PracticeSection({
           {!started ? (
             <div className="mt-4 flex justify-end">
               <Button
-                onClick={() => {
-                  setRemainingSeconds(practiceDuration);
-                  setStarted(true);
-                }}
+                disabled={starting || rejected}
+                onClick={() => onStart(mode)}
               >
-                {mode === "HARD" ? <TimerReset className="size-4" /> : <BrainCircuit className="size-4" />}
-                Bắt đầu luyện tập {mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}
+                {starting ? <LoaderCircle className="size-4 animate-spin" /> : mode === "HARD" ? <TimerReset className="size-4" /> : <BrainCircuit className="size-4" />}
+                {starting ? "Đang bắt đầu..." : `Bắt đầu luyện tập ${mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}`}
               </Button>
             </div>
           ) : null}
         </div>
       ) : null}
+      {rejected ? <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">Giáo viên đã bác bỏ ít nhất một câu hỏi trong bộ này; hiện không thể bắt đầu hoặc làm lại.</p> : null}
 
       {started && !submitted && currentQuestion ? (
-        <PracticeQuestionRunner
+        <><p className="mt-3 text-xs text-blue-700">{currentQuestion.reviewDecision === "CONFIRMED" ? "Giáo viên đã xác nhận" : currentQuestion.reviewDecision === "EDITED" ? "Giáo viên đã sửa" : currentQuestion.reviewDecision === "REJECTED" ? "Giáo viên đã bác bỏ" : "AI đề xuất"}</p><FeedbackControl onSend={(reason, comment) => onFeedback(`QUESTION:${currentQuestion.id}`, reason, comment)} /><PracticeQuestionRunner
           practice={practice}
           question={currentQuestion}
           questionIndex={index}
@@ -762,7 +828,7 @@ function PracticeSection({
           onGetHint={onGetHint}
           onGoTo={setIndex}
           onSubmit={onSubmit}
-        />
+        /></>
       ) : null}
 
       {submitted ? <div className="mt-6 space-y-5">
@@ -777,6 +843,8 @@ function PracticeSection({
                   Câu {index + 1} · {question.topicName}
                 </p>
                 <h3 className="mt-2 font-bold leading-6">{question.content}</h3>
+                <p className="mt-1 text-xs text-blue-700">{question.reviewDecision === "CONFIRMED" ? "Giáo viên đã xác nhận" : question.reviewDecision === "EDITED" ? "Giáo viên đã sửa" : question.reviewDecision === "REJECTED" ? "Giáo viên đã bác bỏ" : "AI đề xuất"}</p>
+                <FeedbackControl onSend={(reason, comment) => onFeedback(`QUESTION:${question.id}`, reason, comment)} />
               </div>
               <span
                 className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}
@@ -846,12 +914,10 @@ function PracticeSection({
         ))}
       </div> : null}
 
-      {submitted && practice.correctCount !== practice.totalQuestions ? (
+      {submitted ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
           <p className="text-sm text-slate-600">
-            {mode === "EASY"
-              ? "Bạn có thể làm lại để chinh phục toàn bộ câu hỏi."
-              : "Bạn có thể bắt đầu một lượt mô phỏng mới nếu muốn thử lại."}
+            Làm lại sẽ tạo lượt mới và giữ nguyên kết quả vừa hoàn thành trong lịch sử.
           </p>
           <Button variant="outline" disabled={retrying} onClick={onRetry}>
             {retrying ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}

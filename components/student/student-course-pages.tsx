@@ -19,8 +19,8 @@ import {
   UserRound,
   MessagesSquare,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-shell";
 import { StudentExamList } from "@/components/assessment/student-exam-pages";
 import { StudentShell } from "@/components/student/student-shell";
@@ -213,6 +213,8 @@ type CourseSection = "overview" | "materials" | "exams" | "review" | "chat";
 export function StudentCourseDetailPage() {
   const params = useParams<{ classId: string; subjectId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const openedMaterialId = useRef<string | null>(null);
   const { can } = usePermissions();
   const [course, setCourse] = useState<StudentCourseDetail | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -246,6 +248,22 @@ export function StudentCourseDetailPage() {
     () => course?.topics.flatMap((topic) => topic.materials.map((material) => ({ material, topicName: topic.name }))) ?? [],
     [course],
   );
+  useEffect(() => {
+    const materialId = searchParams.get("materialId");
+    if (!materialId || openedMaterialId.current === materialId || !course) return;
+    const entry = materials.find(({ material }) => material.id === materialId);
+    if (!entry) { setError("Tài liệu trong nhiệm vụ không còn được gán cho lớp này."); return; }
+    openedMaterialId.current = materialId;
+    setActiveSection("materials");
+    setPreviewMaterial(entry.material);
+    setPreviewLoading(true);
+    setPreviewUrl("");
+    setMaterialError("");
+    void academicDataService.getStudentMaterialPreviewUrl(materialId)
+      .then(({ url }) => setPreviewUrl(url))
+      .catch((cause) => setMaterialError(cause instanceof Error ? cause.message : "Không thể mở tài liệu"))
+      .finally(() => setPreviewLoading(false));
+  }, [course, materials, searchParams]);
   const completedExams = exams.filter((exam) => exam.currentAttempt?.status === "SUBMITTED").length;
   const availableExams = exams.filter((exam) => exam.studentStatus === "AVAILABLE" || exam.studentStatus === "IN_PROGRESS").length;
   const canReadClassChat = can("class_chat.read");

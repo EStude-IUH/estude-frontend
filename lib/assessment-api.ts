@@ -1,5 +1,5 @@
 import { authenticatedBlobRequest, authenticatedRequest, authenticatedUploadRequest, type UploadProgressPhase } from "@/lib/auth-api";
-import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, AiQuestionJob, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings } from "@/types/assessment";
+import type { Exam, ExamAttempt, ExamClassAnalysisState, SubjectSupportReport, ExamClassReport, ExamClassReportReview, ExamInsightActionInput, ExamInsightActionResult, ExamListAiAnalysis, ExamInput, ExamAnswer, AcademicYear, ClassRoster, AvailableStudentsPage, GradeComponent, SchoolClass, Question, QuestionFilters, QuestionInput, BulkMoveQuestionsInput, BulkMoveQuestionsResult, Subject, SubjectImportResult, SubjectTeacherAssignment, StudentCourse, StudentCourseDetail, TeacherAssignedClass, TeacherManagedStudent, ClassTopic, ClassTopicInput, LearningMaterial, MaterialAssignmentTarget, BulkMaterialAssignmentResult, Term, Topic, GeneratedQuestion, AiQuestionJob, GenerateAiQuestionsInput, UpdateGeneratedQuestionInput, DifficultyLevelDefinition, SystemDifficultySettings, StudyAnalysis, StudyPracticeSet, StudyPracticeAttempt, StudyPracticeMode, StudyEvidenceBundle, BaselineSelectionRecord, TeacherDifficultySettings, TeacherExamDefaults, TeacherExamDefaultSettings, TeacherStudyAnalysis, StudyAiReview, StudyAiFeedback, LearningPlan, LearningPlanDraftInput, LearningTask, LearningImprovementProfile, ClassImprovementReport, LearningReassessment, ImprovementComparison } from "@/types/assessment";
 import type { StudentOverview } from "@/types/student-overview";
 
 export const academicDataService = {
@@ -440,6 +440,26 @@ export const examService = {
   getSubmissions(id: string): Promise<ExamAttempt[]> {
     return authenticatedRequest<ExamAttempt[]>(`/exams/${encodeURIComponent(id)}/submissions`);
   },
+  getStudentEvidence(examId: string, studentId: string): Promise<StudyEvidenceBundle> {
+    return authenticatedRequest<StudyEvidenceBundle>(`/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/evidence`);
+  },
+  getTeacherStudyAnalysis(examId: string, studentId: string, attemptId: string): Promise<TeacherStudyAnalysis> {
+    return authenticatedRequest(`/exams/${examId}/students/${studentId}/attempts/${attemptId}/study-analysis`);
+  },
+  createTeacherStudyAnalysis(examId: string, studentId: string, attemptId: string): Promise<TeacherStudyAnalysis> {
+    return authenticatedRequest(`/exams/${examId}/students/${studentId}/attempts/${attemptId}/study-analysis`, { method: "POST" });
+  },
+  submitTeacherAiFeedback(examId: string, studentId: string, attemptId: string, input: { targetKey: string; reason: StudyAiFeedback["reason"]; comment?: string }): Promise<StudyAiFeedback> {
+    return authenticatedRequest(`/exams/${examId}/students/${studentId}/attempts/${attemptId}/study-analysis/feedback`, { method: "POST", body: JSON.stringify(input) });
+  },
+  reviewStudyAi(examId: string, studentId: string, attemptId: string, input: { targetKey: string; decision: StudyAiReview["decision"]; effectiveText?: string; reason: string; expectedVersion: number }): Promise<StudyAiReview> {
+    return authenticatedRequest(`/exams/${examId}/students/${studentId}/attempts/${attemptId}/study-analysis/review`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  selectStudentBaseline(examId: string, studentId: string, input: { evidenceId: string; reason: string; expectedVersion: number }): Promise<BaselineSelectionRecord> {
+    return authenticatedRequest<BaselineSelectionRecord>(`/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/baseline`, {
+      method: "POST", body: JSON.stringify(input),
+    });
+  },
   getClassReport(id: string): Promise<ExamClassReport> {
     return authenticatedRequest<ExamClassReport>(`/exams/${encodeURIComponent(id)}/class-report`);
   },
@@ -508,13 +528,82 @@ export const examAttemptService = {
   getStudyAnalysis(id: string): Promise<StudyAnalysis> {
     return authenticatedRequest<StudyAnalysis>(`/exam-attempts/${encodeURIComponent(id)}/study-analysis`);
   },
-  submitStudyPractice(id: string, answers: Array<{ questionId: string; selectedOptionIds: string[] }>): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
+  startStudyPractice(id: string, attemptId: string, mode: StudyPracticeMode): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/start`, {
+      method: "POST", body: JSON.stringify({ attemptId, mode }),
+    });
   },
-  retryStudyPractice(id: string): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  submitStudyAiFeedback(id: string, input: { targetKey: string; reason: StudyAiFeedback["reason"]; comment?: string }): Promise<StudyAiFeedback> {
+    return authenticatedRequest(`/exam-attempts/${id}/study-analysis/feedback`, { method: "POST", body: JSON.stringify(input) });
   },
-  getStudyPracticeHint(practiceSetId: string, questionId: string): Promise<{ questionId: string; message: string }> {
-    return authenticatedRequest<{ questionId: string; message: string }>(`/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`);
+  submitStudyPractice(id: string, attemptId: string, answers: Array<{ questionId: string; selectedOptionIds: string[] }>): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/submit`, { method: "POST", body: JSON.stringify({ attemptId, answers }) });
+  },
+  retryStudyPractice(id: string, attemptId: string): Promise<StudyPracticeSet> {
+    return authenticatedRequest<StudyPracticeSet>(`/study-practice-sets/${encodeURIComponent(id)}/retry`, { method: "POST", body: JSON.stringify({ attemptId }) });
+  },
+  getStudyPracticeAttempt(id: string, attemptId: string): Promise<StudyPracticeAttempt> {
+    return authenticatedRequest<StudyPracticeAttempt>(`/study-practice-sets/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`);
+  },
+  getStudyPracticeHint(practiceSetId: string, questionId: string, attemptId: string): Promise<{ questionId: string; message: string }> {
+    return authenticatedRequest<{ questionId: string; message: string }>(`/study-practice-sets/${encodeURIComponent(practiceSetId)}/questions/${encodeURIComponent(questionId)}/hint`, {
+      method: "POST", body: JSON.stringify({ attemptId }),
+    });
+  },
+};
+
+export const learningPlanService = {
+  suggest(examId: string, studentId: string, objectiveId: string): Promise<LearningPlanDraftInput & { source: string; evidence: string | null }> {
+    return authenticatedRequest(`/learning-plans/teacher/exams/${examId}/suggestions`, { method: "POST", body: JSON.stringify({ studentId, objectiveId }) });
+  },
+  createDrafts(examId: string, input: LearningPlanDraftInput): Promise<{ cohortId: string; plans: LearningPlan[] }> {
+    return authenticatedRequest(`/learning-plans/teacher/exams/${examId}`, { method: "POST", body: JSON.stringify(input) });
+  },
+  listTeacher(examId: string): Promise<LearningPlan[]> { return authenticatedRequest(`/learning-plans/teacher/exams/${examId}`); },
+  getTeacher(planId: string): Promise<LearningPlan> { return authenticatedRequest(`/learning-plans/teacher/${planId}`); },
+  updatePlan(planId: string, input: { expectedVersion: number; reason: string; title?: string; summary?: string; successCriteria?: string; targetAccuracyPercent?: number; dueAt?: string }): Promise<LearningPlan> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  publish(planId: string, expectedVersion: number): Promise<LearningPlan> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}/publish`, { method: "POST", body: JSON.stringify({ expectedVersion }) });
+  },
+  cancel(planId: string, expectedVersion: number, reason: string): Promise<LearningPlan> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}/cancel`, { method: "POST", body: JSON.stringify({ expectedVersion, reason }) });
+  },
+  updateTask(taskId: string, input: { expectedVersion: number; reason: string; title?: string; description?: string; dueAt?: string; status?: "ASSIGNED" | "CANCELLED" }): Promise<LearningTask> {
+    return authenticatedRequest(`/learning-plans/teacher/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  listMine(): Promise<LearningPlan[]> { return authenticatedRequest("/learning-plans/me"); },
+  getMine(planId: string): Promise<LearningPlan> { return authenticatedRequest(`/learning-plans/${planId}`); },
+  startTask(planId: string, taskId: string): Promise<{ actionUrl: string | null; taskId: string }> {
+    return authenticatedRequest(`/learning-plans/${planId}/tasks/${taskId}/start`, { method: "POST" });
+  },
+  completeMaterial(planId: string, taskId: string): Promise<LearningTask["progress"]> {
+    return authenticatedRequest(`/learning-plans/${planId}/tasks/${taskId}/complete`, { method: "POST" });
+  },
+  reportDifficulty(planId: string, taskId: string, note: string): Promise<LearningTask["progress"]> {
+    return authenticatedRequest(`/learning-plans/${planId}/tasks/${taskId}/difficulty`, { method: "POST", body: JSON.stringify({ note }) });
+  },
+  getTeacherImprovement(planId: string): Promise<LearningImprovementProfile> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}/improvement`);
+  },
+  getMyImprovement(planId: string): Promise<LearningImprovementProfile> {
+    return authenticatedRequest(`/learning-plans/${planId}/improvement`);
+  },
+  assignReassessment(planId: string, phase: "AFTER" | "RETENTION", input: {
+    examId: string; minimumQuestions: number; equivalenceRationale: string; scheduledFor?: string; dueAt?: string;
+    expectedPlanVersion: number; expectedVersion?: number;
+  }): Promise<LearningReassessment> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}/reassessments/${phase}`, { method: "POST", body: JSON.stringify(input) });
+  },
+  reviewReassessment(planId: string, phase: "AFTER" | "RETENTION", input: {
+    evidenceId: string; equivalenceConfirmed: boolean; decision: "CONFIRMED" | "NEEDS_ADJUSTMENT";
+    reason: string; expectedVersion: number;
+  }): Promise<{ comparison: ImprovementComparison; planStatus: LearningPlan["status"]; commentary: string | null }> {
+    return authenticatedRequest(`/learning-plans/teacher/${planId}/reassessments/${phase}/review`, { method: "POST", body: JSON.stringify(input) });
+  },
+  classImprovementReport(filters: { classId: string; subjectId: string; from?: string; to?: string; objectiveId?: string; cohortId?: string }): Promise<ClassImprovementReport> {
+    const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])));
+    return authenticatedRequest(`/learning-plans/teacher/report?${query.toString()}`);
   },
 };
