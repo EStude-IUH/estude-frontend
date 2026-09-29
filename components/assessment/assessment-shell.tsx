@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   FilePlus2,
   Library,
+  ChartNoAxesCombined,
   LoaderCircle,
   LogOut,
   Menu,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { requestWorkspaceNavigation } from "@/lib/workspace-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
 import { StudentShell } from "@/components/student/student-shell";
@@ -93,6 +95,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       icon: FilePlus2,
     },
     { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
+    {
+      href: "/teacher/learning-support",
+      label: "Theo dõi học tập",
+      icon: ChartNoAxesCombined,
+    },
     { href: "/teacher/attendance", label: "Điểm danh", icon: CheckCircle2 },
     { href: "/teacher/notifications", label: "Thông báo", icon: BellRing },
     {
@@ -140,7 +147,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             aria-label="Vị trí hiện tại"
           >
             {breadcrumbs.map((item, index) => (
-              <div key={item.label} className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div
+                key={item.label}
+                className="flex min-w-0 items-center gap-2 sm:gap-3"
+              >
                 {index > 0 ? (
                   <ChevronRight
                     aria-hidden="true"
@@ -187,8 +197,13 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             >
               <span className="relative grid size-10 overflow-hidden place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
                 {user?.avatarUrl ? (
-                  <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
-                ) : initials}
+                  <span
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${user.avatarUrl})` }}
+                  />
+                ) : (
+                  initials
+                )}
               </span>
               {user ? (
                 <span className="hidden md:block">
@@ -223,7 +238,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    requestWorkspaceNavigation(() => router.push("/help"));
+                  }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   <CircleHelp className="size-4" /> Trợ giúp
@@ -233,7 +251,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                   role="menuitem"
                   onClick={() => {
                     setIsAccountMenuOpen(false);
-                    if (user) router.push(getRoleSessionSettings(user.role));
+                    if (user)
+                      requestWorkspaceNavigation(() =>
+                        router.push(getRoleSessionSettings(user.role)),
+                      );
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
@@ -243,7 +264,9 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleSignOut()}
+                  onClick={() =>
+                    requestWorkspaceNavigation(() => void handleSignOut())
+                  }
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-rose-600 hover:bg-rose-50"
                 >
                   <LogOut className="size-4" /> Đăng xuất
@@ -293,25 +316,28 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="mt-4 space-y-1.5" aria-label="Điều hướng khu vực">
-          {links.filter((link) => !link.href || canVisit(link.href)).map(({ href, label, icon: Icon }, index) => {
-            const active = Boolean(href && pathname.startsWith(href));
-            return (
-              <div key={`${label}-${index}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (href) router.push(href);
-                    setIsMenuOpen(false);
-                  }}
-                  title={isSidebarCollapsed ? label : undefined}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all ${active ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"} ${isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : ""}`}
-                >
-                  <Icon className="size-5 shrink-0" />
-                  <span className={sidebarLabelClass}>{label}</span>
-                </button>
-              </div>
-            );
-          })}
+          {links
+            .filter((link) => !link.href || canVisit(link.href))
+            .map(({ href, label, icon: Icon }, index) => {
+              const active = Boolean(href && pathname.startsWith(href));
+              return (
+                <div key={`${label}-${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (href)
+                        requestWorkspaceNavigation(() => router.push(href));
+                      setIsMenuOpen(false);
+                    }}
+                    title={isSidebarCollapsed ? label : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all ${active ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"} ${isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : ""}`}
+                  >
+                    <Icon className="size-5 shrink-0" />
+                    <span className={sidebarLabelClass}>{label}</span>
+                  </button>
+                </div>
+              );
+            })}
         </nav>
       </aside>
       <main
@@ -319,13 +345,14 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       >
         <div
           className={
-            pathname.startsWith("/teacher/question-bank")
-              || pathname === "/teacher/exams"
-              || pathname === "/teacher/exams/new"
-              || pathname.startsWith("/teacher/exams/")
-              || pathname === "/teacher/attendance"
-              || pathname === "/teacher/notifications"
-              || pathname === "/teacher/settings/exam-defaults"
+            pathname.startsWith("/teacher/question-bank") ||
+            pathname === "/teacher/exams" ||
+            pathname === "/teacher/exams/new" ||
+            pathname.startsWith("/teacher/exams/") ||
+            pathname.startsWith("/teacher/learning-support") ||
+            pathname === "/teacher/attendance" ||
+            pathname === "/teacher/notifications" ||
+            pathname === "/teacher/settings/exam-defaults"
               ? "w-full"
               : "mx-auto max-w-[1280px]"
           }
@@ -379,14 +406,20 @@ export function ErrorPanel({ message }: { message: string }) {
 }
 
 function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
+  if (pathname.startsWith("/teacher/learning-plans/"))
+    return "Chi tiết lộ trình học";
+  if (pathname.startsWith("/teacher/learning-support/"))
+    return "Theo dõi học tập theo môn";
   if (pathname === "/teacher/question-bank/generate")
     return "Tạo câu hỏi bằng AI";
   if (pathname === "/teacher/question-bank/new") return "Tạo câu hỏi mới";
   if (/^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname))
     return "Chỉnh sửa câu hỏi";
   if (pathname === "/teacher/exams/new") return "Tạo mới bài kiểm tra";
-  if (/^\/teacher\/exams\/[^/]+\/analysis$/.test(pathname)) return "Phân tích AI";
-  if (/^\/teacher\/exams\/[^/]+\/subject-support$/.test(pathname)) return "Theo dõi học tập theo môn";
+  if (/^\/teacher\/exams\/[^/]+\/analysis$/.test(pathname))
+    return "Phân tích AI";
+  if (/^\/teacher\/exams\/[^/]+\/subject-support$/.test(pathname))
+    return "Theo dõi học tập theo môn";
   if (/^\/teacher\/exams\/[^/]+\/submissions\/[^/]+$/.test(pathname))
     return "Chấm bài";
   if (/^\/teacher\/exams\/[^/]+\/submissions$/.test(pathname))
@@ -405,6 +438,18 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
 function getWorkspaceBreadcrumbs(
   pathname: string,
 ): Array<{ label: string; href?: string }> {
+  if (pathname.startsWith("/teacher/learning-plans/")) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết lộ trình học" },
+    ];
+  }
+  if (pathname.startsWith("/teacher/learning-support/")) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết môn học" },
+    ];
+  }
   if (pathname === "/teacher/exams/new") {
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
@@ -412,13 +457,26 @@ function getWorkspaceBreadcrumbs(
     ];
   }
 
-  const supportMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/subject-support$/);
-  if (supportMatch) return [{ label: "Bài kiểm tra", href: "/teacher/exams" }, { label: "Tổng quan & bài nộp", href: `/teacher/exams/${supportMatch[1]}` }, { label: "Theo dõi học tập theo môn" }];
+  const supportMatch = pathname.match(
+    /^\/teacher\/exams\/([^/]+)\/subject-support$/,
+  );
+  if (supportMatch)
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      {
+        label: "Tổng quan & bài nộp",
+        href: `/teacher/exams/${supportMatch[1]}`,
+      },
+      { label: "Theo dõi học tập theo môn" },
+    ];
   const analysisMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/analysis$/);
   if (analysisMatch) {
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
-      { label: "Tổng quan & bài nộp", href: `/teacher/exams/${analysisMatch[1]}` },
+      {
+        label: "Tổng quan & bài nộp",
+        href: `/teacher/exams/${analysisMatch[1]}`,
+      },
       { label: "Phân tích AI" },
     ];
   }
@@ -456,13 +514,14 @@ function getWorkspaceBreadcrumbs(
 
   if (!pathname.startsWith("/teacher/question-bank/")) return [];
 
-  const currentLabel = pathname === "/teacher/question-bank/generate"
-    ? "Tạo câu hỏi bằng AI"
-    : pathname === "/teacher/question-bank/new"
-      ? "Tạo câu hỏi mới"
-      : /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname)
-        ? "Chỉnh sửa câu hỏi"
-        : "Ngân hàng câu hỏi";
+  const currentLabel =
+    pathname === "/teacher/question-bank/generate"
+      ? "Tạo câu hỏi bằng AI"
+      : pathname === "/teacher/question-bank/new"
+        ? "Tạo câu hỏi mới"
+        : /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname)
+          ? "Chỉnh sửa câu hỏi"
+          : "Ngân hàng câu hỏi";
 
   return [
     { label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },

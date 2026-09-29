@@ -83,12 +83,25 @@ export const MODULE_LINKS = [
     permission: "exams.read",
   },
   {
+    href: "/teacher/learning-support",
+    label: "Theo dõi học tập",
+    permission: "exams.submissions",
+  },
+  {
     href: "/teacher/settings/exam-defaults",
     label: "Cấu hình bài kiểm tra",
     permission: "teacher_settings.read",
   },
-  { href: "/teacher/attendance", label: "Điểm danh", permission: "attendance.read" },
-  { href: "/teacher/notifications", label: "Gửi thông báo", permission: "notifications.send" },
+  {
+    href: "/teacher/attendance",
+    label: "Điểm danh",
+    permission: "attendance.read",
+  },
+  {
+    href: "/teacher/notifications",
+    label: "Gửi thông báo",
+    permission: "notifications.send",
+  },
   {
     href: "/student/courses",
     label: "Môn học của tôi",
@@ -100,7 +113,11 @@ export const MODULE_LINKS = [
     permission: "learning.read",
   },
   { href: "/student/review", label: "Ôn tập", permission: "study.read" },
-  { href: "/student/activity", label: "Điểm danh & thông báo", permission: "notifications.read" },
+  {
+    href: "/student/activity",
+    label: "Điểm danh & thông báo",
+    permission: "notifications.read",
+  },
   {
     href: "/parent/dashboard",
     label: "Học sinh liên kết",
@@ -125,7 +142,16 @@ export function routePermission(path: string): string | null {
     return "questions.update";
   if (path === "/teacher/exams/new") return "exams.create";
   if (/^\/teacher\/exams\/[^/]+\/edit$/.test(path)) return "exams.update";
-  if (path.includes("/submissions") || /^\/teacher\/exams\/[^/]+\/(analysis|subject-support)$/.test(path)) return "exams.submissions";
+  if (
+    path.includes("/submissions") ||
+    /^\/teacher\/exams\/[^/]+\/(analysis|subject-support)$/.test(path)
+  )
+    return "exams.submissions";
+  if (
+    path === "/teacher/learning-plans" ||
+    path.startsWith("/teacher/learning-plans/")
+  )
+    return "exams.submissions";
   if (path.startsWith("/student/attempts/") && path.endsWith("/study"))
     return "study.read";
   if (
@@ -140,5 +166,5 @@ export function routePermission(path: string): string | null {
   );
   if (link) return link.permission;
   if (path.startsWith("/admin/settings")) return "system_settings.read";
-  return '__unmapped__';
+  return "__unmapped__";
 }

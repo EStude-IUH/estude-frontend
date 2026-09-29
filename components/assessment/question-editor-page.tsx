@@ -17,6 +17,7 @@ import { TextToImageConverter } from "@/components/assessment/text-to-image-conv
 import type {
   Difficulty,
   Question,
+  QuestionFolder,
   QuestionInput,
   QuestionOption,
   QuestionType,
@@ -33,16 +34,19 @@ const initialOptions: QuestionOption[] = [
 
 export function QuestionEditorForm({
   questionId,
+  initialFolderId,
   onSaved,
   onCancel,
   embedded = false,
 }: {
   questionId?: string;
+  initialFolderId?: string;
   onSaved: (question: Question) => void;
   onCancel: () => void;
   embedded?: boolean;
 }) {
   const [form, setForm] = useState<QuestionInput>({
+    folderId: null,
     subjectId: "",
     subjectName: "",
     topicId: null,
@@ -56,6 +60,7 @@ export function QuestionEditorForm({
     disabled: false,
   });
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [folders, setFolders] = useState<QuestionFolder[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(Boolean(questionId));
   const [saving, setSaving] = useState(false);
@@ -63,6 +68,17 @@ export function QuestionEditorForm({
   const [pendingImage, setPendingImage] = useState<Blob | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [removeImage, setRemoveImage] = useState(false);
+
+  useEffect(() => {
+    if (questionId || !initialFolderId) return;
+    setForm((current) => ({ ...current, folderId: initialFolderId }));
+  }, [initialFolderId, questionId]);
+
+  useEffect(() => {
+    void questionBankService.getFolders().then(setFolders).catch((cause) =>
+      setError(cause instanceof Error ? cause.message : "Không thể tải thư mục câu hỏi"),
+    );
+  }, []);
 
   useEffect(() => {
     void academicDataService
@@ -104,6 +120,7 @@ export function QuestionEditorForm({
       .getQuestionById(questionId)
       .then((question) => {
         setForm({
+          folderId: question.folderId ?? null,
           subjectId: question.subjectId,
           subjectName: question.subjectName,
           topicId: question.topicId,
@@ -286,6 +303,12 @@ export function QuestionEditorForm({
                 className={`grid gap-4 md:grid-cols-2 ${embedded ? "mt-3" : "mt-4"}`}
               >
                 <CustomSelect
+                  label="Thư mục câu hỏi"
+                  value={form.folderId ?? ""}
+                  options={[{ value: "", label: "Chưa xếp thư mục" }, ...folders.map((folder) => ({ value: folder.id, label: `${"　".repeat(folder.depth - 1)}${folder.name}` }))]}
+                  onValueChange={(value) => update("folderId", value || null)}
+                />
+                <CustomSelect
                   label="Môn học"
                   value={form.subjectId}
                   options={subjects.map((subject) => ({
@@ -439,15 +462,24 @@ export function QuestionEditorForm({
 export function QuestionEditorPage() {
   const params = useParams<{ id?: string }>();
   const router = useRouter();
+  const [initialFolderId, setInitialFolderId] = useState<string>();
   const questionId = params.id === "new" ? undefined : params.id;
+
+  useEffect(() => {
+    setInitialFolderId(new URLSearchParams(window.location.search).get("folderId") ?? undefined);
+  }, []);
+  const bankHref = initialFolderId
+    ? `/teacher/question-bank?folderId=${encodeURIComponent(initialFolderId)}`
+    : "/teacher/question-bank";
 
   return (
     <AssessmentShell>
       <PageHeading title={questionId ? "Chỉnh sửa câu hỏi" : "Tạo câu hỏi mới"} />
       <QuestionEditorForm
         questionId={questionId}
-        onSaved={() => router.push("/teacher/question-bank")}
-        onCancel={() => router.push("/teacher/question-bank")}
+        initialFolderId={initialFolderId}
+        onSaved={() => router.push(bankHref)}
+        onCancel={() => router.push(bankHref)}
       />
     </AssessmentShell>
   );

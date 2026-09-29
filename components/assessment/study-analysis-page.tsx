@@ -5,15 +5,11 @@ import {
   ArrowLeft,
   BookOpen,
   BrainCircuit,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
-  Clock3,
   CircleHelp,
-  FileSearch,
   Lightbulb,
-  ListChecks,
   LoaderCircle,
   RotateCcw,
   Send,
@@ -26,38 +22,22 @@ import { ErrorPanel } from "@/components/assessment/assessment-shell";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { examAttemptService } from "@/lib/assessment-api";
-import { ApiError } from "@/lib/auth-api";
+import { loadOrCreateStudentStudyAnalysis } from "@/lib/study-analysis-loader";
+import { PracticeAttemptHistory } from "@/components/assessment/practice-attempt-history";
 import { StudyPracticeHistory } from "@/components/assessment/study-practice-history";
 import Link from "next/link";
+import {
+  StudyAnalysisDetails,
+  ReviewLabel,
+  FeedbackControl,
+  sourceMeta,
+} from "@/components/assessment/study-analysis-details";
 import type { StudyAiFeedback } from "@/types/assessment";
 import type {
   StudyAnalysis,
-  StudyLearningPath,
   StudyPracticeMode,
   StudyPracticeSet,
-  StudySourceType,
 } from "@/types/assessment";
-
-const sourceMeta: Record<
-  StudySourceType,
-  { label: string; description: string; tone: string }
-> = {
-  SOURCE_UNAVAILABLE: {
-    label: "Chưa kiểm tra được nguồn",
-    description: "Tài liệu chưa truy xuất được; chưa đủ căn cứ để kết luận nội dung nằm ngoài tài liệu.",
-    tone: "bg-slate-100 text-slate-700",
-  },
-  COURSE_MATERIAL: {
-    label: "Trong tài liệu môn học",
-    description: "Được đối chiếu với tài liệu giáo viên đã gán cho lớp.",
-    tone: "bg-emerald-50 text-emerald-700",
-  },
-  EXTERNAL_KNOWLEDGE: {
-    label: "Kiến thức bổ sung",
-    description: "Chưa tìm thấy nội dung tương ứng rõ ràng trong tài liệu lớp.",
-    tone: "bg-amber-50 text-amber-700",
-  },
-};
 
 export function StudentStudyAnalysisPage() {
   const params = useParams<{ id: string }>();
@@ -82,14 +62,9 @@ export function StudentStudyAnalysisPage() {
 
     async function loadAnalysis() {
       try {
-        let loaded: StudyAnalysis;
-        try {
-          loaded = await examAttemptService.getStudyAnalysis(params.id);
-        } catch (cause) {
-          if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+        const loaded = await loadOrCreateStudentStudyAnalysis(params.id, () => {
           if (active) setGenerating(true);
-          loaded = await examAttemptService.createStudyAnalysis(params.id);
-        }
+        });
         if (!active) return;
         setAnalysis(loaded);
         setHints({});
@@ -127,7 +102,8 @@ export function StudentStudyAnalysisPage() {
   }, [params.id]);
 
   const practice = analysis?.practiceSet ?? null;
-  const activeTab = searchParams.get("tab") === "practice" ? "practice" : "theory";
+  const activeTab =
+    searchParams.get("tab") === "practice" ? "practice" : "theory";
   const answeredCount = useMemo(
     () =>
       practice?.questions.filter((question) => answers[question.id]?.length)
@@ -141,14 +117,25 @@ export function StudentStudyAnalysisPage() {
   }
 
   async function startPractice(mode: StudyPracticeMode) {
-    if (!practice || practice.status === "SUBMITTED" || practice.startedAt) return;
+    if (!practice || practice.status === "SUBMITTED" || practice.startedAt)
+      return;
     setStarting(true);
     setError("");
     try {
-      const updated = await examAttemptService.startStudyPractice(practice.id, practice.attemptId, mode);
-      setAnalysis((current) => current ? { ...current, practiceSet: updated } : current);
+      const updated = await examAttemptService.startStudyPractice(
+        practice.id,
+        practice.attemptId,
+        mode,
+      );
+      setAnalysis((current) =>
+        current ? { ...current, practiceSet: updated } : current,
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể bắt đầu lượt luyện tập");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể bắt đầu lượt luyện tập",
+      );
     } finally {
       setStarting(false);
     }
@@ -192,15 +179,26 @@ export function StudentStudyAnalysisPage() {
     setRetrying(true);
     setError("");
     try {
-      const updated = await examAttemptService.retryStudyPractice(practice.id, practice.attemptId);
+      const updated = await examAttemptService.retryStudyPractice(
+        practice.id,
+        practice.attemptId,
+      );
       setAnalysis((current) =>
         current ? { ...current, practiceSet: updated } : current,
       );
-      setAnswers({});
+      setAnswers(
+        updated.status === "SUBMITTED"
+          ? Object.fromEntries(
+              updated.questions.map((q) => [q.id, q.selectedOptionIds ?? []]),
+            )
+          : {},
+      );
       setHints({});
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Không thể tạo lượt ôn tập mới",
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tạo lượt ôn tập mới",
       );
     } finally {
       setRetrying(false);
@@ -217,7 +215,11 @@ export function StudentStudyAnalysisPage() {
       );
       setHints((current) => ({ ...current, [questionId]: hint.message }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Không thể lấy gợi ý cách giải");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể lấy gợi ý cách giải",
+      );
     }
   }
 
@@ -225,12 +227,25 @@ export function StudentStudyAnalysisPage() {
     setGenerating(true);
     setError("");
     try {
-      const updated = await examAttemptService.createStudyAnalysis(params.id);
+      const updated = await examAttemptService.retryStudyAnalysis(params.id);
       setAnalysis(updated);
-      setAnswers({});
+      setAnswers(
+        updated.practiceSet?.status === "SUBMITTED"
+          ? Object.fromEntries(
+              updated.practiceSet.questions.map((q) => [
+                q.id,
+                q.selectedOptionIds ?? [],
+              ]),
+            )
+          : {},
+      );
       setHints({});
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Chưa thể tạo lại nội dung ôn tập");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Chưa thể tạo lại nội dung ôn tập",
+      );
     } finally {
       setGenerating(false);
     }
@@ -240,10 +255,20 @@ export function StudentStudyAnalysisPage() {
     router.push(`/student/attempts/${params.id}/study?tab=${tab}`);
   }
 
-  async function sendFeedback(targetKey: string, reason: StudyAiFeedback["reason"], comment: string) {
+  async function sendFeedback(
+    targetKey: string,
+    reason: StudyAiFeedback["reason"],
+    comment: string,
+  ) {
     setFeedbackMessage("");
-    await examAttemptService.submitStudyAiFeedback(params.id, { targetKey, reason, comment });
-    setFeedbackMessage("Đã gửi phản hồi đến giáo viên. Báo cáo chỉ đổi khi giáo viên xử lý.");
+    await examAttemptService.submitStudyAiFeedback(params.id, {
+      targetKey,
+      reason,
+      comment,
+    });
+    setFeedbackMessage(
+      "Đã gửi phản hồi đến giáo viên. Báo cáo chỉ đổi khi giáo viên xử lý.",
+    );
   }
 
   if (loading) {
@@ -271,7 +296,11 @@ export function StudentStudyAnalysisPage() {
     return (
       <StudentShell>
         <div className="mx-auto max-w-2xl">
-          <Button variant="ghost" className="mb-4" onClick={() => router.back()}>
+          <Button
+            variant="ghost"
+            className="mb-4"
+            onClick={() => router.back()}
+          >
             <ArrowLeft className="size-4" /> Quay lại kết quả
           </Button>
           <ErrorPanel message={error} />
@@ -282,6 +311,9 @@ export function StudentStudyAnalysisPage() {
   if (!analysis) return null;
 
   const { report } = analysis;
+  const assessmentOnly =
+    report.analysisScope === "ASSESSMENT_ONLY" ||
+    report.aiStatus === "SKIPPED_NO_MATERIAL";
   return (
     <StudentShell>
       <div className="mb-4">
@@ -295,27 +327,61 @@ export function StudentStudyAnalysisPage() {
           <ErrorPanel message={error} />
         </div>
       ) : null}
-      {feedbackMessage ? <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{feedbackMessage}</p> : null}
-      <Link href="/student/learning-plans" className="mb-4 inline-block text-sm font-bold text-brand-700 underline">Xem lộ trình giáo viên đã giao</Link>
+      {feedbackMessage ? (
+        <p
+          role="status"
+          className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700"
+        >
+          {feedbackMessage}
+        </p>
+      ) : null}
+      <Link
+        href="/student/learning-plans"
+        className="mb-4 inline-block text-sm font-bold text-brand-700 underline"
+      >
+        Xem lộ trình giáo viên đã giao
+      </Link>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
+        <p
+          role="status"
+          className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          Phân tích đã được lưu lúc{" "}
+          {new Date(analysis.generatedAt).toLocaleString("vi-VN")}. Giáo viên
+          của bạn cũng xem báo cáo này.
+        </p>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)] lg:items-center">
           <div>
             <p className="text-sm font-bold text-brand-600">
               {report.exam.subjectName} · {report.exam.className}
             </p>
             <h1 className="mt-1.5 text-2xl font-black text-slate-950 sm:text-3xl">
-              Kết quả và lộ trình ôn tập
+              {assessmentOnly
+                ? "Kết quả và đánh giá nguy cơ"
+                : "Kết quả và lộ trình ôn tập"}
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {report.summary}
             </p>
-            <ReviewLabel state={report.reviewStates?.SUMMARY} />
-            <FeedbackControl onSend={(reason, comment) => sendFeedback("SUMMARY", reason, comment)} />
+            {!assessmentOnly ? (
+              <>
+                <ReviewLabel state={report.reviewStates?.SUMMARY} />
+                <FeedbackControl
+                  onSend={(reason, comment) =>
+                    sendFeedback("SUMMARY", reason, comment)
+                  }
+                />
+              </>
+            ) : null}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-blue-50 p-4">
-              <p className="text-xs font-semibold text-brand-600">Độ chính xác</p>
+              <p className="text-xs font-semibold text-brand-600">
+                {report.performance.ungradedEssayCount
+                  ? "Độ chính xác phần đã chấm"
+                  : "Độ chính xác"}
+              </p>
               <p className="mt-1 text-2xl font-black text-brand-800">
                 {report.performance.accuracy}%
               </p>
@@ -328,38 +394,76 @@ export function StudentStudyAnalysisPage() {
               </p>
             </div>
             <div className="rounded-xl bg-violet-50 p-4">
-              <p className="text-xs font-semibold text-violet-700">Điểm bài làm</p>
-              <p className="mt-1 text-2xl font-black text-violet-800">{report.performance.score ?? "—"}/{report.performance.totalPoints}</p>
+              <p className="text-xs font-semibold text-violet-700">
+                {report.performance.ungradedEssayCount
+                  ? "Điểm phần đã chấm"
+                  : "Điểm bài làm"}
+              </p>
+              <p className="mt-1 text-2xl font-black text-violet-800">
+                {report.performance.score ?? "—"}/
+                {report.performance.totalPoints}
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      <nav className="mt-5 flex w-full gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card sm:w-fit">
-        <Button
-          variant={activeTab === "theory" ? "primary" : "ghost"}
-          className="gap-2"
-          onClick={() => openTab("theory")}
-        >
-          <BookOpen className="size-4" /> Ôn tập lý thuyết
-        </Button>
-        <Button
-          variant={activeTab === "practice" ? "primary" : "ghost"}
-          className="gap-2"
-          onClick={() => openTab("practice")}
-        >
-          <BrainCircuit className="size-4" /> Luyện tập
-        </Button>
-      </nav>
+      {report.performance.ungradedEssayCount > 0 ? (
+        <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+          Còn {report.performance.ungradedEssayCount} câu tự luận chờ chấm. Chưa
+          có kết luận về tổng điểm hoàn chỉnh.
+        </p>
+      ) : null}
+      {report.performance.snapshotOrigin === "LEGACY_INCOMPLETE" ? (
+        <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+          Dữ liệu bài làm cũ chưa đủ để xác nhận tiến bộ. Hãy làm bài đánh giá
+          mới để giáo viên chọn mốc ban đầu.
+        </p>
+      ) : null}
 
-      {activeTab === "theory" && report.performance.needsWarning ? (
+      {assessmentOnly ? (
+        <div className="mt-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <CircleAlert className="mt-0.5 size-5 shrink-0" />
+          <div>
+            <p className="font-black">Chưa tạo lộ trình học</p>
+            <p className="mt-1 leading-6">
+              Môn học chưa có tài liệu được giáo viên gắn và xử lý sẵn sàng. Kết
+              quả bên dưới chỉ phản ánh nguy cơ từ các bài kiểm tra, không dùng
+              để sinh nội dung ôn tập hoặc bài luyện AI.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {!assessmentOnly ? (
+        <nav className="mt-5 flex w-full gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card sm:w-fit">
+          <Button
+            variant={activeTab === "theory" ? "primary" : "ghost"}
+            className="gap-2"
+            onClick={() => openTab("theory")}
+          >
+            <BookOpen className="size-4" /> Ôn tập lý thuyết
+          </Button>
+          <Button
+            variant={activeTab === "practice" ? "primary" : "ghost"}
+            className="gap-2"
+            onClick={() => openTab("practice")}
+          >
+            <BrainCircuit className="size-4" /> Luyện tập
+          </Button>
+        </nav>
+      ) : null}
+
+      {(activeTab === "theory" || assessmentOnly) &&
+      report.performance.needsWarning ? (
         <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-600" />
           <div>
             <p className="font-black">Kết quả hiện tại dưới mức trung bình</p>
             <p className="mt-1 leading-6">
-              Bạn nên hoàn thành lộ trình bên dưới theo đúng thứ tự, ưu tiên các
-              chủ đề có độ chính xác thấp trước.
+              {assessmentOnly
+                ? "Kết quả bài kiểm tra cho thấy bạn đang có nguy cơ cần hỗ trợ. Giáo viên cần gắn tài liệu môn học trước khi hệ thống có thể đề xuất lộ trình."
+                : "Bạn nên hoàn thành lộ trình bên dưới theo đúng thứ tự, ưu tiên các chủ đề có độ chính xác thấp trước."}
             </p>
           </div>
         </div>
@@ -369,163 +473,31 @@ export function StudentStudyAnalysisPage() {
         <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <CircleAlert className="mt-0.5 size-5 shrink-0" />
           <p>
-            Hiện AI chưa tạo được phần tổng hợp chi tiết. Thống kê chủ đề và
-            dữ liệu đã thu thập vẫn được giữ nguyên. Bạn có thể ôn theo lộ trình
-            và các nguồn đã đối chiếu; chưa có bộ câu hỏi AI đạt kiểm tra chất lượng.
+            Hiện AI chưa tạo được phần tổng hợp chi tiết. Thống kê chủ đề và dữ
+            liệu đã thu thập vẫn được giữ nguyên. Bạn có thể ôn theo lộ trình và
+            các nguồn đã đối chiếu; chưa có bộ câu hỏi AI đạt kiểm tra chất
+            lượng.
           </p>
-          <Button variant="ghost" disabled={generating} onClick={() => void retryAnalysis()}>
-            {generating ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} Thử lại AI
+          <Button
+            variant="ghost"
+            disabled={generating}
+            onClick={() => void retryAnalysis()}
+          >
+            {generating ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}{" "}
+            Thử lại AI
           </Button>
         </div>
       ) : null}
 
-      {activeTab === "theory" ? (
-        <>
-          {report.learningProfile?.length ? (
-            <section className="mt-5 rounded-2xl border border-blue-100 bg-white p-5 shadow-card">
-              <h2 className="font-black">Hồ sơ học tập cá nhân</h2>
-              <p className="mt-1 text-sm text-slate-500">Dựa trên bài này và {report.historyAnalysisCount ?? 0} bài đã được phân tích trước đó cùng môn/lớp. Mức nắm vững là ước lượng để chọn bài ôn, không phải điểm kiểm tra.</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {report.learningProfile.map((topic) => (
-                  <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
-                    <div className="flex justify-between gap-3"><h3 className="font-bold">{topic.topicName}</h3><span className="font-bold text-blue-700">{topic.masteryEstimate}%</span></div>
-                    <p className="mt-2 text-xs text-slate-500">{topic.sampleSize} câu quan sát · {topic.evidenceLevel === "LIMITED" ? "Cần thêm dữ liệu" : topic.trend === "IMPROVING" ? "Đang tiến bộ" : topic.trend === "DECLINING" ? "Cần củng cố lại" : topic.trend === "STABLE" ? "Tương đối ổn định" : "Chưa đủ dữ liệu so sánh"}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">{topic.recommendation}</p>
-                    <p className="mt-2 text-xs font-semibold text-blue-700">Mức luyện đề xuất: {topic.recommendedDifficulty === "EASY" ? "Nền tảng" : topic.recommendedDifficulty === "MEDIUM" ? "Vận dụng" : "Nâng cao"}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-          <LearningPathSection learningPath={report.learningPath} />
-
-          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-brand-700">
-              <FileSearch className="size-5" />
-            </span>
-            <div>
-              <h2 className="font-black">Kết quả theo chủ đề</h2>
-              <p className="text-xs text-slate-500">Ưu tiên phần có tỷ lệ thấp</p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {report.topicPerformance.map((topic) => (
-              <div key={topic.topicName} className="rounded-xl bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-bold text-slate-700">
-                    {topic.topicName}
-                  </span>
-                  <span className="font-black text-slate-900">
-                    {topic.accuracy}%
-                  </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full ${topic.accuracy >= 80 ? "bg-emerald-500" : topic.accuracy >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
-                    style={{ width: `${topic.accuracy}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  {topic.correctCount}/{topic.totalQuestions} câu đúng
-                </p>
-              </div>
-            ))}
-          </div>
-          </section>
-
-        <div className="mt-6 space-y-4">
-          <div>
-            <h2 className="text-xl font-black">Nội dung cần ôn lại</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Gợi ý được tách rõ theo nguồn để bạn biết nội dung nào thuộc tài
-              liệu chính thức của lớp.
-            </p>
-          </div>
-          {report.weakAreas.length === 0 ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-              <CheckCircle2 className="mx-auto size-10 text-emerald-600" />
-              <h3 className="mt-3 font-black text-emerald-800">
-                Chưa phát hiện lỗ hổng kiến thức
-              </h3>
-              <p className="mt-1 text-sm text-emerald-700">
-                Bạn đã trả lời đúng toàn bộ câu hỏi có thể chấm tự động.
-              </p>
-            </div>
-          ) : (
-            report.weakAreas.map((area) => {
-              const meta = sourceMeta[area.sourceType];
-              return (
-                <article
-                  key={area.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${meta.tone}`}
-                      >
-                        {meta.label}
-                      </span>
-                      <h3 className="mt-3 text-lg font-black">
-                        {area.topicName}
-                      </h3>
-                    </div>
-                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
-                      Sai {area.missedCount}/{area.totalQuestions} câu
-                    </span>
-                  </div>
-                  <p className="mt-4 text-sm font-semibold leading-6 text-slate-700">
-                    {area.diagnosis}
-                  </p>
-                  <ReviewLabel state={report.reviewStates?.[`AREA:${area.id}:DIAGNOSIS`]} />
-                  <FeedbackControl onSend={(reason, comment) => sendFeedback(`AREA:${area.id}:DIAGNOSIS`, reason, comment)} />
-                  <div className="mt-4 rounded-xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-sm font-black text-slate-800">
-                      <Lightbulb className="size-4 text-amber-500" /> Gợi ý ôn tập
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {area.reviewSummary}
-                    </p>
-                    <ReviewLabel state={report.reviewStates?.[`AREA:${area.id}:REVIEW`]} />
-                    <FeedbackControl onSend={(reason, comment) => sendFeedback(`AREA:${area.id}:REVIEW`, reason, comment)} />
-                    {area.keyPoints.length ? (
-                      <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                        {area.keyPoints.map((point) => (
-                          <li key={point} className="flex gap-2">
-                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-500" />
-                            <span>{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  {area.sourceReferences.length ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {area.sourceReferences.map((source) => (
-                        <span
-                          key={`${source.documentName}-${source.page}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700"
-                        >
-                          <BookOpen className="size-3.5" /> {source.documentName} ·
-                          trang {source.page}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-xs font-medium text-amber-700">
-                      {meta.description}
-                    </p>
-                  )}
-                </article>
-              );
-            })
-          )}
-        </div>
-        </>
+      {activeTab === "theory" || assessmentOnly ? (
+        <StudyAnalysisDetails report={report} onFeedback={sendFeedback} />
       ) : null}
 
-      {activeTab === "practice" ? (
+      {activeTab === "practice" && !assessmentOnly ? (
         <PracticeSection
           practice={practice}
           answers={answers}
@@ -542,92 +514,10 @@ export function StudentStudyAnalysisPage() {
           onFeedback={sendFeedback}
         />
       ) : null}
-      {activeTab === "practice" && practice ? <StudyPracticeHistory practice={practice} /> : null}
+      {activeTab === "practice" && !assessmentOnly && practice ? (
+        <StudyPracticeHistory practice={practice} />
+      ) : null}
     </StudentShell>
-  );
-}
-
-function ReviewLabel({ state }: { state?: { decision: "CONFIRMED" | "EDITED" | "REJECTED"; version: number; reason: string } }) {
-  return <p className="mt-2 text-xs font-semibold text-blue-700">{!state ? "AI đề xuất · chưa được giáo viên xác nhận" : state.decision === "CONFIRMED" ? "Giáo viên đã xác nhận" : state.decision === "EDITED" ? `Giáo viên đã sửa · ${state.reason}` : `Giáo viên đã bác bỏ · ${state.reason}`}</p>;
-}
-
-function FeedbackControl({ onSend }: { onSend: (reason: StudyAiFeedback["reason"], comment: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState<StudyAiFeedback["reason"]>("UNCLEAR");
-  const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  return <div className="mt-2 text-xs"><button type="button" className="font-semibold text-brand-700 underline" onClick={() => setOpen(!open)}>Báo nhận định chưa đúng/rõ</button>{open ? <div className="mt-2 flex flex-wrap gap-2"><select className="rounded-lg border p-2" value={reason} onChange={(event) => setReason(event.target.value as StudyAiFeedback["reason"])}><option value="WRONG_KNOWLEDGE">Sai kiến thức</option><option value="OUT_OF_SCOPE">Ngoài phạm vi</option><option value="INSUFFICIENT_EVIDENCE">Thiếu bằng chứng</option><option value="UNCLEAR">Chưa rõ</option></select><input className="min-w-40 flex-1 rounded-lg border p-2" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Ghi chú thêm" /><Button size="sm" disabled={busy} onClick={() => { setBusy(true); setError(""); void onSend(reason, comment).then(() => { setOpen(false); setComment(""); }).catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể gửi phản hồi")).finally(() => setBusy(false)); }}>Gửi</Button>{error ? <p role="alert" className="w-full text-rose-700">{error}</p> : null}</div> : null}</div>;
-}
-
-function LearningPathSection({
-  learningPath,
-}: {
-  learningPath: StudyLearningPath;
-}) {
-  return (
-    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
-            <ListChecks className="size-5" />
-          </span>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-600">Lộ trình đề xuất</p>
-            <h2 className="mt-1 text-xl font-black">Học theo từng bước</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Hoàn thành lần lượt để củng cố phần kiến thức còn yếu.
-            </p>
-          </div>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-brand-700">
-          <Clock3 className="size-3.5" /> Khoảng {learningPath.totalDurationMinutes} phút
-        </span>
-      </div>
-
-      <ol className="mt-5 space-y-3">
-        {learningPath.steps.map((step) => (
-          <li
-            key={`${step.order}-${step.topicName}`}
-            className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5"
-          >
-            <div className="flex flex-wrap items-start gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-sm font-black text-white">
-                {step.order}
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-brand-600">{step.topicName}</p>
-                <h3 className="mt-1 font-black text-slate-900">{step.title}</h3>
-              </div>
-              <span className="ml-auto shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-bold text-slate-500">
-                {step.durationMinutes} phút
-              </span>
-            </div>
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                Mục tiêu
-              </p>
-              <p className="mt-1.5 text-sm leading-6 text-slate-600">
-                {step.objective}
-              </p>
-            </div>
-            <div className="mt-3 rounded-xl bg-emerald-50/60 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
-                Cần hoàn thành
-              </p>
-              <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
-                {step.activities.map((activity) => (
-                  <li key={activity} className="flex items-start gap-2.5">
-                    <CheckCircle2 className="mt-1 size-4 shrink-0 text-emerald-500" />
-                    <span>{activity}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }
 
@@ -658,7 +548,11 @@ function PracticeSection({
   onSubmit: () => void;
   onRetry: () => void;
   onGetHint: (questionId: string) => void;
-  onFeedback: (targetKey: string, reason: StudyAiFeedback["reason"], comment: string) => Promise<void>;
+  onFeedback: (
+    targetKey: string,
+    reason: StudyAiFeedback["reason"],
+    comment: string,
+  ) => Promise<void>;
 }) {
   const [mode, setMode] = useState<StudyPracticeMode>("EASY");
   const [started, setStarted] = useState(false);
@@ -669,29 +563,67 @@ function PracticeSection({
 
   useEffect(() => {
     const persistedMode = practice?.mode;
-    setMode(persistedMode === "EASY" || persistedMode === "HARD" ? persistedMode : "EASY");
+    setMode(
+      persistedMode === "EASY" || persistedMode === "HARD"
+        ? persistedMode
+        : "EASY",
+    );
     setStarted(Boolean(practice?.startedAt));
     setIndex(0);
-    setRemainingSeconds(practice?.startedAt && persistedMode === "HARD"
-      ? Math.max(0, Math.ceil((new Date(practice.startedAt).getTime() + practiceDuration * 1000 - Date.now()) / 1000))
-      : practiceDuration);
-  }, [practice?.attemptId, practice?.startedAt, practice?.mode, practiceDuration]);
+    setRemainingSeconds(
+      practice?.startedAt && persistedMode === "HARD"
+        ? Math.max(
+            0,
+            Math.ceil(
+              (new Date(practice.startedAt).getTime() +
+                practiceDuration * 1000 -
+                Date.now()) /
+                1000,
+            ),
+          )
+        : practiceDuration,
+    );
+  }, [
+    practice?.attemptId,
+    practice?.startedAt,
+    practice?.mode,
+    practiceDuration,
+  ]);
 
   useEffect(() => {
-    if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0) return;
-    const updateTime = () => setRemainingSeconds(Math.max(0, Math.ceil(
-      (new Date(practice?.startedAt ?? 0).getTime() + practiceDuration * 1000 - Date.now()) / 1000,
-    )));
+    if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0)
+      return;
+    const updateTime = () =>
+      setRemainingSeconds(
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(practice?.startedAt ?? 0).getTime() +
+              practiceDuration * 1000 -
+              Date.now()) /
+              1000,
+          ),
+        ),
+      );
     const timer = window.setInterval(updateTime, 1000);
     document.addEventListener("visibilitychange", updateTime);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", updateTime);
     };
-  }, [mode, remainingSeconds, started, submitted, practice?.startedAt, practiceDuration]);
+  }, [
+    mode,
+    remainingSeconds,
+    started,
+    submitted,
+    practice?.startedAt,
+    practiceDuration,
+  ]);
 
   if (!practice) return null;
-  const rejected = practice.questions.some((question) => question.reviewDecision === "REJECTED");
+  const rejected = practice.questions.some(
+    (question) => question.reviewDecision === "REJECTED",
+  );
   const timeExpired = mode === "HARD" && started && remainingSeconds === 0;
   const locked = submitted || timeExpired;
   const formattedRemaining = `${Math.floor(remainingSeconds / 60)
@@ -700,12 +632,24 @@ function PracticeSection({
   const currentQuestion = practice.questions[index];
   return (
     <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
+      <PracticeAttemptHistory
+        key={practice.id}
+        practiceSetId={practice.id}
+        items={practice.attemptHistory ?? []}
+      />
       {submitted && practice.feedback?.length ? (
         <div className="mb-5 space-y-3 rounded-xl bg-emerald-50 p-4">
           <h3 className="font-black text-emerald-900">Bước học tiếp theo</h3>
           {practice.feedback.map((item) => (
-            <div key={item.topicName} className="text-sm leading-6 text-emerald-900">
-              <p className="font-bold">{item.topicName}: {item.correctCount}/{item.totalQuestions} câu đúng · Ôn lại ngày {new Date(item.reviewAt).toLocaleDateString("vi-VN")}</p>
+            <div
+              key={item.objectiveId ?? item.topicName}
+              className="text-sm leading-6 text-emerald-900"
+            >
+              <p className="font-bold">
+                {item.topicName}: {item.correctCount}/{item.totalQuestions} câu
+                đúng · Ôn lại ngày{" "}
+                {new Date(item.reviewAt).toLocaleDateString("vi-VN")}
+              </p>
               <p>{item.recommendation}</p>
             </div>
           ))}
@@ -719,7 +663,9 @@ function PracticeSection({
               Luyện tập thích ứng
             </p>
           </div>
-          <h2 className="mt-2 text-xl font-black">Câu hỏi ôn tập dành cho bạn</h2>
+          <h2 className="mt-2 text-xl font-black">
+            Câu hỏi ôn tập dành cho bạn
+          </h2>
           <p className="mt-1 text-sm text-slate-500">
             Câu hỏi mới được tạo từ đúng những chủ đề bạn đang thiếu hụt.
           </p>
@@ -732,11 +678,17 @@ function PracticeSection({
             </p>
           </div>
         ) : mode === "HARD" && started ? (
-          <div className={`rounded-xl px-4 py-3 text-right ${timeExpired ? "bg-rose-50" : "bg-slate-100"}`}>
-            <p className={`text-xs font-bold ${timeExpired ? "text-rose-600" : "text-slate-500"}`}>
+          <div
+            className={`rounded-xl px-4 py-3 text-right ${timeExpired ? "bg-rose-50" : "bg-slate-100"}`}
+          >
+            <p
+              className={`text-xs font-bold ${timeExpired ? "text-rose-600" : "text-slate-500"}`}
+            >
               {timeExpired ? "Đã hết thời gian" : "Thời gian còn lại"}
             </p>
-            <p className={`text-2xl font-black ${timeExpired ? "text-rose-700" : "text-slate-800"}`}>
+            <p
+              className={`text-2xl font-black ${timeExpired ? "text-rose-700" : "text-slate-800"}`}
+            >
               {formattedRemaining}
             </p>
           </div>
@@ -753,9 +705,12 @@ function PracticeSection({
             <Trophy className="size-5" />
           </span>
           <div>
-            <p className="font-black">Chúc mừng! Bạn đã trả lời đúng tất cả câu hỏi.</p>
+            <p className="font-black">
+              Chúc mừng! Bạn đã trả lời đúng tất cả câu hỏi.
+            </p>
             <p className="mt-1 text-sm leading-6 text-emerald-700">
-              Bạn đã hoàn thành tốt phần luyện tập này. Hãy tiếp tục duy trì phong độ ở các chủ đề khác nhé.
+              Bạn đã hoàn thành tốt phần luyện tập này. Hãy tiếp tục duy trì
+              phong độ ở các chủ đề khác nhé.
             </p>
           </div>
         </div>
@@ -763,7 +718,9 @@ function PracticeSection({
 
       {!submitted && !started ? (
         <div className="mt-6 rounded-2xl bg-slate-50 p-4 sm:p-5">
-          <p className="text-sm font-black text-slate-900">Chọn chế độ luyện tập</p>
+          <p className="text-sm font-black text-slate-900">
+            Chọn chế độ luyện tập
+          </p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <button
               type="button"
@@ -778,7 +735,8 @@ function PracticeSection({
                 <CircleHelp className="size-5" /> Dễ · học có hướng dẫn
               </div>
               <p className="mt-1.5 text-sm leading-5 text-slate-600">
-                Có gợi ý cách giải để bạn tự suy luận. Bạn có thể làm lại để củng cố kiến thức.
+                Có gợi ý cách giải để bạn tự suy luận. Bạn có thể làm lại để
+                củng cố kiến thức.
               </p>
             </button>
             <button
@@ -794,7 +752,8 @@ function PracticeSection({
                 <TimerReset className="size-5" /> Khó · mô phỏng kiểm tra
               </div>
               <p className="mt-1.5 text-sm leading-5 text-slate-600">
-                Có giới hạn thời gian, không gợi ý và không hiện đáp án khi bạn chọn.
+                Có giới hạn thời gian, không gợi ý và không hiện đáp án khi bạn
+                chọn.
               </p>
             </button>
           </div>
@@ -804,123 +763,173 @@ function PracticeSection({
                 disabled={starting || rejected}
                 onClick={() => onStart(mode)}
               >
-                {starting ? <LoaderCircle className="size-4 animate-spin" /> : mode === "HARD" ? <TimerReset className="size-4" /> : <BrainCircuit className="size-4" />}
-                {starting ? "Đang bắt đầu..." : `Bắt đầu luyện tập ${mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}`}
+                {starting ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : mode === "HARD" ? (
+                  <TimerReset className="size-4" />
+                ) : (
+                  <BrainCircuit className="size-4" />
+                )}
+                {starting
+                  ? "Đang bắt đầu..."
+                  : `Bắt đầu luyện tập ${mode === "HARD" ? `(${Math.ceil(practiceDuration / 60)} phút)` : ""}`}
               </Button>
             </div>
           ) : null}
         </div>
       ) : null}
-      {rejected ? <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">Giáo viên đã bác bỏ ít nhất một câu hỏi trong bộ này; hiện không thể bắt đầu hoặc làm lại.</p> : null}
-
-      {started && !submitted && currentQuestion ? (
-        <><p className="mt-3 text-xs text-blue-700">{currentQuestion.reviewDecision === "CONFIRMED" ? "Giáo viên đã xác nhận" : currentQuestion.reviewDecision === "EDITED" ? "Giáo viên đã sửa" : currentQuestion.reviewDecision === "REJECTED" ? "Giáo viên đã bác bỏ" : "AI đề xuất"}</p><FeedbackControl onSend={(reason, comment) => onFeedback(`QUESTION:${currentQuestion.id}`, reason, comment)} /><PracticeQuestionRunner
-          practice={practice}
-          question={currentQuestion}
-          questionIndex={index}
-          answers={answers}
-          mode={mode}
-          hints={hints}
-          locked={locked}
-          timeExpired={timeExpired}
-          submitting={submitting}
-          onChoose={onChoose}
-          onGetHint={onGetHint}
-          onGoTo={setIndex}
-          onSubmit={onSubmit}
-        /></>
+      {rejected ? (
+        <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+          Giáo viên đã bác bỏ ít nhất một câu hỏi trong bộ này; hiện không thể
+          bắt đầu hoặc làm lại.
+        </p>
       ) : null}
 
-      {submitted ? <div className="mt-6 space-y-5">
-        {practice.questions.map((question, index) => (
-          <article
-            key={question.id}
-            className="rounded-2xl border border-slate-200 p-5"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-brand-600">
-                  Câu {index + 1} · {question.topicName}
-                </p>
-                <h3 className="mt-2 font-bold leading-6">{question.content}</h3>
-                <p className="mt-1 text-xs text-blue-700">{question.reviewDecision === "CONFIRMED" ? "Giáo viên đã xác nhận" : question.reviewDecision === "EDITED" ? "Giáo viên đã sửa" : question.reviewDecision === "REJECTED" ? "Giáo viên đã bác bỏ" : "AI đề xuất"}</p>
-                <FeedbackControl onSend={(reason, comment) => onFeedback(`QUESTION:${question.id}`, reason, comment)} />
-              </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}
-              >
-                {sourceMeta[question.sourceType].label}
-              </span>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {question.options.map((option) => {
-                const selected = answers[question.id]?.includes(option.id);
-                const isCorrectOption = question.correctOptionIds?.includes(
-                  option.id,
-                );
-                const tone = submitted
-                  ? isCorrectOption
-                    ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-                    : selected
-                      ? "border-rose-300 bg-rose-50 text-rose-700"
-                      : "border-slate-200 text-slate-500"
-                  : selected
-                    ? "border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-100"
-                    : "border-slate-200 text-slate-700 hover:border-brand-300";
-                return (
-                  <button
-                    type="button"
-                    key={option.id}
-                    disabled={locked}
-                    onClick={() => onChoose(question.id, option.id)}
-                    className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-semibold transition ${tone}`}
-                  >
-                    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/80 text-xs font-black">
-                      {option.label}
-                    </span>
-                    {option.text}
-                  </button>
-                );
-              })}
-            </div>
-            {submitted ? (
-              <div
-                className={`mt-4 rounded-xl p-4 text-sm ${question.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}
-              >
-                <p className="font-black">
-                  {question.correct ? "Trả lời đúng" : "Cần ôn lại phần này"}
-                </p>
-                <p className="mt-1 leading-6">{question.explanation}</p>
-              </div>
-            ) : mode === "EASY" ? (
-              <div className="mt-4">
-                {hints[question.id] ? (
-                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                    {hints[question.id]}
+      {started && !submitted && currentQuestion ? (
+        <>
+          <p className="mt-3 text-xs text-blue-700">
+            {currentQuestion.reviewDecision === "CONFIRMED"
+              ? "Giáo viên đã xác nhận"
+              : currentQuestion.reviewDecision === "EDITED"
+                ? "Giáo viên đã sửa"
+                : currentQuestion.reviewDecision === "REJECTED"
+                  ? "Giáo viên đã bác bỏ"
+                  : "AI đề xuất"}
+          </p>
+          <FeedbackControl
+            onSend={(reason, comment) =>
+              onFeedback(`QUESTION:${currentQuestion.id}`, reason, comment)
+            }
+          />
+          <PracticeQuestionRunner
+            practice={practice}
+            question={currentQuestion}
+            questionIndex={index}
+            answers={answers}
+            mode={mode}
+            hints={hints}
+            locked={locked}
+            timeExpired={timeExpired}
+            submitting={submitting}
+            onChoose={onChoose}
+            onGetHint={onGetHint}
+            onGoTo={setIndex}
+            onSubmit={onSubmit}
+          />
+        </>
+      ) : null}
+
+      {submitted ? (
+        <div className="mt-6 space-y-5">
+          {practice.questions.map((question, index) => (
+            <article
+              key={question.id}
+              className="rounded-2xl border border-slate-200 p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black text-brand-600">
+                    Câu {index + 1} · {question.topicName}
                   </p>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
-                    onClick={() => onGetHint(question.id)}
-                  >
-                    <Lightbulb className="size-3.5" /> Gợi ý cách giải
-                  </Button>
-                )}
+                  <h3 className="mt-2 font-bold leading-6">
+                    {question.content}
+                  </h3>
+                  <p className="mt-1 text-xs text-blue-700">
+                    {question.reviewDecision === "CONFIRMED"
+                      ? "Giáo viên đã xác nhận"
+                      : question.reviewDecision === "EDITED"
+                        ? "Giáo viên đã sửa"
+                        : question.reviewDecision === "REJECTED"
+                          ? "Giáo viên đã bác bỏ"
+                          : "AI đề xuất"}
+                  </p>
+                  <FeedbackControl
+                    onSend={(reason, comment) =>
+                      onFeedback(`QUESTION:${question.id}`, reason, comment)
+                    }
+                  />
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}
+                >
+                  {sourceMeta[question.sourceType].label}
+                </span>
               </div>
-            ) : null}
-          </article>
-        ))}
-      </div> : null}
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {question.options.map((option) => {
+                  const selected = answers[question.id]?.includes(option.id);
+                  const isCorrectOption = question.correctOptionIds?.includes(
+                    option.id,
+                  );
+                  const tone = submitted
+                    ? isCorrectOption
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                      : selected
+                        ? "border-rose-300 bg-rose-50 text-rose-700"
+                        : "border-slate-200 text-slate-500"
+                    : selected
+                      ? "border-brand-500 bg-brand-50 text-brand-800 ring-2 ring-brand-100"
+                      : "border-slate-200 text-slate-700 hover:border-brand-300";
+                  return (
+                    <button
+                      type="button"
+                      key={option.id}
+                      disabled={locked}
+                      onClick={() => onChoose(question.id, option.id)}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left text-sm font-semibold transition ${tone}`}
+                    >
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/80 text-xs font-black">
+                        {option.label}
+                      </span>
+                      {option.text}
+                    </button>
+                  );
+                })}
+              </div>
+              {submitted ? (
+                <div
+                  className={`mt-4 rounded-xl p-4 text-sm ${question.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}
+                >
+                  <p className="font-black">
+                    {question.correct ? "Trả lời đúng" : "Cần ôn lại phần này"}
+                  </p>
+                  <p className="mt-1 leading-6">{question.explanation}</p>
+                </div>
+              ) : mode === "EASY" ? (
+                <div className="mt-4">
+                  {hints[question.id] ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                      {hints[question.id]}
+                    </p>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-amber-700 hover:text-amber-800"
+                      onClick={() => onGetHint(question.id)}
+                    >
+                      <Lightbulb className="size-3.5" /> Gợi ý cách giải
+                    </Button>
+                  )}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       {submitted ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
           <p className="text-sm text-slate-600">
-            Làm lại sẽ tạo lượt mới và giữ nguyên kết quả vừa hoàn thành trong lịch sử.
+            Làm lại sẽ tạo lượt mới và giữ nguyên kết quả vừa hoàn thành trong
+            lịch sử.
           </p>
           <Button variant="outline" disabled={retrying} onClick={onRetry}>
-            {retrying ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+            {retrying ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <RotateCcw className="size-4" />
+            )}
             {retrying ? "Đang tạo lượt mới..." : "Làm lại"}
           </Button>
         </div>
@@ -1036,10 +1045,17 @@ function PracticeQuestionRunner({
           </span>
           {isLastQuestion ? (
             <Button
-              disabled={(!timeExpired && answeredCount < practice.totalQuestions) || submitting}
+              disabled={
+                (!timeExpired && answeredCount < practice.totalQuestions) ||
+                submitting
+              }
               onClick={onSubmit}
             >
-              {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
+              {submitting ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
               {submitting ? "Đang chấm..." : "Nộp bài"}
             </Button>
           ) : (
@@ -1079,7 +1095,10 @@ function PracticeQuestionRunner({
           <Button
             className="mt-4 w-full"
             variant="danger"
-            disabled={(!timeExpired && answeredCount < practice.totalQuestions) || submitting}
+            disabled={
+              (!timeExpired && answeredCount < practice.totalQuestions) ||
+              submitting
+            }
             onClick={onSubmit}
           >
             <Send className="size-4" /> Nộp bài ngay

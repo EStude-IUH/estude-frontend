@@ -37,6 +37,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { ExamSubmissionsPanel } from "@/components/assessment/exam-submissions-panel";
 import { ExamResultsOverview } from "@/components/assessment/exam-results-overview";
 import { ExamDetailTabs } from "@/components/assessment/exam-detail-tabs";
+import { QuestionFolderTree, folderDescendantIds, type FolderSelection } from "@/components/assessment/question-folder-tree";
 import {
   Table,
   TableBody,
@@ -62,6 +63,7 @@ import {
   teacherSettingsService,
 } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
+import { eligibleExamQuestions, examPickerFolderCounts } from "@/lib/exam-question-picker";
 import {
   getVietnameseSubjectName,
   toVietnameseSubjectName,
@@ -75,6 +77,7 @@ import {
   type ExamQuestion,
   type ExamSettings,
   type Question,
+  type QuestionFolder,
   type Subject,
   type TeacherAssignedClass,
   type TeacherExamDefaults,
@@ -596,6 +599,8 @@ export function ExamWizardPage({
   const [hasVisitedConfigurationStep, setHasVisitedConfigurationStep] =
     useState(Boolean(examId));
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [questionFolders, setQuestionFolders] = useState<QuestionFolder[]>([]);
+  const [pickerFolder, setPickerFolder] = useState<FolderSelection>("all");
   const [selected, setSelected] = useState<ExamQuestion[]>([]);
   const [maximumPoints, setMaximumPoints] = useState(DEFAULT_MAX_POINTS);
   const [scoreDistributionMode, setScoreDistributionMode] =
@@ -769,12 +774,15 @@ export function ExamWizardPage({
   useEffect(() => {
     if (!info.subjectId) {
       setQuestions([]);
+      setQuestionFolders([]);
       return;
     }
     setLoadingQuestions(true);
-    void questionBankService
-      .getQuestions({ subjectId: info.subjectId })
-      .then(setQuestions)
+    void Promise.all([questionBankService.getQuestions(), questionBankService.getFolders()])
+      .then(([loadedQuestions, loadedFolders]) => {
+        setQuestions(loadedQuestions);
+        setQuestionFolders(loadedFolders);
+      })
       .catch((cause) =>
         reportError(
           cause instanceof Error ? cause.message : "Không thể tải câu hỏi",
@@ -811,6 +819,7 @@ export function ExamWizardPage({
     }));
     setSelected([]);
     setSearch("");
+    setPickerFolder("all");
     setQuestionPickerOpen(false);
   }
 
@@ -863,6 +872,7 @@ export function ExamWizardPage({
       new Set(selected.map((question) => question.questionId)),
     );
     setSearch("");
+    setPickerFolder("all");
     setQuestionPickerOpen(true);
   }
 
@@ -926,12 +936,17 @@ export function ExamWizardPage({
     });
   }
 
-  const filteredQuestions = questions.filter(
-    (question) =>
-      !question.disabled &&
-      question.subjectId === info.subjectId &&
-      matchesSearchKeyword(question.keyword, search),
+  const eligibleQuestions = eligibleExamQuestions(
+    questions, info.subjectId, new Set(selected.map((item) => item.questionId)),
   );
+  const pickerFolderIds = pickerFolder !== "all" && pickerFolder !== "unfiled"
+    ? folderDescendantIds(questionFolders, pickerFolder) : null;
+  const filteredQuestions = eligibleQuestions.filter((question) =>
+    (pickerFolder === "all" ||
+      (pickerFolder === "unfiled" ? !question.folderId : pickerFolderIds?.has(question.folderId ?? ""))) &&
+    matchesSearchKeyword(question.keyword, search),
+  );
+  const pickerFolderCounts = examPickerFolderCounts(eligibleQuestions);
   const allFilteredQuestionsSelected =
     filteredQuestions.length > 0 &&
     filteredQuestions.every((question) => draftQuestionIds.has(question.id));
@@ -1250,7 +1265,7 @@ export function ExamWizardPage({
                     {info.subjectName
                       ? toVietnameseSubjectName(info.subjectName)
                       : "đã chọn"}{" "}
-                    từ ngân hàng câu hỏi.
+                    hoặc câu chưa gắn môn từ ngân hàng câu hỏi.
                   </p>
                 </div>
                 <Button onClick={openQuestionPicker}>
@@ -1956,7 +1971,23 @@ export function ExamWizardPage({
             ) : null}
           </div>
         </div>
-        <div className="max-h-[min(62dvh,620px)] overflow-y-auto p-4">
+        <div className="flex min-h-[300px] max-h-[min(62dvh,620px)] flex-col sm:flex-row">
+          <aside className="max-h-40 w-full shrink-0 overflow-y-auto border-b border-slate-100 p-3 sm:max-h-none sm:w-56 sm:border-b-0 sm:border-r">
+            <p className="mb-2 text-xs font-bold text-slate-500">Thư mục câu hỏi</p>
+            <QuestionFolderTree
+              folders={questionFolders}
+              selected={pickerFolder}
+              counts={pickerFolderCounts}
+              canCreate={false}
+              canUpdate={false}
+              canDelete={false}
+              onSelect={setPickerFolder}
+              onCreate={() => undefined}
+              onRename={() => undefined}
+              onDelete={() => undefined}
+            />
+          </aside>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4">
           {loadingQuestions ? (
             <div className="py-16 text-center text-sm text-slate-400">
               Đang tải câu hỏi...
@@ -1967,19 +1998,19 @@ export function ExamWizardPage({
               <p className="mt-3 text-sm font-bold text-slate-700">
                 {search
                   ? "Không tìm thấy câu hỏi phù hợp"
-                  : "Môn học này chưa có câu hỏi"}
+                  : "Chưa có câu hỏi thuộc môn này hoặc chưa gắn môn"}
               </p>
               <p className="mt-1 text-xs text-slate-400">
                 {search
                   ? "Thử tìm bằng nội dung hoặc chủ đề khác."
-                  : "Tạo câu hỏi mới trước khi thêm vào bài kiểm tra."}
+                  : "Chọn thư mục khác hoặc tạo câu hỏi mới trước khi thêm vào bài kiểm tra."}
               </p>
               {!search ? (
                 <Link
                   href="/teacher/question-bank/new"
                   className="mt-3 inline-flex text-xs font-bold text-brand-600 hover:text-brand-800"
                 >
-                  Tạo câu hỏi cho môn này
+                  Tạo câu hỏi mới
                 </Link>
               ) : null}
             </div>
@@ -2006,7 +2037,7 @@ export function ExamWizardPage({
                       </span>
                       <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
                         <span>
-                          {question.topicName || "Chưa phân chủ đề"}
+                          {question.subjectId ? question.topicName || "Chưa phân chủ đề" : "Chưa gắn môn"}
                         </span>
                         <span>·</span>
                         <span>{QUESTION_TYPE_LABELS[question.type]}</span>
@@ -2019,6 +2050,7 @@ export function ExamWizardPage({
               })}
             </div>
           )}
+          </div>
         </div>
       </Modal>
     </ExamWizardFrame>
