@@ -367,7 +367,12 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           {links
             .filter((link) => !link.href || canVisit(link.href))
             .map(({ href, label, icon: Icon }, index) => {
-              const active = Boolean(href && pathname.startsWith(href));
+              const active = Boolean(
+                href &&
+                  (pathname.startsWith(href) ||
+                    (href === "/teacher/learning-support" &&
+                      pathname.startsWith("/teacher/cohorts/"))),
+              );
               return (
                 <div key={`${label}-${index}`}>
                   <button
@@ -403,6 +408,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             pathname === "/teacher/exams/new" ||
             pathname.startsWith("/teacher/exams/") ||
             pathname.startsWith("/teacher/learning-support") ||
+            pathname.startsWith("/teacher/cohorts/") ||
             pathname.startsWith("/teacher/support-requests") ||
             pathname === "/teacher/attendance" ||
             pathname === "/teacher/notifications" ||
@@ -459,6 +465,8 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
     return "Hộp thư hỗ trợ học sinh";
   if (pathname.startsWith("/teacher/learning-plans/"))
     return "Chi tiết lộ trình học";
+  if (/^\/teacher\/cohorts\/[^/]+$/.test(pathname))
+    return "Chi tiết đợt hỗ trợ";
   if (pathname.startsWith("/teacher/learning-support/"))
     return "Theo dõi học tập theo môn";
   if (pathname === "/teacher/question-bank/generate")
@@ -496,6 +504,12 @@ function getWorkspaceBreadcrumbs(
     return [
       { label: "Theo dõi học tập", href: "/teacher/learning-support" },
       { label: "Chi tiết lộ trình học" },
+    ];
+  }
+  if (/^\/teacher\/cohorts\/[^/]+$/.test(pathname)) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết đợt hỗ trợ" },
     ];
   }
   if (pathname.startsWith("/teacher/learning-support/")) {

@@ -75,8 +75,44 @@ const draftPlan = {
   history: [],
 };
 
-async function renderPage(t) {
+const assignedPlan = {
+  ...draftPlan,
+  status: "IN_PROGRESS",
+  tasks: draftPlan.tasks.map((task) => ({
+    ...task,
+    status: "ASSIGNED",
+    practiceSetId: task.kind === "PRACTICE" ? "practice-set" : null,
+  })),
+};
+
+const practicePreview = {
+  planId: "plan",
+  taskId: "practice-task",
+  practiceSetId: "practice-set",
+  totalQuestions: 1,
+  questions: [
+    {
+      id: "question-1",
+      type: "SINGLE_CHOICE",
+      topicName: "Chủ đề chương I",
+      sourceType: "COURSE_MATERIAL",
+      content: "Thủ đô của Việt Nam là thành phố nào?",
+      options: [
+        { id: "a", label: "A", text: "Hà Nội" },
+        { id: "b", label: "B", text: "Huế" },
+      ],
+      correctOptionIds: ["a"],
+      explanation: "Hà Nội là thủ đô của Việt Nam.",
+    },
+  ],
+};
+
+async function renderPage(
+  t,
+  { plan = draftPlan, preview = practicePreview } = {},
+) {
   const publishCalls = [];
+  const previewCalls = [];
   const filename = path.resolve(
     "components/assessment/teacher-learning-plan-page.tsx",
   );
@@ -95,6 +131,7 @@ async function renderPage(t) {
         BookOpen: Icon,
         CalendarDays: Icon,
         CheckCircle2: Icon,
+        ChevronDown: Icon,
         FileText: Icon,
         Send: Icon,
         Target: Icon,
@@ -119,14 +156,18 @@ async function renderPage(t) {
     if (id === "@/lib/assessment-api")
       return {
         learningPlanService: {
-          getTeacher: async () => draftPlan,
+          getTeacher: async () => plan,
+          getTeacherPracticePreview: async (planId) => {
+            previewCalls.push(planId);
+            return preview;
+          },
           publish: async (planId, version) => {
             publishCalls.push({ planId, version });
             return {
-              ...draftPlan,
+              ...plan,
               status: "ASSIGNED",
               version: version + 1,
-              tasks: draftPlan.tasks.map((task) => ({
+              tasks: plan.tasks.map((task) => ({
                 ...task,
                 status: "ASSIGNED",
               })),
@@ -157,7 +198,7 @@ async function renderPage(t) {
   t.after(async () => {
     await act(async () => renderer.unmount());
   });
-  return { renderer, publishCalls };
+  return { renderer, publishCalls, previewCalls };
 }
 
 test("teacher sees draft tasks and can approve the plan", async (t) => {
@@ -183,4 +224,22 @@ test("teacher sees draft tasks and can approve the plan", async (t) => {
   assert.deepEqual(publishCalls, [{ planId: "plan", version: 2 }]);
   assert.match(visibleText(renderer.toJSON()), /Đã duyệt và giao lộ trình/);
   assert.match(visibleText(renderer.toJSON()), /Học sinh đang thực hiện/);
+});
+
+test("teacher can review practice questions, correct answers, and explanations", async (t) => {
+  const { renderer, previewCalls } = await renderPage(t, {
+    plan: assignedPlan,
+  });
+
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const text = visibleText(renderer.toJSON());
+  assert.deepEqual(previewCalls, ["plan"]);
+  assert.match(text, /Xem trước bộ câu luyện · 1 câu/);
+  assert.match(text, /Thủ đô của Việt Nam là thành phố nào/);
+  assert.match(text, /Hà Nội/);
+  assert.match(text, /Hà Nội là thủ đô của Việt Nam/);
 });

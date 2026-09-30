@@ -5,13 +5,34 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { PortalNotification } from "@/types/engagement";
 
-function timeLabel(value: string) {
-  return new Date(value).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
+function isSameLocalDate(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function timeLabel(value: string, now = new Date()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa rõ thời gian";
+  const time = new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
-  });
+    hourCycle: "h23",
+  }).format(date);
+  if (isSameLocalDate(date, now)) return `Hôm nay, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameLocalDate(date, yesterday)) return `Hôm qua, ${time}`;
+  const day = new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    ...(date.getFullYear() === now.getFullYear()
+      ? {}
+      : { year: "numeric" as const }),
+  }).format(date);
+  return `${day}, ${time}`;
 }
 
 export function StudentNotificationPopup({
@@ -52,10 +73,21 @@ export function StudentNotificationPopup({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                    <h3 className="font-bold leading-5 text-slate-900">{item.title}</h3>
-                    <time className="shrink-0 text-xs text-slate-400">{timeLabel(item.createdAt)}</time>
+                    <h3 className="line-clamp-2 font-bold leading-5 text-slate-900">{item.title}</h3>
+                    <time
+                      dateTime={item.createdAt}
+                      title={new Date(item.createdAt).toLocaleString("vi-VN")}
+                      className="shrink-0 text-xs font-medium text-slate-400"
+                    >
+                      {timeLabel(item.createdAt)}
+                    </time>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-slate-600">{item.message}</p>
+                  <p
+                    className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-5 text-slate-600"
+                    title={item.message}
+                  >
+                    {item.message}
+                  </p>
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <span className="text-xs text-slate-500">Từ {item.senderName}</span>
                     <Button

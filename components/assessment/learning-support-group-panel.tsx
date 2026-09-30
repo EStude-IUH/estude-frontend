@@ -2,6 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  BookOpenCheck,
+  CalendarDays,
+  ChevronDown,
+  Eye,
+  UsersRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/date-range-picker";
 import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
@@ -11,7 +18,6 @@ import type {
   LearningPlan,
   LearningPlanScopeItem,
   MaterialPlanProposal,
-  LearningCohortProgress,
   SubjectSupportReport,
   SubjectSupportStudent,
 } from "@/types/assessment";
@@ -19,6 +25,22 @@ import type {
 const unclassified = "Chưa xác định chủ đề";
 const examRisk = "Nguy cơ từ bài kiểm tra";
 const genericTopics = new Set(["Kiến thức tổng hợp", "Chưa gắn chủ đề"]);
+
+function formatCreatedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa rõ thời gian";
+  const dateText = new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+  const timeText = new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+  return `${timeText} · ${dateText}`;
+}
 
 function groupStudents(
   students: SubjectSupportStudent[],
@@ -88,7 +110,6 @@ export function LearningSupportGroupPanel({
   const [dueAt, setDueAt] = useState("");
   const [proposalReady, setProposalReady] = useState(false);
   const [materialProposals, setMaterialProposals] = useState<Record<string, MaterialPlanProposal>>({});
-  const [cohortProgress, setCohortProgress] = useState<Record<string, LearningCohortProgress>>({});
   const [busy, setBusy] = useState(false);
   const [preparationProgress, setPreparationProgress] = useState(0);
   const [error, setError] = useState("");
@@ -682,106 +703,102 @@ export function LearningSupportGroupPanel({
           Chưa có sinh viên được xếp mức cần hỗ trợ từ các bài kiểm tra.
         </p>
       )}
-      <details className="mt-4 rounded-xl border border-slate-200 p-3">
-        <summary className="cursor-pointer font-bold text-slate-800">
-          Lộ trình đã tạo · {cohorts.length} đợt
+      <details className="group mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 marker:content-none sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-brand-700">
+              <BookOpenCheck className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-black text-slate-900">
+                Lộ trình đã tạo · {cohorts.length} đợt
+              </h3>
+              <p className="mt-0.5 text-xs font-normal text-slate-500">
+                Theo dõi trạng thái giao bài và tiến độ của từng nhóm
+              </p>
+            </div>
+          </div>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition group-open:rotate-180">
+            <ChevronDown className="size-4" />
+          </span>
         </summary>
+        <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-4 sm:px-5">
         {!cohorts.length && proposalReady ? (
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="text-xs text-slate-500">
             Bản AI đề xuất phía trên chỉ là bản xem trước. Lộ trình sẽ xuất hiện
             ở đây sau khi giáo viên bấm “Duyệt và giao”.
           </p>
         ) : null}
         {plans.length === 200 ? (
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mb-3 text-xs text-slate-500">
             Đang hiển thị 200 lộ trình gần nhất.
           </p>
         ) : null}
         {plansError ? (
-          <p role="alert" className="mt-2 text-sm text-rose-700">
+          <p role="alert" className="mb-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {plansError}
           </p>
         ) : null}
         {cohorts.length ? (
-          <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
-            {cohorts.map((cohort) => (
-              <div
-                key={cohort[0].cohortId}
-                className="rounded-lg bg-slate-50 p-3 text-sm"
-              >
-                <p className="font-bold text-slate-800">
-                  {cohort[0].title} · {cohort.length} sinh viên
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {cohort.filter((plan) => plan.status === "DRAFT").length} bản
-                  nháp ·{" "}
-                  {
-                    cohort.filter(
-                      (plan) =>
-                        plan.status !== "DRAFT" && plan.status !== "CANCELLED",
-                    ).length
-                  }{" "}
-                  đã giao
-                </p>
-                <button
-                  type="button"
-                  className="mt-2 text-xs font-bold text-brand-700 underline"
-                  onClick={() => void learningPlanService.cohortProgress(cohort[0].cohortId)
-                    .then((value) => setCohortProgress((current) => ({ ...current, [cohort[0].cohortId]: value })))
-                    .catch((cause) => setPlansError(cause instanceof Error ? cause.message : "Không thể tải tiến độ"))}
+          <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
+            {cohorts.map((cohort, index) => {
+              const cohortId = cohort[0].cohortId;
+              const draftCount = cohort.filter((plan) => plan.status === "DRAFT").length;
+              const assignedCount = cohort.filter(
+                (plan) => plan.status !== "DRAFT" && plan.status !== "CANCELLED",
+              ).length;
+
+              return (
+                <article
+                  key={cohortId}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                 >
-                  Xem tiến độ và điểm luyện tập
-                </button>
-                {cohortProgress[cohort[0].cohortId] ? (
-                  <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="font-bold text-slate-900">Tiến độ ôn tập của nhóm cần hỗ trợ</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <div className="rounded-lg bg-emerald-50 p-3 text-emerald-800"><span className="block text-xs">Đạt ngưỡng</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].completed}</strong></div>
-                      <div className="rounded-lg bg-blue-50 p-3 text-brand-800"><span className="block text-xs">Đang ôn</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].rows.filter((row) => row.status === "IN_PROGRESS").length}</strong></div>
-                      <div className="rounded-lg bg-slate-100 p-3 text-slate-700"><span className="block text-xs">Chưa bắt đầu</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].rows.filter((row) => row.status === "ASSIGNED").length}</strong></div>
-                    </div>
-                    <p className="mt-3 text-xs text-slate-500">Hoàn thành {cohortProgress[cohort[0].cohortId].completed}/{cohortProgress[cohort[0].cohortId].total} học sinh</p>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`Hoàn thành ${cohortProgress[cohort[0].cohortId].completed} trên ${cohortProgress[cohort[0].cohortId].total} học sinh`}>
-                      <div className="h-full rounded-full bg-brand-600" style={{ width: `${cohortProgress[cohort[0].cohortId].total ? 100 * cohortProgress[cohort[0].cohortId].completed / cohortProgress[cohort[0].cohortId].total : 0}%` }} />
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {cohortProgress[cohort[0].cohortId].rows.map((row) => (
-                        <div key={row.planId} className="grid gap-2 border-t border-slate-100 pt-2 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1.4fr)_auto] sm:items-center">
-                          <Link href={`/teacher/learning-plans/${row.planId}`} className="font-semibold text-brand-700 underline">{row.studentName}</Link>
-                          <div className="min-w-0"><div className="h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${row.studentName} hoàn thành ${row.completedTasks} trên ${row.totalTasks} bước`}><div className={`h-full rounded-full ${row.materialStudy?.passed ? "bg-emerald-500" : "bg-brand-500"}`} style={{ width: `${row.totalTasks ? 100 * row.completedTasks / row.totalTasks : 0}%` }} /></div><span className="mt-1 block text-xs text-slate-500">{row.completedTasks}/{row.totalTasks} bước</span></div>
-                          <span className={`text-xs font-semibold ${row.materialStudy?.passed ? "text-emerald-700" : "text-amber-700"}`}>{row.materialStudy ? `Điểm ${row.materialStudy.latestScore ?? "—"}% · ngưỡng ${row.target ?? "—"}%` : row.status}</span>
+                  <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-black text-white shadow-sm shadow-blue-200">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="truncate font-bold text-slate-900">
+                          {cohort[0].title}
+                        </h4>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <UsersRound className="size-3.5" />
+                            {cohort.length} sinh viên
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <CalendarDays className="size-3.5" />
+                            Tạo lúc {formatCreatedAt(cohort[0].createdAt)}
+                          </span>
                         </div>
-                      ))}
+                        <p className="mt-2 text-xs text-slate-500">
+                          {draftCount} bản nháp · {assignedCount} đã giao
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {cohort.map((plan) => (
                     <Link
-                      key={plan.id}
-                      href={`/teacher/learning-plans/${plan.id}`}
-                      className="rounded-md bg-white px-2 py-1 font-semibold text-brand-700 hover:underline"
+                      href={`/teacher/cohorts/${encodeURIComponent(cohortId)}`}
+                      className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-brand-700 transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-100"
                     >
-                      {report.students.find(
-                        (student) => student.id === plan.studentId,
-                      )?.fullName ?? plan.studentId}{" "}
-                      ·{" "}
-                      {plan.status === "DRAFT"
-                        ? "Nháp"
-                        : plan.status === "CANCELLED"
-                          ? "Đã hủy"
-                          : "Đã giao"}
+                      <Eye className="size-4" />
+                      Xem chi tiết
                     </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : !plansError ? (
-          <p className="mt-2 text-sm text-slate-500">
-            Chưa có lộ trình cho môn này.
-          </p>
+          <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
+            <span className="flex size-11 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+              <BookOpenCheck className="size-5" />
+            </span>
+            <p className="mt-3 text-sm font-semibold text-slate-700">Chưa có lộ trình cho môn này</p>
+            <p className="mt-1 max-w-md text-xs text-slate-500">Lộ trình đã duyệt và giao cho sinh viên sẽ được lưu tại đây.</p>
+          </div>
         ) : null}
+        </div>
       </details>
     </section>
   );

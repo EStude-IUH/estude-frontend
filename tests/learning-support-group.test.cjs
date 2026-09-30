@@ -257,6 +257,7 @@ test("groups at-risk students by topic and creates one cohort draft for the sele
   ]);
   assert.match(page.text(), /Lộ trình đã tạo · 1 đợt/);
   assert.match(page.text(), /0 bản nháp · 2 đã giao/);
+  assert.match(page.text(), /Tạo lúc \d{2}:\d{2} · \d{2}\/\d{2}\/\d{4}/);
 });
 
 test("shows exam risk groups but no plan composer without attached material", async (t) => {

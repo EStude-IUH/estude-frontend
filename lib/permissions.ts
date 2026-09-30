@@ -157,6 +157,8 @@ export function routePermission(path: string): string | null {
     path.startsWith("/teacher/learning-plans/")
   )
     return "exams.submissions";
+  if (path === "/teacher/cohorts" || path.startsWith("/teacher/cohorts/"))
+    return "exams.submissions";
   if (
     path === "/teacher/support-requests" ||
     path.startsWith("/teacher/support-requests/")

@@ -61,6 +61,7 @@ import type {
   StudyActivityDashboard,
   StudyActivityReview,
   StudyPracticeSet,
+  TeacherPracticePreview,
   StudyPracticeAttempt,
   StudyEvidenceBundle,
   BaselineSelectionRecord,
@@ -865,9 +866,18 @@ export const teacherSettingsService = {
 };
 
 export const examService = {
-  getLearningSupportOverview(fresh = false): Promise<LearningSupportOverview> {
+  getLearningSupportOverview(
+    options: boolean | { fresh?: boolean; from?: string; to?: string } = false,
+  ): Promise<LearningSupportOverview> {
+    const normalized =
+      typeof options === "boolean" ? { fresh: options } : options;
+    const query = new URLSearchParams();
+    if (normalized.fresh) query.set("fresh", "true");
+    if (normalized.from) query.set("from", normalized.from);
+    if (normalized.to) query.set("to", normalized.to);
+    const suffix = query.size ? `?${query.toString()}` : "";
     return authenticatedRequest<LearningSupportOverview>(
-      `/exams/support/overview${fresh ? "?fresh=true" : ""}`,
+      `/exams/support/overview${suffix}`,
     );
   },
   getStudentEvidence(
@@ -1318,6 +1328,11 @@ export const learningPlanService = {
   },
   getTeacher(planId: string): Promise<LearningPlan> {
     return authenticatedRequest(`/learning-plans/teacher/${planId}`);
+  },
+  getTeacherPracticePreview(planId: string): Promise<TeacherPracticePreview> {
+    return authenticatedRequest(
+      `/learning-plans/teacher/${encodeURIComponent(planId)}/practice-preview`,
+    );
   },
   updatePlan(
     planId: string,

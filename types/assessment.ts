@@ -1018,6 +1018,14 @@ export interface StudyPracticeQuestion {
   correct?: boolean;
 }
 
+export interface TeacherPracticePreview {
+  planId: string;
+  taskId: string;
+  practiceSetId: string | null;
+  totalQuestions: number;
+  questions: StudyPracticeQuestion[];
+}
+
 export type StudyPracticeMode = "EASY" | "HARD";
 export type StudyPracticeContentType = "WRONG_QUESTIONS" | "SOURCE_REGION";
 
@@ -1457,12 +1465,17 @@ export interface MaterialPlanProposal {
 
 export interface LearningCohortProgress {
   cohortId: string;
+  title: string;
+  classId: string;
+  subjectId: string;
+  createdAt: string;
   completed: number;
   total: number;
   rows: Array<{
     planId: string;
     studentId: string;
     studentName: string;
+    studentCode: string;
     status: LearningPlan["status"];
     target: number | null;
     materialStudy: LearningPlan["materialStudy"] | null;

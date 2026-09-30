@@ -185,6 +185,22 @@ test("multi-class support and cohort delivery use scoped endpoints", async () =>
   ]);
 });
 
+test("learning support overview sends the selected time range", async () => {
+  const { examService, calls } = loadApi();
+  await examService.getLearningSupportOverview({
+    fresh: true,
+    from: "2026-09-01",
+    to: "2026-09-30",
+  });
+  assert.deepEqual(calls, [
+    {
+      url: "/exams/support/overview?fresh=true&from=2026-09-01&to=2026-09-30",
+      method: "GET",
+      body: null,
+    },
+  ]);
+});
+
 test("reassessment, review, profiles and class report keep phases and scope explicit", async () => {
   const { learningPlanService, calls } = loadApi();
   const assignment = {

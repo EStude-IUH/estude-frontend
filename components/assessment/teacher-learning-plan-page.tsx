@@ -8,6 +8,7 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   FileText,
   Send,
   Target,
@@ -21,7 +22,12 @@ import { TeacherImprovementPanel } from "@/components/assessment/learning-improv
 import { useActionNotification } from "@/components/ui/action-notification";
 import { Button } from "@/components/ui/button";
 import { learningPlanService } from "@/lib/assessment-api";
-import type { LearningPlan, LearningTask } from "@/types/assessment";
+import type {
+  LearningPlan,
+  LearningTask,
+  StudyPracticeQuestion,
+  TeacherPracticePreview,
+} from "@/types/assessment";
 
 const statusText: Record<LearningPlan["status"], string> = {
   DRAFT: "Bản nháp",
@@ -84,6 +90,154 @@ function taskTone(task: LearningTask) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
+function questionTypeText(type: StudyPracticeQuestion["type"]) {
+  if (type === "MULTIPLE_CHOICE") return "Nhiều đáp án";
+  if (type === "TRUE_FALSE") return "Đúng / Sai";
+  if (type === "ESSAY") return "Tự luận";
+  return "Một đáp án";
+}
+
+function PracticeQuestionPreview({
+  question,
+  index,
+}: {
+  question: StudyPracticeQuestion;
+  index: number;
+}) {
+  const correctOptionIds = new Set(question.correctOptionIds ?? []);
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="grid size-7 place-items-center rounded-md bg-brand-600 text-xs font-bold text-white">
+          {index + 1}
+        </span>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+          {questionTypeText(question.type)}
+        </span>
+        {question.topicName ? (
+          <span className="text-xs font-medium text-slate-500">
+            {question.topicName}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-3 text-sm font-semibold leading-6 text-slate-900">
+        {question.content || "Câu hỏi chưa có nội dung."}
+      </p>
+      {question.options.length ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {question.options.map((option, optionIndex) => {
+            const correct = correctOptionIds.has(option.id);
+            return (
+              <div
+                key={option.id}
+                className={`flex min-h-11 items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  correct
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                    : "border-slate-200 bg-slate-50 text-slate-700"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                    correct
+                      ? "bg-emerald-600 text-white"
+                      : "bg-white text-slate-500 ring-1 ring-slate-200"
+                  }`}
+                >
+                  {option.label || String.fromCharCode(65 + optionIndex)}
+                </span>
+                <span className="min-w-0 flex-1 leading-5">{option.text}</span>
+                {correct ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-emerald-700">
+                    <CheckCircle2 className="size-4" />
+                    Đáp án đúng
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">
+          Câu hỏi này không có danh sách lựa chọn.
+        </p>
+      )}
+      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-sm leading-6 text-slate-700">
+        <span className="font-bold text-brand-700">Giải thích: </span>
+        {question.explanation?.trim() || "Chưa có giải thích cho câu hỏi này."}
+      </div>
+    </article>
+  );
+}
+
+function PracticePreview({
+  task,
+  preview,
+  loading,
+  error,
+}: {
+  task: LearningTask;
+  preview: TeacherPracticePreview | null;
+  loading: boolean;
+  error: string;
+}) {
+  if (!task.practiceSetId) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+        Bộ câu hỏi sẽ được chọn theo đúng mục tiêu của học sinh khi giáo viên
+        duyệt và giao lộ trình.
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/50 px-4 py-3 text-sm text-slate-600">
+        Đang tải bộ câu luyện của học sinh...
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        {error}
+      </div>
+    );
+  }
+  if (!preview?.questions.length) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        Bộ câu luyện hiện chưa có câu hỏi để xem trước.
+      </div>
+    );
+  }
+  return (
+    <details className="group mt-4 overflow-hidden rounded-lg border border-blue-200 bg-blue-50/30" open>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus:outline-none focus:ring-4 focus:ring-blue-100">
+        <div className="flex items-center gap-2">
+          <FileText className="size-4 text-brand-600" />
+          <div>
+            <p className="text-sm font-bold text-slate-900">
+              Xem trước bộ câu luyện · {preview.totalQuestions} câu
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Giáo viên có thể kiểm tra câu hỏi, đáp án đúng và lời giải.
+            </p>
+          </div>
+        </div>
+        <ChevronDown className="size-4 shrink-0 text-brand-600 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="space-y-3 border-t border-blue-100 p-3 sm:p-4">
+        {preview.questions.map((question, index) => (
+          <PracticeQuestionPreview
+            key={question.id}
+            question={question}
+            index={index}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function TeacherLearningPlanPage() {
   const { id } = useParams<{ id: string }>();
   const { notify } = useActionNotification();
@@ -92,6 +246,10 @@ export function TeacherLearningPlanPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [practicePreview, setPracticePreview] =
+    useState<TeacherPracticePreview | null>(null);
+  const [practicePreviewLoading, setPracticePreviewLoading] = useState(false);
+  const [practicePreviewError, setPracticePreviewError] = useState("");
 
   const reload = useCallback(async () => {
     const value = await learningPlanService.getTeacher(id);
@@ -119,6 +277,41 @@ export function TeacherLearningPlanPage() {
       live = false;
     };
   }, [id]);
+
+  const practiceSetId =
+    plan?.tasks.find((task) => task.kind === "PRACTICE")?.practiceSetId ?? null;
+
+  useEffect(() => {
+    let live = true;
+    setPracticePreview(null);
+    setPracticePreviewError("");
+    if (!plan?.id || !practiceSetId) {
+      setPracticePreviewLoading(false);
+      return () => {
+        live = false;
+      };
+    }
+    setPracticePreviewLoading(true);
+    learningPlanService
+      .getTeacherPracticePreview(plan.id)
+      .then((value) => {
+        if (live) setPracticePreview(value);
+      })
+      .catch((cause) => {
+        if (live)
+          setPracticePreviewError(
+            cause instanceof Error
+              ? cause.message
+              : "Không thể tải bộ câu luyện",
+          );
+      })
+      .finally(() => {
+        if (live) setPracticePreviewLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [plan?.id, practiceSetId]);
 
   async function publishPlan() {
     if (!plan || plan.status !== "DRAFT") return;
@@ -335,6 +528,14 @@ export function TeacherLearningPlanPage() {
                           Khó khăn học sinh đã báo:{" "}
                           {task.progress.difficultyNote}
                         </p>
+                      ) : null}
+                      {task.kind === "PRACTICE" ? (
+                        <PracticePreview
+                          task={task}
+                          preview={practicePreview}
+                          loading={practicePreviewLoading}
+                          error={practicePreviewError}
+                        />
                       ) : null}
                     </li>
                   ))}
