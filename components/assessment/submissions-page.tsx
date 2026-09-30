@@ -1935,14 +1935,7 @@ export function SubmissionDetailPage() {
   const orderedQuestions = [...data.exam.questions].sort(
     (left, right) => left.order - right.order,
   );
-  const scorePercentage =
-    data.score !== null && data.exam.totalPoints > 0
-      ? (data.score / data.exam.totalPoints) * 100
-      : null;
-  const canViewAiAnalysis =
-    data.status === "SUBMITTED" &&
-    scorePercentage !== null &&
-    scorePercentage < 50;
+  const canViewAiAnalysis = data.status === "SUBMITTED";
   const submittedAt = data.submittedAt ? new Date(data.submittedAt) : null;
   const submittedDate = submittedAt
     ? submittedAt.toLocaleDateString("vi-VN")
@@ -1985,8 +1978,8 @@ export function SubmissionDetailPage() {
             disabled={!canViewAiAnalysis}
             title={
               canViewAiAnalysis
-                ? "Xem phân tích AI"
-                : "Chỉ mở cho bài làm có kết quả dưới 5/10"
+                ? "Xem phân tích AI và quá trình tự ôn tập"
+                : "Chỉ mở sau khi học sinh nộp bài"
             }
             onClick={() => {
               setHasOpenedAnalysis(true);
@@ -1995,10 +1988,10 @@ export function SubmissionDetailPage() {
             className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black outline-none transition focus-visible:ring-2 focus-visible:ring-brand-200 ${activeTab === "analysis" ? "bg-brand-600 text-white shadow-sm" : canViewAiAnalysis ? "text-slate-600 hover:bg-slate-50" : "cursor-not-allowed bg-slate-50 text-slate-400"}`}
           >
             <BrainCircuit className="size-4" />
-            Phân tích AI
+            Phân tích AI & tiến độ ôn tập
             {!canViewAiAnalysis ? (
               <span className="hidden text-xs font-semibold sm:inline">
-                · Chỉ dành cho kết quả dưới trung bình
+                · Chưa nộp bài
               </span>
             ) : null}
           </button>

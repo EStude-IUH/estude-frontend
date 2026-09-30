@@ -21,10 +21,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ErrorPanel } from "@/components/assessment/assessment-shell";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
-import { examAttemptService } from "@/lib/assessment-api";
+import { examAttemptService, learningPlanService } from "@/lib/assessment-api";
 import { loadOrCreateStudentStudyAnalysis } from "@/lib/study-analysis-loader";
 import { PracticeAttemptHistory } from "@/components/assessment/practice-attempt-history";
-import { StudyPracticeHistory } from "@/components/assessment/study-practice-history";
 import { StudyActivityDashboard } from "@/components/assessment/study-activity-dashboard";
 import Link from "next/link";
 import {
@@ -36,6 +35,7 @@ import {
 import type { StudyAiFeedback } from "@/types/assessment";
 import type {
   StudyAnalysis,
+  LearningPlan,
   StudyPracticeMode,
   StudyPracticeSet,
 } from "@/types/assessment";
@@ -54,8 +54,16 @@ export function StudentStudyAnalysisPage() {
   const [hints, setHints] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [supportPlans, setSupportPlans] = useState<LearningPlan[]>([]);
+  const isLegacyPracticeRoute = searchParams.get("tab") === "practice";
 
   useEffect(() => {
+    if (isLegacyPracticeRoute)
+      router.replace(`/student/study-coach/practice/${params.id}`);
+  }, [isLegacyPracticeRoute, params.id, router]);
+
+  useEffect(() => {
+    if (isLegacyPracticeRoute) return;
     let active = true;
     setLoading(true);
     setGenerating(false);
@@ -100,7 +108,29 @@ export function StudentStudyAnalysisPage() {
     return () => {
       active = false;
     };
-  }, [params.id]);
+  }, [isLegacyPracticeRoute, params.id]);
+
+  useEffect(() => {
+    let active = true;
+    setSupportPlans([]);
+    if (!analysis?.report.performance.needsWarning) return;
+    const classId = analysis.report.exam.classId;
+    const subjectId = analysis.report.exam.subjectId;
+    void learningPlanService.listMine()
+      .then((plans) => {
+        if (active) setSupportPlans(plans.filter((plan) =>
+          plan.classId === classId && plan.subjectId === subjectId &&
+          !["DRAFT", "CANCELLED"].includes(plan.status),
+        ));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [
+    analysis?.id,
+    analysis?.report.performance.needsWarning,
+    analysis?.report.exam.classId,
+    analysis?.report.exam.subjectId,
+  ]);
 
   const practice = analysis?.practiceSet ?? null;
   const activeTab =
@@ -253,7 +283,11 @@ export function StudentStudyAnalysisPage() {
   }
 
   function openTab(tab: "theory" | "practice") {
-    router.push(`/student/attempts/${params.id}/study?tab=${tab}`);
+    router.push(
+      tab === "practice"
+        ? `/student/study-coach/practice/${params.id}`
+        : `/student/attempts/${params.id}/study?tab=theory`,
+    );
   }
 
   async function sendFeedback(
@@ -269,6 +303,16 @@ export function StudentStudyAnalysisPage() {
     });
     setFeedbackMessage(
       "Đã gửi phản hồi đến giáo viên. Báo cáo chỉ đổi khi giáo viên xử lý.",
+    );
+  }
+
+  if (isLegacyPracticeRoute) {
+    return (
+      <StudentShell>
+        <div className="grid min-h-56 place-items-center rounded-2xl border border-slate-200 bg-white">
+          <LoaderCircle className="size-7 animate-spin text-brand-600" />
+        </div>
+      </StudentShell>
     );
   }
 
@@ -337,12 +381,14 @@ export function StudentStudyAnalysisPage() {
           {feedbackMessage}
         </p>
       ) : null}
-      <Link
-        href="/student/learning-plans"
-        className="mb-4 inline-block text-sm font-bold text-brand-700 underline"
-      >
-        Xem lộ trình giáo viên đã giao
-      </Link>
+      {supportPlans.length ? (
+        <Link
+          href={supportPlans.length === 1 ? `/student/learning-plans/${supportPlans[0].id}` : "/student/learning-plans"}
+          className="mb-4 inline-block text-sm font-bold text-brand-700 underline"
+        >
+          Xem lộ trình giáo viên đã giao
+        </Link>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
         <p
@@ -529,9 +575,6 @@ export function StudentStudyAnalysisPage() {
           onFeedback={sendFeedback}
         />
       ) : null}
-      {activeTab === "practice" && !assessmentOnly && practice ? (
-        <StudyPracticeHistory practice={practice} />
-      ) : null}
     </StudentShell>
   );
 }
@@ -550,6 +593,8 @@ export function PracticeSection({
   onRetry,
   onGetHint,
   onFeedback,
+  openWorkspace = false,
+  showAttemptHistory = true,
 }: {
   practice: StudyPracticeSet | null;
   answers: Record<string, string[]>;
@@ -568,9 +613,12 @@ export function PracticeSection({
     reason: StudyAiFeedback["reason"],
     comment: string,
   ) => Promise<void>;
+  openWorkspace?: boolean;
+  showAttemptHistory?: boolean;
 }) {
   const [mode, setMode] = useState<StudyPracticeMode>("EASY");
   const [started, setStarted] = useState(false);
+  const [showWorkspace, setShowWorkspace] = useState(openWorkspace);
   const [index, setIndex] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const submitted = practice?.status === "SUBMITTED";
@@ -604,6 +652,10 @@ export function PracticeSection({
     practice?.mode,
     practiceDuration,
   ]);
+
+  useEffect(() => {
+    if (openWorkspace) setShowWorkspace(true);
+  }, [openWorkspace, practice?.attemptId]);
 
   useEffect(() => {
     if (!started || mode !== "HARD" || submitted || remainingSeconds <= 0)
@@ -645,30 +697,55 @@ export function PracticeSection({
     .toString()
     .padStart(2, "0")}:${(remainingSeconds % 60).toString().padStart(2, "0")}`;
   const currentQuestion = practice.questions[index];
+
+  if (submitted && showAttemptHistory) {
+    return (
+      <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
+        <PracticeAttemptHistory
+          key={practice.id}
+          practiceSetId={practice.id}
+          items={practice.attemptHistory ?? []}
+          activeAttemptId={practice.attemptId}
+          creating={retrying}
+          onCreate={() => {
+            setShowWorkspace(true);
+            onRetry();
+          }}
+        />
+      </section>
+    );
+  }
+
+  if (!showWorkspace) {
+    return (
+      <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
+        {showAttemptHistory ? (
+          <PracticeAttemptHistory
+            key={practice.id}
+            practiceSetId={practice.id}
+            items={practice.attemptHistory ?? []}
+            activeAttemptId={practice.attemptId}
+            onContinue={() => setShowWorkspace(true)}
+          />
+        ) : null}
+        <div className="mt-5 rounded-xl border border-dashed border-violet-200 bg-violet-50/50 p-4 text-sm text-slate-600">
+          Chọn <span className="font-bold text-violet-800">Bắt đầu</span> hoặc{" "}
+          <span className="font-bold text-violet-800">Làm tiếp</span> ở bài hiện tại để vào phần luyện tập.
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mt-8 rounded-2xl border border-violet-200 bg-white p-5 shadow-card sm:p-7">
-      <PracticeAttemptHistory
-        key={practice.id}
-        practiceSetId={practice.id}
-        items={practice.attemptHistory ?? []}
-      />
-      {submitted && practice.feedback?.length ? (
-        <div className="mb-5 space-y-3 rounded-xl bg-emerald-50 p-4">
-          <h3 className="font-black text-emerald-900">Bước học tiếp theo</h3>
-          {practice.feedback.map((item) => (
-            <div
-              key={item.objectiveId ?? item.topicName}
-              className="text-sm leading-6 text-emerald-900"
-            >
-              <p className="font-bold">
-                {item.topicName}: {item.correctCount}/{item.totalQuestions} câu
-                đúng · Ôn lại ngày{" "}
-                {new Date(item.reviewAt).toLocaleDateString("vi-VN")}
-              </p>
-              <p>{item.recommendation}</p>
-            </div>
-          ))}
-        </div>
+      {showAttemptHistory ? (
+        <PracticeAttemptHistory
+          key={practice.id}
+          practiceSetId={practice.id}
+          items={practice.attemptHistory ?? []}
+          activeAttemptId={practice.attemptId}
+          onContinue={() => setShowWorkspace(true)}
+        />
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -933,22 +1010,6 @@ export function PracticeSection({
         </div>
       ) : null}
 
-      {submitted ? (
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-          <p className="text-sm text-slate-600">
-            Làm lại sẽ tạo lượt mới và giữ nguyên kết quả vừa hoàn thành trong
-            lịch sử.
-          </p>
-          <Button variant="outline" disabled={retrying} onClick={onRetry}>
-            {retrying ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <RotateCcw className="size-4" />
-            )}
-            {retrying ? "Đang tạo lượt mới..." : "Làm lại"}
-          </Button>
-        </div>
-      ) : null}
     </section>
   );
 }

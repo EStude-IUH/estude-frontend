@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
+import { StudentNotificationPopup } from "@/components/student/student-notification-popup";
+import { StudyReviewReminderPopup } from "@/components/student/study-review-reminder-popup";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
@@ -27,6 +29,7 @@ import {
   NOTIFICATIONS_CHANGED_EVENT,
   notificationService,
 } from "@/lib/engagement-api";
+import type { PortalNotification } from "@/types/engagement";
 
 interface StudentNavItem {
   icon: ComponentType<{ className?: string }>;
@@ -49,7 +52,6 @@ const studentNavItems: StudentNavItem[] = [
     href: "/student/learning-plans",
   },
   { icon: BarChart3, label: "Điểm số", href: "/student/grades" },
-  { icon: Bell, label: "Hoạt động", href: "/student/activity" },
 ];
 
 function isNavItemActive(pathname: string, href?: string): boolean {
@@ -107,8 +109,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const { canVisit } = usePermissions();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isNotificationPopupOpen, setIsNotificationPopupOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -128,17 +132,23 @@ export function StudentShell({ children }: { children: ReactNode }) {
       void notificationService
         .getMine()
         .then((items) => {
-          if (active)
+          if (active) {
+            setNotifications(items);
             setUnreadNotificationCount(
               items.filter((item) => !item.readAt).length,
             );
+          }
         })
         .catch(() => undefined);
     };
     refreshUnreadCount();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshUnreadCount();
+    }, 60_000);
     window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshUnreadCount);
     return () => {
       active = false;
+      window.clearInterval(timer);
       window.removeEventListener(
         NOTIFICATIONS_CHANGED_EVENT,
         refreshUnreadCount,
@@ -153,6 +163,38 @@ export function StudentShell({ children }: { children: ReactNode }) {
     } finally {
       router.replace("/login");
     }
+  }
+
+  async function openStudyReminder(item: PortalNotification) {
+    await notificationService.markRead(item.id);
+    setNotifications((current) => current.map((entry) =>
+      entry.id === item.id ? { ...entry, readAt: new Date().toISOString() } : entry,
+    ));
+    setUnreadNotificationCount((count) => Math.max(0, count - 1));
+    window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    router.push(item.actionUrl ?? "/student/review");
+  }
+
+  async function openNotification(item: PortalNotification) {
+    if (!item.readAt) {
+      await notificationService.markRead(item.id);
+      setNotifications((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, readAt: new Date().toISOString() }
+            : entry,
+        ),
+      );
+      setUnreadNotificationCount((count) => Math.max(0, count - 1));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    }
+    setIsNotificationPopupOpen(false);
+    const href = item.actionUrl?.startsWith("/student/")
+      ? item.actionUrl
+      : item.examId
+        ? `/student/exams/${item.examId}`
+        : null;
+    if (href) router.push(href);
   }
 
   if (!user) return <StudentShellLoading />;
@@ -203,7 +245,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => router.push("/student/activity")}
+              onClick={() => setIsNotificationPopupOpen(true)}
               className="relative grid size-10 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
               aria-label={
                 unreadNotificationCount
@@ -309,6 +351,16 @@ export function StudentShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      <StudyReviewReminderPopup
+        notifications={notifications}
+        onStartReview={openStudyReminder}
+      />
+      <StudentNotificationPopup
+        open={isNotificationPopupOpen}
+        notifications={notifications}
+        onClose={() => setIsNotificationPopupOpen(false)}
+        onOpenNotification={openNotification}
+      />
 
       <main className="mx-auto max-w-[1480px] px-4 pb-8 pt-20 sm:px-6 lg:px-8">
         {children}

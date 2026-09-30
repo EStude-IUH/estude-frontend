@@ -1227,10 +1227,33 @@ export interface StudyAnalysis {
   practiceSet: StudyPracticeSet | null;
 }
 
+export interface StudyActivityReview {
+  source: "AI" | "ERROR" | "EMPTY";
+  comment: string | null;
+  generatedAt: string | null;
+  model: string | null;
+}
+
 export interface StudyActivityDashboard {
+  activityReview?: StudyActivityReview;
+  analysisHistory?: Array<{
+    id: string;
+    attemptId: string | null;
+    examId: string | null;
+    examTitle: string;
+    generatedAt: string;
+    score: number | null;
+    totalPoints: number | null;
+    accuracy: number | null;
+    aiStatus: string;
+    summary: string;
+    weakAreaCount: number;
+  }>;
   practice: Array<{
     id: string;
     attemptNumber: number;
+    status: "READY" | "SUBMITTED";
+    startedAt: string | null;
     submittedAt: string | null;
     correctCount: number;
     totalQuestions: number;
@@ -1242,6 +1265,7 @@ export interface StudyActivityDashboard {
     materialId: string;
     materialName: string;
     openedAt: string;
+    lastActiveAt: string;
     closedAt: string | null;
     activeSeconds: number;
   }>;

@@ -34,12 +34,14 @@ test("practice actions send the current attempt id and use the server methods", 
   await examAttemptService.retryStudyPractice("set", "attempt");
   await examAttemptService.getStudyPracticeHint("set", "question", "attempt");
   await examAttemptService.getStudyPracticeAttempt("set", "attempt");
+  await examAttemptService.getStudyPracticeAttemptById("attempt");
   assert.deepEqual(calls, [
     { url: "/study-practice-sets/set/start", method: "POST", body: { attemptId: "attempt", mode: "HARD" } },
     { url: "/study-practice-sets/set/submit", method: "POST", body: { attemptId: "attempt", answers: [{ questionId: "question", selectedOptionIds: ["option"] }] } },
     { url: "/study-practice-sets/set/retry", method: "POST", body: { attemptId: "attempt" } },
     { url: "/study-practice-sets/set/questions/question/hint", method: "POST", body: { attemptId: "attempt" } },
     { url: "/study-practice-sets/set/attempts/attempt", method: "GET", body: null },
+    { url: "/study-practice-attempts/attempt", method: "GET", body: null },
   ]);
 });
 
@@ -47,8 +49,12 @@ test("teacher evidence selection sends the selected evidence and expected versio
   const { examService, calls } = loadApi();
   await examService.getStudentEvidence("exam", "student");
   await examService.selectStudentBaseline("exam", "student", { evidenceId: "evidence", reason: "Bài đầu kỳ", expectedVersion: 2 });
+  await examService.regenerateTeacherStudyActivityReview("exam", "student", "exam-attempt");
+  await examService.getTeacherStudyPracticeAttempt("exam", "student", "exam-attempt", "practice-attempt");
   assert.deepEqual(calls, [
     { url: "/exams/exam/students/student/evidence", method: "GET", body: null },
     { url: "/exams/exam/students/student/baseline", method: "POST", body: { evidenceId: "evidence", reason: "Bài đầu kỳ", expectedVersion: 2 } },
+    { url: "/exams/exam/students/student/attempts/exam-attempt/study-activity/review", method: "POST", body: null },
+    { url: "/exams/exam/students/student/attempts/exam-attempt/study-practice-attempts/practice-attempt", method: "GET", body: null },
   ]);
 });

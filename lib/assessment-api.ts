@@ -59,6 +59,7 @@ import type {
   SystemDifficultySettings,
   StudyAnalysis,
   StudyActivityDashboard,
+  StudyActivityReview,
   StudyPracticeSet,
   StudyPracticeAttempt,
   StudyEvidenceBundle,
@@ -939,6 +940,37 @@ export const examService = {
       `/exams/${examId}/students/${studentId}/attempts/${attemptId}/study-analysis`,
     );
   },
+  getTeacherStudyActivity(
+    examId: string,
+    studentId: string,
+    attemptId: string,
+  ): Promise<StudyActivityDashboard> {
+    return authenticatedRequest<StudyActivityDashboard>(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/attempts/${encodeURIComponent(attemptId)}/study-activity`,
+      { cache: "no-store" },
+    );
+  },
+  regenerateTeacherStudyActivityReview(
+    examId: string,
+    studentId: string,
+    attemptId: string,
+  ): Promise<StudyActivityReview> {
+    return authenticatedRequest<StudyActivityReview>(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/attempts/${encodeURIComponent(attemptId)}/study-activity/review`,
+      { method: "POST" },
+    );
+  },
+  getTeacherStudyPracticeAttempt(
+    examId: string,
+    studentId: string,
+    attemptId: string,
+    practiceAttemptId: string,
+  ): Promise<StudyPracticeAttempt> {
+    return authenticatedRequest<StudyPracticeAttempt>(
+      `/exams/${encodeURIComponent(examId)}/students/${encodeURIComponent(studentId)}/attempts/${encodeURIComponent(attemptId)}/study-practice-attempts/${encodeURIComponent(practiceAttemptId)}`,
+      { cache: "no-store" },
+    );
+  },
   createTeacherStudyAnalysis(
     examId: string,
     studentId: string,
@@ -1092,6 +1124,13 @@ export const examAttemptService = {
   ): Promise<StudyPracticeAttempt> {
     return authenticatedRequest(
       `/study-practice-sets/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`,
+    );
+  },
+  getStudyPracticeAttemptById(
+    attemptId: string,
+  ): Promise<StudyPracticeAttempt> {
+    return authenticatedRequest(
+      `/study-practice-attempts/${encodeURIComponent(attemptId)}`,
     );
   },
   startExam(examId: string, accessCode?: string): Promise<ExamAttempt> {

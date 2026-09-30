@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BarChart3, BookOpen, Clock3, FileText, RotateCcw } from "lucide-react";
+import { BarChart3, BookOpen, Clock3, FileText, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { examAttemptService } from "@/lib/assessment-api";
+import { studyActivityReviewSections } from "@/lib/study-activity-review";
 import type { StudyActivityDashboard as Dashboard, StudyPracticeSet } from "@/types/assessment";
 
 const durationLabel = (seconds: number) => {
@@ -98,7 +99,9 @@ export function StudyActivityDashboard({
     await reload();
   }
 
-  const practiceHistory = dashboard?.practice ?? [];
+  const practiceHistory = (dashboard?.practice ?? []).filter(
+    (item) => item.status === "SUBMITTED",
+  );
   const materialViews = dashboard?.materialViews ?? [];
   const latest = practiceHistory.at(-1);
   const latestAccuracy = latest?.totalQuestions
@@ -194,6 +197,39 @@ export function StudyActivityDashboard({
             {!practiceHistory.length && !materialViews.length ? <p className="text-sm text-slate-500">Chưa có hoạt động ôn tập được ghi nhận.</p> : null}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-violet-100 bg-violet-50/30 p-4">
+        <h3 className="flex items-center gap-2 font-black text-slate-900">
+          <Sparkles className="size-4 text-violet-600" /> Đánh giá sau quá trình tự ôn
+        </h3>
+        {dashboard?.activityReview?.source === "AI" && dashboard.activityReview.comment ? (
+          <>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {studyActivityReviewSections(dashboard.activityReview.comment).map((item) => (
+                <div key={item.label} className="rounded-lg bg-white p-3">
+                  <p className={`text-xs font-black uppercase tracking-wide ${item.tone}`}>
+                    {item.label}
+                  </p>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-700">{item.content}</p>
+                </div>
+              ))}
+            </div>
+            {dashboard.activityReview.generatedAt ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Cập nhật lúc {dateLabel(dashboard.activityReview.generatedAt)} khi có hoạt động ôn tập mới.
+              </p>
+            ) : null}
+          </>
+        ) : dashboard?.activityReview?.source === "ERROR" ? (
+          <p className="mt-2 text-sm text-amber-700">
+            Chưa thể tạo đánh giá lúc này. Hệ thống sẽ tự thử lại khi có hoạt động mới.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            Hoàn thành một lượt luyện hoặc mở tài liệu để nhận đánh giá.
+          </p>
+        )}
       </div>
 
       {dashboard?.materials.length ? (

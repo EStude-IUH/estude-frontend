@@ -164,16 +164,13 @@ test("below-average submission can open AI analysis from the second tab", async 
   assert.deepEqual(mounts, { analysis: 1, evidence: 0 });
 });
 
-test("average submission keeps the AI analysis tab disabled", async (t) => {
+test("average submission can open its personal AI analysis", async (t) => {
   const { renderer } = await renderDetail(t, 5);
   const tabs = renderer.root
     .findAllByType("button")
     .filter((button) => button.props.role === "tab");
-  assert.equal(tabs[1].props.disabled, true);
-  assert.equal(tabs[1].props["aria-disabled"], true);
-  assert.match(
-    textOf(renderer.toJSON()),
-    /Chỉ dành cho kết quả dưới trung bình/,
-  );
-  assert.doesNotMatch(textOf(renderer.toJSON()), /student-ai-analysis/);
+  assert.equal(tabs[1].props.disabled, false);
+  assert.equal(tabs[1].props["aria-disabled"], false);
+  await act(async () => tabs[1].props.onClick());
+  assert.match(textOf(renderer.toJSON()), /student-ai-analysis/);
 });

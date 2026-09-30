@@ -38,6 +38,11 @@ function load(filename, api = {}) {
       return { Button: (props) => React.createElement("button", props) };
     if (id === "@/components/assessment/learning-improvement-panel")
       return { TeacherImprovementPanel: () => null };
+    if (id === "@/components/assessment/teacher-study-progress")
+      return {
+        TeacherStudyProgress: () => null,
+        TeacherStudyProgressFeedback: () => null,
+      };
     if (id.startsWith("@/components/")) return load(`${id.slice(2)}.tsx`, api);
     return originalRequire(id);
   };
@@ -147,6 +152,7 @@ function apiFor(view, overrides = {}) {
   return {
     examService: {
       getTeacherStudyAnalysis: async () => view,
+      createTeacherStudyAnalysis: async () => view,
       getClassReport: async () => ({ students: [] }),
       getStudentEvidence: async () => ({ items: [], baselines: [] }),
       ...overrides,
@@ -220,8 +226,6 @@ test("student and teacher share all analysis details; only the student can send 
       "Hồ sơ học tập cá nhân",
       "35%",
       "10 câu quan sát",
-      "Kết quả theo chủ đề",
-      "1/5 câu đúng",
       "Nhận định đã chỉnh sửa",
       "Mốc năm 1945",
       "Lịch sử.pdf",
@@ -249,7 +253,6 @@ test("teacher analysis sections stay collapsed until the teacher opens them", as
     "Nhận định tổng quan của AI",
     "Hồ sơ học tập cá nhân",
     "Gợi ý ôn tập",
-    "Kết quả theo chủ đề",
     "Nội dung cần ôn lại",
   ]) {
     assert.ok(
@@ -271,7 +274,8 @@ test("teacher analysis sections stay collapsed until the teacher opens them", as
       .every((details) => details.props.open !== true),
   );
   const shown = textOf(renderer.toJSON());
-  assert.match(shown, /Chưa phải nhiệm vụ đã giao/);
+  assert.doesNotMatch(shown, /Kết quả theo chủ đề/);
+  assert.doesNotMatch(shown, /AI gợi ý .*Chưa phải nhiệm vụ đã giao/);
   assert.doesNotMatch(
     shown,
     /Lộ trình đề xuất|Xem và tạo lộ trình theo nhóm|Lộ trình của lớp|Tạo kế hoạch cho nhóm học sinh|Chọn mục tiêu, người nhận/,
@@ -289,15 +293,14 @@ test("assessment-only comparison keeps observed data and hides old AI advice", a
   const renderer = await mount(t, StudentInterventionPanel, props);
   const shown = textOf(renderer.toJSON());
   assert.match(shown, /Ước lượng từ kết quả kiểm tra/);
-  assert.match(shown, /Kết quả theo chủ đề/);
-  assert.match(shown, /20%/);
+  assert.doesNotMatch(shown, /Kết quả theo chủ đề/);
   assert.doesNotMatch(
     shown,
     /Nhận định đã chỉnh sửa|Lập bảng so sánh|Tổng quan AI gốc|Củng cố kiến thức nền/,
   );
 });
 
-test("five unclassified questions stay in topic results without a redundant warning card", async (t) => {
+test("unclassified questions do not recreate the removed topic-results section", async (t) => {
   const { StudyAnalysisDetails } = load(
     "components/assessment/study-analysis-details.tsx",
   );
@@ -326,7 +329,7 @@ test("five unclassified questions stay in topic results without a redundant warn
   const renderer = await mount(t, StudyAnalysisDetails, { report });
   const shown = textOf(renderer.toJSON());
   assert.doesNotMatch(shown, /Bài này có 5 câu chưa được gắn chủ đề/);
-  assert.match(shown, /Toàn bài · chưa phân loại chủ đề20%/);
+  assert.doesNotMatch(shown, /Kết quả theo chủ đề|Toàn bài · chưa phân loại chủ đề/);
   assert.doesNotMatch(shown, /Dữ liệu còn ít; luyện thêm câu nền tảng/);
   assert.doesNotMatch(shown, /1 câu quan sát/);
 });
@@ -347,12 +350,41 @@ test("teacher receives the effective student report without loading planning dat
   const shown = textOf(renderer.toJSON());
   assert.equal(evidenceLoads, 0);
   assert.match(shown, /Phân tích học sinh đang xem/);
+  assert.doesNotMatch(shown, /Bấm để xem nội dung và trạng thái duyệt/);
+  assert.match(shown, /Kiểm tra lịch sử · 12A/);
+  assert.doesNotMatch(shown, /Kiểm tra lịch sử · Lịch sử · 12A/);
   assert.match(shown, /Phân tích đã được lưu lúc/);
   assert.match(shown, /Giáo viên và học sinh đang xem cùng dữ liệu này/);
   assert.match(shown, /Tổng quan đã chỉnh sửa/);
   assert.doesNotMatch(shown, /Tổng quan AI gốc/);
-  assert.match(shown, /Kết quả theo chủ đề/);
+  assert.doesNotMatch(shown, /Kết quả theo chủ đề/);
   assert.doesNotMatch(shown, /Môn học chưa có tài liệu được gắn/);
+});
+
+test("teacher can request a fresh analysis for the opened submission", async (t) => {
+  const calls = [];
+  const refreshed = analysis();
+  refreshed.generatedAt = "2026-09-30T08:30:00Z";
+  const { StudentInterventionPanel } = load(
+    "components/assessment/student-intervention-panel.tsx",
+    apiFor(analysis(), {
+      createTeacherStudyAnalysis: async (...args) => {
+        calls.push(args);
+        return refreshed;
+      },
+    }),
+  );
+  const renderer = await mount(t, StudentInterventionPanel, props);
+  const button = renderer.root
+    .findAllByType("button")
+    .find((item) => textOf(item).includes("Phân tích lại"));
+  assert.ok(button);
+  await act(async () => {
+    button.props.onClick();
+    await flush();
+  });
+  assert.deepEqual(calls, [["exam", "student", "attempt"]]);
+  assert.match(textOf(renderer.toJSON()), /15:30:00 30\/9\/2026/);
 });
 
 test("missing analysis is created for the selected submission", async (t) => {

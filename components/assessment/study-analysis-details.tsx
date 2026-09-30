@@ -5,7 +5,6 @@ import {
   BookOpen,
   ChevronDown,
   CheckCircle2,
-  FileSearch,
   Lightbulb,
   ListChecks,
 } from "lucide-react";
@@ -53,49 +52,9 @@ export function StudyAnalysisDetails({
   const assessmentOnly =
     report.analysisScope === "ASSESSMENT_ONLY" ||
     report.aiStatus === "SKIPPED_NO_MATERIAL";
-  const unclassifiedPerformance = report.topicPerformance.filter(
-    (topic) => topic.topicName === "Kiến thức tổng hợp",
-  );
   const classifiedLearningProfile = (report.learningProfile ?? []).filter(
     (topic) => topic.topicName !== "Kiến thức tổng hợp",
   );
-  const classifiedPerformance = report.topicPerformance.filter(
-    (topic) => topic.topicName !== "Kiến thức tổng hợp",
-  );
-  const unclassifiedSummary = unclassifiedPerformance.length
-    ? unclassifiedPerformance.reduce(
-        (summary, topic) => ({
-          ...summary,
-          totalQuestions: summary.totalQuestions + topic.totalQuestions,
-          correctCount: summary.correctCount + topic.correctCount,
-          missedCount: summary.missedCount + topic.missedCount,
-          pointsEarned: summary.pointsEarned + topic.pointsEarned,
-          pointsPossible: summary.pointsPossible + topic.pointsPossible,
-        }),
-        {
-          objectiveId: "unclassified",
-          topicName: "Toàn bài · chưa phân loại chủ đề",
-          totalQuestions: 0,
-          correctCount: 0,
-          missedCount: 0,
-          pointsEarned: 0,
-          pointsPossible: 0,
-          accuracy: 0,
-        },
-      )
-    : null;
-  if (unclassifiedSummary)
-    unclassifiedSummary.accuracy = unclassifiedSummary.totalQuestions
-      ? Math.round(
-          (unclassifiedSummary.correctCount /
-            unclassifiedSummary.totalQuestions) *
-            100,
-        )
-      : 0;
-  const visibleTopicPerformance = [
-    ...classifiedPerformance,
-    ...(unclassifiedSummary ? [unclassifiedSummary] : []),
-  ];
   return (
     <>
       {classifiedLearningProfile.length ? (
@@ -170,49 +129,6 @@ export function StudyAnalysisDetails({
       {!assessmentOnly ? (
         <LearningPathSection learningPath={report.learningPath} />
       ) : null}
-
-      <details className="group mt-5 rounded-2xl border border-slate-200 bg-white shadow-card">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 marker:content-none sm:p-6">
-          <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-brand-700">
-              <FileSearch className="size-5" />
-            </span>
-            <div>
-              <h2 className="font-black">Kết quả theo chủ đề</h2>
-              <p className="text-xs text-slate-500">
-                {visibleTopicPerformance.length} mục · Bấm để xem chi tiết
-              </p>
-            </div>
-          </div>
-          <ChevronDown className="size-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="grid gap-3 border-t border-slate-100 p-5 md:grid-cols-2 xl:grid-cols-3 sm:p-6">
-          {visibleTopicPerformance.map((topic) => (
-            <div
-              key={topic.objectiveId ?? topic.topicName}
-              className="rounded-xl bg-slate-50 p-4"
-            >
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-bold text-slate-700">
-                  {topic.topicName}
-                </span>
-                <span className="font-black text-slate-900">
-                  {topic.accuracy}%
-                </span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className={`h-full rounded-full ${topic.accuracy >= 80 ? "bg-emerald-500" : topic.accuracy >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
-                  style={{ width: `${topic.accuracy}%` }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
-                {topic.correctCount}/{topic.totalQuestions} câu đúng
-              </p>
-            </div>
-          ))}
-        </div>
-      </details>
 
       {!assessmentOnly ? (
         <details className="group mt-5 rounded-2xl border border-slate-200 bg-white shadow-card">
@@ -458,11 +374,6 @@ function LearningPathSection({
             <h2 className="mt-1 text-xl font-black">
               Học sinh nên làm gì tiếp theo?
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              AI gợi ý {learningPath.steps.length} bước, khoảng{" "}
-              {learningPath.totalDurationMinutes} phút · Chưa phải nhiệm vụ đã
-              giao
-            </p>
           </div>
         </div>
         <ChevronDown className="mt-2 size-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />

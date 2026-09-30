@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { examService } from "@/lib/assessment-api";
 import { ApiError } from "@/lib/auth-api";
 import { StudyTopicSuggestionsPanel } from "@/components/assessment/study-topic-suggestions-panel";
+import { TeacherStudyProgress } from "@/components/assessment/teacher-study-progress";
 import {
   StudyAnalysisDetails,
   ReviewLabel,
@@ -44,9 +45,32 @@ export function StudentInterventionPanel({
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [analysisError, setAnalysisError] = useState("");
   const [analysisRequest, setAnalysisRequest] = useState(0);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   async function reloadAnalysis() {
     setAnalysis(await loadStudyAnalysis(examId, studentId, attemptId));
+  }
+
+  async function reanalyze() {
+    setReanalyzing(true);
+    setAnalysisError("");
+    try {
+      setAnalysis(
+        await examService.createTeacherStudyAnalysis(
+          examId,
+          studentId,
+          attemptId,
+        ),
+      );
+    } catch (cause) {
+      setAnalysisError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể phân tích lại bài làm",
+      );
+    } finally {
+      setReanalyzing(false);
+    }
   }
 
   useEffect(() => {
@@ -95,17 +119,30 @@ export function StudentInterventionPanel({
   );
   return (
     <section className="mb-5 space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-      <div>
-        <h2 className="text-lg font-black">
-          {assessmentOnly
-            ? "Theo dõi nguy cơ học tập"
-            : "Phân tích kết quả học tập"}
-        </h2>
-        <p className="text-sm text-slate-500">
-          {assessmentOnly
-            ? "Kết quả được tính từ bài kiểm tra; chưa tạo nhận định kiến thức hoặc kế hoạch ôn tập vì môn học chưa có tài liệu."
-            : "Dùng để đối chiếu kết quả và xác nhận chủ đề. Lộ trình được AI đề xuất theo nhóm học sinh cần hỗ trợ ở trang theo dõi lớp/môn."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black">
+            {assessmentOnly
+              ? "Theo dõi nguy cơ học tập"
+              : "Phân tích AI cho bài làm cá nhân"}
+          </h2>
+          {assessmentOnly ? (
+            <p className="text-sm text-slate-500">
+              Kết quả được tính từ bài kiểm tra; chưa tạo nhận định kiến thức hoặc
+              kế hoạch ôn tập vì môn học chưa có tài liệu.
+            </p>
+          ) : null}
+        </div>
+        {analysis ? (
+          <Button
+            size="sm"
+            disabled={reanalyzing}
+            onClick={() => void reanalyze()}
+          >
+            <RotateCcw className={`size-4 ${reanalyzing ? "animate-spin" : ""}`} />
+            {reanalyzing ? "Đang phân tích..." : "Phân tích lại"}
+          </Button>
+        ) : null}
       </div>
       {analysisLoading ? (
         <p
@@ -146,12 +183,7 @@ export function StudentInterventionPanel({
               Phân tích học sinh đang xem
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              {analysis.report.exam.title} · {analysis.report.exam.subjectName}{" "}
-              · {analysis.report.exam.className}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Cùng dữ liệu với trang phân tích của học sinh, gồm các nhận định
-              đã được giáo viên xử lý.
+              {analysis.report.exam.title} · {analysis.report.exam.className}
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -198,14 +230,9 @@ export function StudentInterventionPanel({
           </div>
           <details className="group rounded-xl border border-blue-100 bg-blue-50/60">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none">
-              <div>
-                <p className="font-bold text-slate-800">
-                  Nhận định tổng quan của AI
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Bấm để xem nội dung và trạng thái duyệt
-                </p>
-              </div>
+              <p className="font-bold text-slate-800">
+                Nhận định tổng quan của AI
+              </p>
               <ChevronDown className="size-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
             </summary>
             <div className="border-t border-blue-100 px-4 py-3 text-sm leading-6 text-slate-700">
@@ -275,54 +302,11 @@ export function StudentInterventionPanel({
             </details>
           ) : null}
           <StudyAnalysisDetails report={analysis.report} />
-          {!assessmentOnly && analysis.practiceSet ? (
-            <details className="rounded-xl border border-slate-200 p-4">
-              <summary className="cursor-pointer font-bold">
-                Kết quả luyện tập của học sinh
-              </summary>
-              <p className="mt-3 text-sm text-slate-600">
-                Lượt hiện tại: {analysis.practiceSet.attemptNumber} ·{" "}
-                {analysis.practiceSet.status === "SUBMITTED"
-                  ? `Đã nộp · Đúng ${analysis.practiceSet.correctCount}/${analysis.practiceSet.totalQuestions} câu`
-                  : analysis.practiceSet.startedAt
-                    ? "Đang làm"
-                    : "Chưa bắt đầu"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Kết quả luyện tập có thể có gợi ý, dùng để tham khảo khi đối
-                chiếu.
-              </p>
-              <ul className="mt-3 space-y-2 text-sm">
-                {analysis.practiceSet.attemptHistory.map((attempt) => (
-                  <li key={attempt.id} className="rounded-lg bg-slate-50 p-3">
-                    Lượt {attempt.attemptNumber} ·{" "}
-                    {attempt.status === "SUBMITTED"
-                      ? `Đúng ${attempt.correctCount}/${attempt.totalQuestions} câu`
-                      : "Chưa nộp"}
-                    {attempt.submittedAt
-                      ? ` · ${new Date(attempt.submittedAt).toLocaleString("vi-VN")}`
-                      : ""}
-                    {attempt.assistance === "SYSTEM_HINTS_USED"
-                      ? " · Đã dùng gợi ý"
-                      : attempt.assistance === "NO_SYSTEM_HINTS"
-                        ? " · Không dùng gợi ý hệ thống"
-                        : " · Chưa rõ mức hỗ trợ"}
-                  </li>
-                ))}
-              </ul>
-              {analysis.practiceSet.feedback?.map((item) => (
-                <p
-                  key={item.objectiveId ?? item.topicName}
-                  className="mt-3 text-sm text-slate-700"
-                >
-                  <strong>
-                    {item.topicName}: {item.accuracy}%
-                  </strong>{" "}
-                  · {item.recommendation}
-                </p>
-              ))}
-            </details>
-          ) : null}
+          <TeacherStudyProgress
+            examId={examId}
+            studentId={studentId}
+            attemptId={attemptId}
+          />
         </div>
       ) : null}
     </section>

@@ -11,8 +11,10 @@ import {
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-shell";
+import { PracticeAttemptHistory } from "@/components/assessment/practice-attempt-history";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import {
   Table,
   TableBody,
@@ -22,9 +24,11 @@ import {
   TableHeader,
 } from "@/components/ui/data-table";
 import { CustomSelect, Input } from "@/components/ui/form-control";
-import { studentOverviewService } from "@/lib/assessment-api";
+import { examAttemptService, studentOverviewService } from "@/lib/assessment-api";
 import { normalizeSearchKeyword } from "@/lib/search-keyword";
+import { loadOrCreateStudentStudyAnalysis } from "@/lib/study-analysis-loader";
 import { toVietnameseSubjectName } from "@/lib/subject-localization";
+import type { StudyPracticeSet } from "@/types/assessment";
 import type { StudentExamScore, StudentOverview } from "@/types/student-overview";
 
 const REVIEW_THRESHOLD = 50;
@@ -63,13 +67,30 @@ function priorityFor(percentage: number | null) {
 }
 
 export function StudentReviewPage() {
+  return (
+    <StudentShell>
+      <StudentExamReviewPanel />
+    </StudentShell>
+  );
+}
+
+export function StudentExamReviewPanel({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [overview, setOverview] = useState<StudentOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [subjectId, setSubjectId] = useState("all");
-
+  const [practiceHistory, setPracticeHistory] = useState<StudyPracticeSet | null>(null);
+  const [practiceHistoryAttemptId, setPracticeHistoryAttemptId] = useState<string | null>(null);
+  const [practiceHistoryTitle, setPracticeHistoryTitle] = useState("");
+  const [practiceHistoryLoading, setPracticeHistoryLoading] = useState(false);
+  const [practiceHistoryError, setPracticeHistoryError] = useState("");
+  const [practiceCreating, setPracticeCreating] = useState(false);
   useEffect(() => {
     void studentOverviewService
       .getMyOverview()
@@ -105,9 +126,29 @@ export function StudentReviewPage() {
     [submittedAttempts],
   );
 
+  const optionalReviewItems = useMemo(
+    () =>
+      submittedAttempts
+        .filter((item) => {
+          const percentage = item.percentage ?? 100;
+          return percentage >= REVIEW_THRESHOLD && percentage < 100;
+        })
+        .sort(
+          (left, right) =>
+            (left.percentage ?? 100) - (right.percentage ?? 100) ||
+            (right.submittedAt ?? "").localeCompare(left.submittedAt ?? ""),
+        ),
+    [submittedAttempts],
+  );
+
+  const allReviewItems = useMemo(
+    () => [...reviewItems, ...optionalReviewItems],
+    [reviewItems, optionalReviewItems],
+  );
+
   const subjects = useMemo(() => {
     const unique = new Map<string, { id: string; name: string }>();
-    for (const item of reviewItems) {
+    for (const item of allReviewItems) {
       unique.set(item.subjectId, {
         id: item.subjectId,
         name: toVietnameseSubjectName(item.subjectName),
@@ -116,11 +157,11 @@ export function StudentReviewPage() {
     return [...unique.values()].sort((left, right) =>
       left.name.localeCompare(right.name, "vi"),
     );
-  }, [reviewItems]);
+  }, [allReviewItems]);
 
   const visibleItems = useMemo(() => {
     const keyword = normalizeSearchKeyword(search);
-    return reviewItems.filter(
+    return allReviewItems.filter(
       (item) =>
         (subjectId === "all" || item.subjectId === subjectId) &&
         (!keyword ||
@@ -132,9 +173,9 @@ export function StudentReviewPage() {
             item.termName,
           ).includes(keyword)),
     );
-  }, [reviewItems, search, subjectId]);
+  }, [allReviewItems, search, subjectId]);
 
-  const lowestPercentage = reviewItems.reduce<number | null>(
+  const lowestPercentage = submittedAttempts.reduce<number | null>(
     (lowest, item) =>
       lowest === null
         ? item.percentage
@@ -142,23 +183,58 @@ export function StudentReviewPage() {
     null,
   );
 
+  async function openPracticeHistory(item: StudentExamScore) {
+    setPracticeHistoryAttemptId(item.id);
+    setPracticeHistoryTitle(item.title);
+    setPracticeHistory(null);
+    setPracticeHistoryError("");
+    setPracticeCreating(false);
+    setPracticeHistoryLoading(true);
+    try {
+      const analysis = await loadOrCreateStudentStudyAnalysis(item.id);
+      setPracticeHistory(analysis.practiceSet ?? null);
+    } catch (cause) {
+      setPracticeHistoryError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tải danh sách bài luyện",
+      );
+    } finally {
+      setPracticeHistoryLoading(false);
+    }
+  }
+
+  async function createPracticeAttempt() {
+    if (!practiceHistory || practiceHistory.status !== "SUBMITTED") return;
+    setPracticeCreating(true);
+    setPracticeHistoryError("");
+    try {
+      setPracticeHistory(
+        await examAttemptService.retryStudyPractice(
+          practiceHistory.id,
+          practiceHistory.attemptId,
+        ),
+      );
+    } catch (cause) {
+      setPracticeHistoryError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể tạo bài luyện mới",
+      );
+    } finally {
+      setPracticeCreating(false);
+    }
+  }
+
   if (loading) {
-    return (
-      <StudentShell>
-        <LoadingPanel />
-      </StudentShell>
-    );
+    return <LoadingPanel />;
   }
   if (error) {
-    return (
-      <StudentShell>
-        <ErrorPanel message={error} />
-      </StudentShell>
-    );
+    return <ErrorPanel message={error} />;
   }
 
   return (
-    <StudentShell>
+    <>
       <section className={`rounded-2xl border p-5 shadow-card sm:p-6 ${reviewItems.length ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
         <div className="flex items-start gap-3">
           <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${reviewItems.length ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"}`}>
@@ -171,17 +247,23 @@ export function StudentReviewPage() {
             <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
               {reviewItems.length
                 ? `Có ${reviewItems.length} bài kiểm tra cần được ôn lại`
-                : "Bạn chưa có bài kiểm tra điểm thấp cần ôn tập"}
+                : optionalReviewItems.length
+                  ? `Bạn có ${optionalReviewItems.length} bài có thể tự chọn ôn thêm`
+                  : "Bạn chưa có bài kiểm tra cần ôn thêm"}
             </h1>
             <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
               {reviewItems.length
                 ? "Ưu tiên các bài có điểm thấp trước. Với mỗi bài, bạn có thể xem lại kiến thức hoặc bắt đầu luyện tập ngay."
-                : "Các bài kiểm tra có kết quả dưới 50% sẽ xuất hiện tại đây để bạn chủ động củng cố kiến thức."}
+                : optionalReviewItems.length
+                  ? "Kết quả của bạn đã đạt ngưỡng cơ bản. Bạn vẫn có thể chọn bài còn câu sai để AI tạo gợi ý ôn tập cá nhân."
+                  : "Các bài có câu trả lời chưa đúng sẽ xuất hiện tại đây để bạn chủ động củng cố kiến thức."}
             </p>
           </div>
         </div>
       </section>
 
+      {!embedded ? (
+        <>
       <section className="mt-4 flex flex-col gap-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
@@ -214,6 +296,8 @@ export function StudentReviewPage() {
           Làm Quiz Study Coach
         </Button>
       </section>
+        </>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <SummaryCard
@@ -225,9 +309,9 @@ export function StudentReviewPage() {
         />
         <SummaryCard
           icon={BookOpenCheck}
-          label="Môn cần củng cố"
-          value={subjects.length.toString()}
-          detail="Tổng hợp từ kết quả thực tế"
+          label="Bài tự chọn ôn thêm"
+          value={optionalReviewItems.length.toString()}
+          detail="Bài 50–99% có thể tự ôn"
           tone="violet"
         />
         <SummaryCard
@@ -244,7 +328,7 @@ export function StudentReviewPage() {
           <div>
             <h2 className="font-black text-slate-950">Danh sách bài kiểm tra cần ôn lại</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Mỗi bài lấy lượt làm có kết quả tốt nhất; bài đã đạt sẽ tự rời danh sách.
+              AI tự ưu tiên bài dưới 50%. Bạn vẫn có thể chọn bài khác để tự ôn thêm ở danh sách bên dưới.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[300px_220px]">
@@ -280,7 +364,7 @@ export function StudentReviewPage() {
                 <TableHead className="!text-white">Học kỳ</TableHead>
                 <TableHead className="text-center !text-white">Kết quả</TableHead>
                 <TableHead className="text-center !text-white">Mức ưu tiên</TableHead>
-                <TableHead className="w-64 text-right !text-white">Thao tác</TableHead>
+                <TableHead className="w-80 text-right !text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -359,9 +443,17 @@ export function StudentReviewPage() {
                         <Button
                           size="sm"
                           className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=practice`)}
+                          onClick={() => router.push(`/student/study-coach/practice/${item.id}`)}
                         >
                           <BrainCircuit className="size-3.5" /> Luyện tập
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 whitespace-nowrap px-2.5"
+                          onClick={() => void openPracticeHistory(item)}
+                        >
+                          Bài luyện
                         </Button>
                       </div>
                     </TableCell>
@@ -372,7 +464,141 @@ export function StudentReviewPage() {
           </Table>
         </div>
       </section>
-    </StudentShell>
+
+      <Modal
+        open={practiceHistoryAttemptId !== null}
+        title="Danh sách bài luyện"
+        description={practiceHistoryTitle}
+        width="max-w-6xl"
+        bodyClassName="max-h-[75vh] overflow-y-auto"
+        onClose={() => {
+          setPracticeHistoryAttemptId(null);
+          setPracticeHistory(null);
+          setPracticeHistoryError("");
+          setPracticeCreating(false);
+        }}
+      >
+          {practiceHistoryLoading ? (
+            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+              Đang tải danh sách bài luyện...
+            </p>
+          ) : practiceHistoryError ? (
+            <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
+              {practiceHistoryError}
+            </p>
+          ) : practiceHistory ? (
+            <PracticeAttemptHistory
+              practiceSetId={practiceHistory.id}
+              items={practiceHistory.attemptHistory ?? []}
+              activeAttemptId={practiceHistory.attemptId}
+              showHeading={false}
+              creating={practiceCreating}
+              onCreate={
+                practiceHistory.status === "SUBMITTED"
+                  ? () => void createPracticeAttempt()
+                  : undefined
+              }
+              onContinue={() =>
+                router.push(`/student/study-coach/practice/${practiceHistoryAttemptId}`)
+              }
+              onViewAttempt={(attempt) => {
+                if (!practiceHistoryAttemptId) return;
+                router.push(
+                  `/student/study-coach/practice-results/${attempt.id}`,
+                );
+              }}
+            />
+          ) : (
+            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+              Chưa có bài luyện cho bài kiểm tra này.
+            </p>
+          )}
+      </Modal>
+
+      <section className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-card">
+        <header className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">
+              AI Study Coach
+            </p>
+            <h2 className="mt-1 font-black text-slate-950">Tự chọn ôn thêm với AI</h2>
+            <p className="mt-0.5 text-xs leading-5 text-slate-600">
+              Xem lại gợi ý từ các câu chưa đúng của bài 50–99%. Đây là hoạt động tự ôn, không phải lộ trình giáo viên giao.
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-700 shadow-sm">
+            {optionalReviewItems.length} bài có thể ôn
+          </span>
+        </header>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[760px]">
+            <TableHeader className="!bg-brand-600 !text-white">
+              <tr>
+                <TableHead className="w-14 text-center !text-white">#</TableHead>
+                <TableHead className="!text-white">Bài kiểm tra</TableHead>
+                <TableHead className="!text-white">Môn học / lớp</TableHead>
+                <TableHead className="text-center !text-white">Kết quả</TableHead>
+                <TableHead className="w-64 text-right !text-white">Thao tác</TableHead>
+              </tr>
+            </TableHeader>
+            <TableBody>
+              {visibleOptionalItems.length === 0 ? (
+                <TableEmptyRow
+                  colSpan={5}
+                  icon={<BrainCircuit className="size-5 text-brand-600" />}
+                  message={
+                    optionalReviewItems.length === 0
+                      ? "Bạn chưa có bài kiểm tra từ 50–99% có gợi ý ôn thêm."
+                      : "Không tìm thấy bài phù hợp với bộ lọc."
+                  }
+                />
+              ) : null}
+              {visibleOptionalItems.map((item, index) => {
+                const percentage = Math.round(item.percentage ?? 0);
+                return (
+                  <tr key={item.id} className="transition hover:bg-blue-50/40">
+                    <TableCell className="text-center text-slate-500">{index + 1}</TableCell>
+                    <TableCell>
+                      <p className="font-bold text-slate-950">{item.title}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                        <CalendarDays className="size-3.5" /> Đã nộp {formatDate(item.submittedAt)}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-bold text-slate-800">{toVietnameseSubjectName(item.subjectName)}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-brand-600">{item.className}</p>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="font-black text-brand-700">{tenPointScore(item.percentage)}/10</span>
+                      <span className="ml-1 text-xs text-slate-400">{percentage}%</span>
+                    </TableCell>
+                    <TableCell className="!px-3">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
+                        >
+                          <BrainCircuit className="size-3.5" /> Xem gợi ý AI
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 whitespace-nowrap px-2.5"
+                          onClick={() => void openPracticeHistory(item)}
+                        >
+                          Bài luyện
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </tr>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+    </>
   );
 }
 

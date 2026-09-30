@@ -20,7 +20,25 @@ const insightProgress = (hasData = true) => ({ items: [{ conceptId: "concept", c
 
 async function renderComponent(t, file, exportName, api, options = {}) {
   const previousWindow = global.window;
-  global.window = { location: { search: options.search ?? "" } };
+  const location = {
+    search: options.search ?? "",
+    hash: options.hash ?? "",
+    href: `http://localhost/student/study-coach${options.search ?? ""}${options.hash ?? ""}`,
+  };
+  global.window = {
+    location,
+    history: {
+      replaceState(_state, _title, value) {
+        const next = new URL(value, "http://localhost");
+        location.search = next.search;
+        location.hash = next.hash;
+        location.href = next.href;
+      },
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    requestAnimationFrame(callback) { callback(); },
+  };
   const filename = path.resolve(file);
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); const originalRequire = loaded.require.bind(loaded);
@@ -28,6 +46,7 @@ async function renderComponent(t, file, exportName, api, options = {}) {
     if (id === "next/navigation") return { useRouter: () => ({ push() {} }), useParams: () => ({ materialId: options.materialId }) };
     if (id === "lucide-react") return new Proxy({}, { get: (_target, name) => (props) => React.createElement("svg", { ...props, "data-icon": String(name) }) });
     if (id === "@/components/student/student-shell") return { StudentShell: ({ children }) => React.createElement("main", null, children) };
+    if (id === "@/components/student/student-review-page") return { StudentExamReviewPanel: () => React.createElement("section", { "data-testid": "exam-review-panel" }, "Ôn tập bài kiểm tra") };
     if (id === "@/components/student/study-coach-material-library") return { StudyCoachMaterialLibrary: () => React.createElement("section", { "data-testid": "material-library" }) };
     if (id === "@/components/ui/button") return { Button: ({ children, ...props }) => React.createElement("button", props, children) };
     if (id === "@/components/ui/form-control") return { Select: ({ children, label, ...props }) => React.createElement("label", null, label, React.createElement("select", props, children)) };
@@ -79,7 +98,15 @@ test("Study Coach groups mastery by material instead of mixing concepts", async 
   assert.match(ui.text(), /Năng lực theo từng tài liệu/);
   assert.match(ui.text(), /Sinh học\.pdf/);
   assert.match(ui.text(), /Tin học\.pdf/);
+  assert.match(ui.text(), /Học tiếp từ đúng nơi bạn cần/);
   assert.doesNotMatch(ui.text(), /Năng lực theo khái niệm/);
+  assert.ok(ui.button("Tự học"));
+  assert.ok(ui.button("Ôn tập bài kiểm tra"));
+  assert.doesNotMatch(ui.text(), /exam-review-panel/);
+  await act(async () => { ui.button("Ôn tập bài kiểm tra").props.onClick(); await flush(); });
+  assert.match(ui.text(), /exam-review-panel/);
+  assert.doesNotMatch(ui.text(), /Học tiếp từ đúng nơi bạn cần/);
+  assert.doesNotMatch(ui.text(), /Năng lực theo từng tài liệu/);
 });
 
 test("insights render safe ready/fallback states, preserve action order and prevent duplicate generation", async (t) => {

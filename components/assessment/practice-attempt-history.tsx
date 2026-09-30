@@ -19,9 +19,23 @@ export const assistanceLabel = (value: string) =>
 export function PracticeAttemptHistory({
   practiceSetId,
   items,
+  activeAttemptId,
+  onContinue,
+  onCreate,
+  creating = false,
+  showCreateButton = true,
+  showHeading = true,
+  onViewAttempt,
 }: {
   practiceSetId: string;
   items: StudyPracticeAttemptSummary[];
+  activeAttemptId?: string;
+  onContinue?: () => void;
+  onCreate?: () => void;
+  creating?: boolean;
+  showCreateButton?: boolean;
+  showHeading?: boolean;
+  onViewAttempt?: (attempt: StudyPracticeAttemptSummary) => void;
 }) {
   const [selected, setSelected] = useState<StudyPracticeAttemptResult | null>(
     null,
@@ -44,43 +58,65 @@ export function PracticeAttemptHistory({
     }
   }
   return (
-    <section
-      className="mb-6 rounded-xl border border-slate-200 p-4"
-      aria-label="Lịch sử lượt ôn tập"
-    >
-      <h3 className="font-black">Lịch sử ôn tập</h3>
-      <p className="mt-1 text-xs leading-5 text-slate-500">
-        Mỗi lượt giữ riêng kết quả và nội dung câu hỏi. Kết quả luyện trên cùng
-        bộ câu chưa đủ để kết luận đã cải thiện kiến thức.
-      </p>
+    <section aria-label="Danh sách bài luyện tập">
+      <div
+        className={`flex flex-wrap items-start gap-3 ${showHeading ? "justify-between" : "justify-end"}`}
+      >
+        {showHeading ? (
+          <div>
+            <h2 className="text-lg font-black text-slate-900">Bài luyện tập</h2>
+            <p className="mt-1 text-sm leading-5 text-slate-500">
+              Mỗi dòng là một lượt luyện riêng, lưu nguyên câu hỏi và kết quả tại
+              thời điểm làm bài.
+            </p>
+          </div>
+        ) : null}
+        {showCreateButton ? (
+          <Button
+            disabled={!onCreate || creating}
+            onClick={onCreate}
+            title={!onCreate ? "Hoàn thành bài đang mở trước khi tạo bài mới" : undefined}
+          >
+            {creating ? "Đang tạo..." : "+ Tạo bài luyện mới"}
+          </Button>
+        ) : null}
+      </div>
       {items.some((item) => item.legacy) ? (
         <p className="mt-2 text-xs text-amber-700">
           Dữ liệu cũ chỉ còn lượt được lưu trước cập nhật; các lượt từng bị ghi
           đè không có trong lịch sử.
         </p>
       ) : null}
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[580px] text-left text-sm">
+      <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
-            <tr className="border-b text-slate-500">
-              <th className="py-2">Lượt</th>
-              <th>Thời điểm nộp</th>
+            <tr className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <th className="px-4 py-3">Bài luyện</th>
+              <th className="py-3">Thời gian</th>
               <th>Kết quả</th>
               <th>Hỗ trợ</th>
-              <th>Xem</th>
+              <th>Trạng thái</th>
+              <th className="px-4 py-3 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
-              <tr key={item.id} className="border-b last:border-0">
-                <td className="py-3 font-bold">
-                  {item.attemptNumber}
+              <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50/70">
+                <td className="px-4 py-3 font-bold text-slate-900">
+                  Bài luyện {item.attemptNumber}
                   {item.legacy ? " (cũ)" : ""}
+                  {item.id === activeAttemptId ? (
+                    <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-brand-700">
+                      Hiện tại
+                    </span>
+                  ) : null}
                 </td>
                 <td>
                   {item.submittedAt
                     ? new Date(item.submittedAt).toLocaleString("vi-VN")
-                    : "Chưa nộp"}
+                    : item.startedAt
+                      ? `Bắt đầu ${new Date(item.startedAt).toLocaleString("vi-VN")}`
+                      : "Chưa bắt đầu"}
                 </td>
                 <td>
                   {item.status === "SUBMITTED"
@@ -89,15 +125,41 @@ export function PracticeAttemptHistory({
                 </td>
                 <td className="text-xs">{assistanceLabel(item.assistance)}</td>
                 <td>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={item.status !== "SUBMITTED" || loading !== null}
-                    onClick={() => void open(item.id)}
-                    aria-label={`Xem lượt ôn tập ${item.attemptNumber}`}
-                  >
-                    {loading === item.id ? "Đang tải..." : "Bài làm"}
-                  </Button>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.status === "SUBMITTED" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                    {item.status === "SUBMITTED" ? "Đã hoàn thành" : item.startedAt ? "Đang làm" : "Chưa bắt đầu"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {item.status === "SUBMITTED" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!onViewAttempt && loading !== null}
+                      onClick={() =>
+                        onViewAttempt
+                          ? onViewAttempt(item)
+                          : void open(item.id)
+                      }
+                      aria-label={`Xem lượt ôn tập ${item.attemptNumber}`}
+                    >
+                      {!onViewAttempt && loading === item.id
+                        ? "Đang tải..."
+                        : "Xem bài làm"}
+                    </Button>
+                  ) : item.id === activeAttemptId && onContinue ? (
+                    <Button size="sm" onClick={onContinue}>
+                      {item.startedAt ? "Làm tiếp" : "Bắt đầu"}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      aria-label={`Xem lượt ôn tập ${item.attemptNumber}`}
+                    >
+                      Chưa khả dụng
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}
