@@ -18,6 +18,7 @@ import {
   ChartNoAxesCombined,
   LogOut,
   Menu,
+  MessageCircleQuestion,
   School,
   Settings,
   UsersRound,
@@ -33,6 +34,10 @@ import { StudentShell } from "@/components/student/student-shell";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
+import {
+  LEARNING_SUPPORT_CHANGED_EVENT,
+  learningSupportService,
+} from "@/lib/learning-support-api";
 
 interface WorkspaceLink {
   href?: string;
@@ -61,6 +66,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,6 +77,30 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
     document.addEventListener("mousedown", closeAccountMenu);
     return () => document.removeEventListener("mousedown", closeAccountMenu);
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const refreshSupportCount = () => {
+      void learningSupportService
+        .unreadCount()
+        .then(({ count }) => {
+          if (active) setSupportUnreadCount(count);
+        })
+        .catch(() => undefined);
+    };
+    refreshSupportCount();
+    const timer = window.setInterval(refreshSupportCount, 30_000);
+    window.addEventListener(LEARNING_SUPPORT_CHANGED_EVENT, refreshSupportCount);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener(
+        LEARNING_SUPPORT_CHANGED_EVENT,
+        refreshSupportCount,
+      );
+    };
+  }, [user]);
 
   const links: WorkspaceLink[] = [
     { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
@@ -99,6 +129,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       href: "/teacher/learning-support",
       label: "Theo dõi học tập",
       icon: ChartNoAxesCombined,
+    },
+    {
+      href: "/teacher/support-requests",
+      label: "Yêu cầu hỗ trợ",
+      icon: MessageCircleQuestion,
     },
     { href: "/teacher/attendance", label: "Điểm danh", icon: CheckCircle2 },
     { href: "/teacher/notifications", label: "Thông báo", icon: BellRing },
@@ -180,11 +215,24 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
           <button
             type="button"
+            onClick={() =>
+              requestWorkspaceNavigation(() =>
+                router.push("/teacher/support-requests"),
+              )
+            }
             className="relative grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
-            aria-label="Thông báo"
+            aria-label={
+              supportUnreadCount
+                ? `${supportUnreadCount} yêu cầu hỗ trợ chưa đọc`
+                : "Yêu cầu hỗ trợ"
+            }
           >
             <Bell className="size-5" />
-            <span className="absolute right-2 top-2 size-2 rounded-full bg-amber-500 ring-2 ring-white" />
+            {supportUnreadCount ? (
+              <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-4 text-white ring-2 ring-white">
+                {supportUnreadCount > 9 ? "9+" : supportUnreadCount}
+              </span>
+            ) : null}
           </button>
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
           <div ref={accountMenuRef} className="relative">
@@ -334,6 +382,11 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                   >
                     <Icon className="size-5 shrink-0" />
                     <span className={sidebarLabelClass}>{label}</span>
+                    {href === "/teacher/support-requests" && supportUnreadCount ? (
+                      <span className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                        {supportUnreadCount > 99 ? "99+" : supportUnreadCount}
+                      </span>
+                    ) : null}
                   </button>
                 </div>
               );
@@ -350,6 +403,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             pathname === "/teacher/exams/new" ||
             pathname.startsWith("/teacher/exams/") ||
             pathname.startsWith("/teacher/learning-support") ||
+            pathname.startsWith("/teacher/support-requests") ||
             pathname === "/teacher/attendance" ||
             pathname === "/teacher/notifications" ||
             pathname === "/teacher/settings/exam-defaults"
@@ -401,6 +455,8 @@ export function ErrorPanel({ message }: { message: string }) {
 }
 
 function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
+  if (pathname.startsWith("/teacher/support-requests"))
+    return "Hộp thư hỗ trợ học sinh";
   if (pathname.startsWith("/teacher/learning-plans/"))
     return "Chi tiết lộ trình học";
   if (pathname.startsWith("/teacher/learning-support/"))
@@ -433,6 +489,9 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
 function getWorkspaceBreadcrumbs(
   pathname: string,
 ): Array<{ label: string; href?: string }> {
+  if (pathname.startsWith("/teacher/support-requests")) {
+    return [{ label: "Hộp thư hỗ trợ học sinh" }];
+  }
   if (pathname.startsWith("/teacher/learning-plans/")) {
     return [
       { label: "Theo dõi học tập", href: "/teacher/learning-support" },

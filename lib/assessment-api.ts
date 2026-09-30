@@ -1396,7 +1396,7 @@ export const learningPlanService = {
     planId: string,
     taskId: string,
     note: string,
-  ): Promise<LearningTask["progress"]> {
+  ): Promise<import("@/types/assessment").LearningSupportRequest> {
     return authenticatedRequest(
       `/learning-plans/${planId}/tasks/${taskId}/difficulty`,
       { method: "POST", body: JSON.stringify({ note }) },

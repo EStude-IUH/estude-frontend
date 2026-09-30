@@ -65,6 +65,10 @@ function load() {
     if (id === "@/components/ui/button") return { Button: ({ children, ...props }) => React.createElement("button", props, children) };
     if (id === "@/components/assessment/student-improvement-panel") return { StudentImprovementPanel: () => null };
     if (id === "@/lib/assessment-api") return { learningPlanService: { getMine: async () => plan, listMine: async () => [plan] } };
+    if (id === "@/lib/learning-support-api") return {
+      LEARNING_SUPPORT_CHANGED_EVENT: "support-changed",
+      learningSupportService: { listStudent: async () => [], markStudentRead: async () => null },
+    };
     return original(id);
   };
   loaded._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {

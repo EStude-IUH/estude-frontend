@@ -10,8 +10,16 @@ import {
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
 import { learningPlanService } from "@/lib/assessment-api";
+import {
+  LEARNING_SUPPORT_CHANGED_EVENT,
+  learningSupportService,
+} from "@/lib/learning-support-api";
 import { StudentImprovementPanel } from "@/components/assessment/student-improvement-panel";
-import type { LearningPlan, LearningTask } from "@/types/assessment";
+import type {
+  LearningPlan,
+  LearningSupportRequest,
+  LearningTask,
+} from "@/types/assessment";
 
 const planStatus: Record<LearningPlan["status"], { label: string; tone: string }> = {
   DRAFT: { label: "Bản nháp", tone: "bg-slate-100 text-slate-700" },
@@ -51,6 +59,10 @@ export function StudentLearningPlansPage({ detail = false }: { detail?: boolean 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState<Record<string, string>>({});
+  const [supportThreads, setSupportThreads] = useState<
+    Record<string, LearningSupportRequest>
+  >({});
+  const [sentTaskId, setSentTaskId] = useState<string | null>(null);
 
   async function reload() {
     if (detail && params.id) setPlans([await learningPlanService.getMine(params.id)]);
@@ -68,12 +80,71 @@ export function StudentLearningPlansPage({ detail = false }: { detail?: boolean 
     return () => { live = false; };
   }, [detail, params.id]);
 
+  useEffect(() => {
+    if (!detail || !params.id) return;
+    let live = true;
+    void learningSupportService
+      .listStudent(params.id)
+      .then((items) => {
+        if (!live) return;
+        setSupportThreads(
+          Object.fromEntries(items.map((item) => [item.taskId, item])),
+        );
+        const unread = items.filter((item) => item.unreadForStudent);
+        return Promise.all(
+          unread.map((item) =>
+            learningSupportService.markStudentRead(params.id!, item.id),
+          ),
+        ).then((readItems) => {
+          if (!live || !readItems.length) return;
+          setSupportThreads((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              readItems.map((item) => [item.taskId, item]),
+            ),
+          }));
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [detail, params.id]);
+
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setError("");
     try { await action(); await reload(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể cập nhật nhiệm vụ"); }
     finally { setBusy(false); }
+  }
+
+  async function sendSupportRequest(
+    planId: string,
+    taskId: string,
+  ) {
+    const content = (note[taskId] ?? "").trim();
+    if (!content) return;
+    setBusy(true);
+    setError("");
+    setSentTaskId(null);
+    try {
+      const request = await learningPlanService.reportDifficulty(
+        planId,
+        taskId,
+        content,
+      );
+      setSupportThreads((current) => ({ ...current, [taskId]: request }));
+      setNote((current) => ({ ...current, [taskId]: "" }));
+      setSentTaskId(taskId);
+      window.dispatchEvent(new Event(LEARNING_SUPPORT_CHANGED_EVENT));
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể gửi yêu cầu hỗ trợ",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -149,6 +220,7 @@ export function StudentLearningPlansPage({ detail = false }: { detail?: boolean 
                       const practiceLocked = plan.objective?.granularity === "MATERIAL" && task.kind === "PRACTICE" && materialIncomplete;
                       const canAct = task.status === "ASSIGNED" && ["ASSIGNED", "IN_PROGRESS"].includes(plan.status);
                       const Icon = task.kind === "MATERIAL" ? BookOpenCheck : BrainCircuit;
+                      const supportThread = supportThreads[task.id];
 
                       return (
                         <li key={task.id} className={`rounded-2xl border p-4 sm:p-5 ${completed ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200 bg-white"}`}>
@@ -162,7 +234,7 @@ export function StudentLearningPlansPage({ detail = false }: { detail?: boolean 
                               <p className="mt-2 text-sm leading-6 text-slate-600">{task.description}</p>
                               {task.kind === "PRACTICE" ? <p className="mt-2 text-xs text-slate-500">Bước này tự hoàn thành sau khi bạn nộp bài luyện.</p> : null}
                               {practiceLocked ? <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 p-2.5 text-xs font-semibold text-amber-700"><Circle className="size-3.5 fill-current" /> Hoàn thành bước đọc tài liệu trước khi làm bài luyện.</p> : null}
-                              {task.progress?.difficultyNote ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"><b>Khó khăn đã báo:</b> {task.progress.difficultyNote}</p> : null}
+                              {!supportThread && task.progress?.difficultyNote ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"><b>Khó khăn đã báo:</b> {task.progress.difficultyNote}</p> : null}
 
                               {canAct ? (
                                 <div className="mt-4 flex flex-wrap gap-2">
@@ -175,10 +247,49 @@ export function StudentLearningPlansPage({ detail = false }: { detail?: boolean 
 
                               {task.status === "ASSIGNED" ? (
                                 <div className="mt-4 border-t border-slate-100 pt-4">
-                                  <label className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-600"><MessageCircleMore className="size-4" /> Cần giáo viên hỗ trợ?</label>
+                                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><MessageCircleMore className="size-4" /> Cần giáo viên hỗ trợ?</label>
+                                    {supportThread ? (
+                                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                                        supportThread.status === "RESOLVED"
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : supportThread.status === "IN_PROGRESS"
+                                            ? "bg-blue-50 text-brand-700"
+                                            : supportThread.teacherReadAt
+                                              ? "bg-violet-50 text-violet-700"
+                                              : "bg-amber-50 text-amber-700"
+                                      }`}>
+                                        {supportThread.status === "RESOLVED"
+                                          ? "Đã xử lý"
+                                          : supportThread.status === "IN_PROGRESS"
+                                            ? "Giáo viên đang xử lý"
+                                            : supportThread.teacherReadAt
+                                              ? "Giáo viên đã xem"
+                                              : "Đã gửi · chờ giáo viên xem"}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {supportThread?.messages.length ? (
+                                    <div className="mb-3 space-y-2 rounded-xl bg-slate-50 p-3">
+                                      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Lịch sử trao đổi</p>
+                                      {supportThread.messages.map((message) => {
+                                        const mine = message.authorRole === "STUDENT";
+                                        return (
+                                          <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                                            <div className={`max-w-[88%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-brand-600 text-white" : "border border-blue-100 bg-white text-slate-700"}`}>
+                                              <p className={`text-[10px] font-bold ${mine ? "text-blue-100" : "text-brand-600"}`}>{mine ? "Bạn" : "Giáo viên"}</p>
+                                              <p className="mt-0.5 whitespace-pre-wrap">{message.content}</p>
+                                              <time className={`mt-1 block text-[10px] ${mine ? "text-blue-100" : "text-slate-400"}`}>{new Date(message.createdAt).toLocaleString("vi-VN")}</time>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : null}
+                                  {sentTaskId === task.id ? <p role="status" className="mb-2 text-xs font-semibold text-emerald-700">Đã gửi yêu cầu đến giáo viên, trang vẫn giữ nguyên vị trí hiện tại.</p> : null}
                                   <div className="flex gap-2">
-                                    <input className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-blue-100" value={note[task.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [task.id]: event.target.value }))} placeholder="Mô tả nội dung bạn đang gặp khó khăn" />
-                                    <Button size="sm" variant="outline" disabled={busy || !(note[task.id] ?? "").trim()} onClick={() => void run(() => learningPlanService.reportDifficulty(plan.id, task.id, note[task.id]))}>Gửi</Button>
+                                    <input className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-blue-100" value={note[task.id] ?? ""} onChange={(event) => { setSentTaskId(null); setNote((current) => ({ ...current, [task.id]: event.target.value })); }} placeholder={supportThread ? "Gửi thêm nội dung cho giáo viên" : "Mô tả nội dung bạn đang gặp khó khăn"} />
+                                    <Button size="sm" variant="outline" disabled={busy || !(note[task.id] ?? "").trim()} onClick={() => void sendSupportRequest(plan.id, task.id)}>Gửi</Button>
                                   </div>
                                 </div>
                               ) : null}

@@ -1327,6 +1327,56 @@ export interface LearningTask {
     sourceAttemptId: string | null;
   } | null;
 }
+
+export type LearningSupportStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED";
+
+export interface LearningSupportMessage {
+  id: string;
+  requestId: string;
+  authorId: string;
+  authorRole: "STUDENT" | "TEACHER";
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface LearningSupportRequest {
+  id: string;
+  planId: string;
+  taskId: string;
+  studentId: string;
+  teacherId: string;
+  status: LearningSupportStatus;
+  teacherReadAt: string | null;
+  studentReadAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  planTitle: string;
+  classId: string | null;
+  subjectId: string | null;
+  taskTitle: string;
+  taskOrder: number | null;
+  taskKind: "MATERIAL" | "PRACTICE" | null;
+  studentName: string;
+  teacherName: string;
+  unreadForTeacher: boolean;
+  unreadForStudent: boolean;
+  messages: LearningSupportMessage[];
+  latestMessage: LearningSupportMessage | null;
+}
+
+export interface LearningSupportInbox {
+  items: LearningSupportRequest[];
+  unreadCount: number;
+  counts: {
+    all: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+  };
+}
+
 export interface LearningPlan {
   id: string;
   cohortId: string;
