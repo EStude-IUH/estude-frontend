@@ -1297,6 +1297,27 @@ export function StudentResultPage() {
   const assessmentOnly =
     analysis?.report.analysisScope === "ASSESSMENT_ONLY" ||
     analysis?.report.aiStatus === "SKIPPED_NO_MATERIAL";
+  const optionalReview =
+    !!analysis && !assessmentOnly && !analysis.report.performance.needsWarning;
+  const missedQuestionCount = analysis
+    ? Math.max(
+        0,
+        analysis.report.performance.totalQuestions -
+          analysis.report.performance.correctCount,
+      )
+    : 0;
+  const optionalReviewTitle = !attempt.exam.settings.showScoreImmediately
+    ? "Gợi ý ôn tập từ bài làm"
+    : missedQuestionCount > 0
+      ? `Gợi ý ôn thêm ${missedQuestionCount} câu chưa đúng`
+      : "Gợi ý củng cố kiến thức";
+  const optionalReviewDescription = analysis
+    ? !attempt.exam.settings.showScoreImmediately
+      ? "Hệ thống đã tạo gợi ý ôn tập từ bài làm. Kết quả bài kiểm tra sẽ hiển thị khi giáo viên công bố."
+      : missedQuestionCount > 0
+        ? `Bạn làm đúng ${analysis.report.performance.correctCount}/${analysis.report.performance.totalQuestions} câu. Hệ thống gợi ý ${analysis.report.learningPath.steps.length} bước ôn tập (${analysis.report.learningPath.totalDurationMinutes} phút) cho phần chưa đúng; điểm bài kiểm tra không thay đổi.`
+        : "Bạn đã làm đúng tất cả câu có thể chấm tự động. Bạn có thể xem phần gợi ý củng cố kiến thức."
+    : "";
   return (
     <AssessmentShell student>
       <div className="mb-4 flex justify-start">
@@ -1427,18 +1448,22 @@ export function StudentResultPage() {
                   ? "Đang kiểm tra dữ liệu môn học"
                   : assessmentOnly
                     ? "Chỉ có đánh giá nguy cơ từ bài kiểm tra"
-                    : analysis
-                      ? "Đã tạo phân tích và lộ trình học"
-                      : "Chưa thể tạo phân tích AI"}
+                    : optionalReview
+                      ? optionalReviewTitle
+                      : analysis
+                        ? "Đã tạo phân tích và lộ trình học"
+                        : "Chưa thể tạo phân tích AI"}
               </p>
               <p className="mt-1 text-sm leading-6 text-violet-700">
                 {analysisLoading
                   ? "Hệ thống đang kiểm tra tài liệu liên quan trước khi phân tích."
                   : assessmentOnly
                     ? "Chưa có tài liệu được gắn và xử lý sẵn sàng nên hệ thống không tạo lộ trình hoặc bài luyện AI."
-                    : analysis
-                      ? `Lộ trình gồm ${analysis.report.learningPath.steps.length} bước, dự kiến ${analysis.report.learningPath.totalDurationMinutes} phút.`
-                      : analysisError}
+                    : optionalReview && analysis
+                      ? optionalReviewDescription
+                      : analysis
+                        ? `Lộ trình gồm ${analysis.report.learningPath.steps.length} bước, dự kiến ${analysis.report.learningPath.totalDurationMinutes} phút.`
+                        : analysisError}
               </p>
             </div>
           </div>
@@ -1453,7 +1478,9 @@ export function StudentResultPage() {
               <Sparkles className="size-4" />{" "}
               {assessmentOnly
                 ? "Xem đánh giá nguy cơ"
-                : "Xem phân tích và lộ trình học"}
+                : optionalReview
+                  ? "Xem gợi ý ôn thêm"
+                  : "Xem phân tích và lộ trình học"}
             </Button>
           ) : analysisLoading ? null : (
             <Button

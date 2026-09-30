@@ -7,7 +7,6 @@ import type {
 import type {
   BaselineSelection,
   StudentEvidenceResult,
-  StudyPracticeAttemptResult,
   StudyPracticeMode,
 } from "@/types/assessment";
 import {
@@ -54,15 +53,14 @@ import type {
   Term,
   Topic,
   GeneratedQuestion,
-  AiQuestionJob,
   GenerateAiQuestionsInput,
   UpdateGeneratedQuestionInput,
   DifficultyLevelDefinition,
   SystemDifficultySettings,
   StudyAnalysis,
+  StudyActivityDashboard,
   StudyPracticeSet,
   StudyPracticeAttempt,
-  StudyPracticeMode,
   StudyEvidenceBundle,
   BaselineSelectionRecord,
   LearningObjectiveEvidence,
@@ -732,20 +730,24 @@ export const questionBankService = {
 };
 
 export const aiQuestionService = {
+  getDraft(): Promise<AiQuestionDraft | null> {
+    return authenticatedRequest<AiQuestionDraft | null>("/ai-questions/draft");
+  },
+  saveDraft(payload: AiQuestionDraftInput): Promise<{ version: number; savedAt: string }> {
+    return authenticatedRequest<{ version: number; savedAt: string }>("/ai-questions/draft", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
   generate(
     payload: GenerateAiQuestionsInput,
-  ): Promise<Pick<AiQuestionJob, "id" | "status">> {
-    return authenticatedRequest<Pick<AiQuestionJob, "id" | "status">>(
-      "/ai-questions/generate-async",
+  ): Promise<GeneratedQuestion[]> {
+    return authenticatedRequest<GeneratedQuestion[]>(
+      "/ai-questions/generate",
       {
         method: "POST",
         body: JSON.stringify(payload),
       },
-    );
-  },
-  getJob(id: string): Promise<AiQuestionJob> {
-    return authenticatedRequest<AiQuestionJob>(
-      `/ai-questions/jobs/${encodeURIComponent(id)}`,
     );
   },
   update(
@@ -770,18 +772,22 @@ export const aiQuestionService = {
   },
   approve(
     id: string,
+    folderId?: string,
   ): Promise<{ generatedQuestion: GeneratedQuestion; question: Question }> {
     return authenticatedRequest<{
       generatedQuestion: GeneratedQuestion;
       question: Question;
-    }>(`/ai-questions/${encodeURIComponent(id)}/approve`, { method: "POST" });
+    }>(`/ai-questions/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(folderId ? { folderId } : {}),
+    });
   },
-  approveMany(questionIds: string[]): Promise<ApprovedAiQuestion[]> {
+  approveMany(questionIds: string[], folderId?: string): Promise<ApprovedAiQuestion[]> {
     return authenticatedRequest<ApprovedAiQuestion[]>(
       "/ai-questions/approve-bulk",
       {
         method: "POST",
-        body: JSON.stringify({ questionIds }),
+        body: JSON.stringify({ questionIds, ...(folderId ? { folderId } : {}) }),
       },
     );
   },
@@ -916,7 +922,7 @@ export const examService = {
       `/exams/${encodeURIComponent(id)}/submissions`,
     );
   },
-  getStudentEvidence(
+  getStudentEvidenceBundle(
     examId: string,
     studentId: string,
   ): Promise<StudyEvidenceBundle> {
@@ -985,7 +991,7 @@ export const examService = {
       { method: "PATCH", body: JSON.stringify(input) },
     );
   },
-  selectStudentBaseline(
+  selectStudentBaselineRecord(
     examId: string,
     studentId: string,
     input: { evidenceId: string; reason: string; expectedVersion: number },
@@ -1083,7 +1089,7 @@ export const examAttemptService = {
   getStudyPracticeAttempt(
     id: string,
     attemptId: string,
-  ): Promise<StudyPracticeAttemptResult> {
+  ): Promise<StudyPracticeAttempt> {
     return authenticatedRequest(
       `/study-practice-sets/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`,
     );
@@ -1137,17 +1143,21 @@ export const examAttemptService = {
       `/exam-attempts/${encodeURIComponent(id)}/study-analysis`,
     );
   },
-  startStudyPractice(
-    id: string,
-    attemptId: string,
-    mode: StudyPracticeMode,
-  ): Promise<StudyPracticeSet> {
-    return authenticatedRequest<StudyPracticeSet>(
-      `/study-practice-sets/${encodeURIComponent(id)}/start`,
-      {
-        method: "POST",
-        body: JSON.stringify({ attemptId, mode }),
-      },
+  getStudyActivity(id: string): Promise<StudyActivityDashboard> {
+    return authenticatedRequest<StudyActivityDashboard>(
+      `/exam-attempts/${encodeURIComponent(id)}/study-activity`,
+    );
+  },
+  openStudyMaterial(id: string, materialId: string): Promise<{ id: string; url: string; expiresIn: number }> {
+    return authenticatedRequest(
+      `/exam-attempts/${encodeURIComponent(id)}/study-activity/materials/${encodeURIComponent(materialId)}/open`,
+      { method: "POST" },
+    );
+  },
+  updateStudyMaterialView(id: string, viewId: string, close = false, visible = true): Promise<{ activeSeconds: number; closedAt: string | null }> {
+    return authenticatedRequest(
+      `/exam-attempts/${encodeURIComponent(id)}/study-activity/views/${encodeURIComponent(viewId)}/${close ? "close" : "ping"}`,
+      { method: "POST", body: JSON.stringify({ visible }) },
     );
   },
   submitStudyAiFeedback(
@@ -1179,14 +1189,6 @@ export const examAttemptService = {
       { method: "POST", body: JSON.stringify({ attemptId }) },
     );
   },
-  getStudyPracticeAttempt(
-    id: string,
-    attemptId: string,
-  ): Promise<StudyPracticeAttempt> {
-    return authenticatedRequest<StudyPracticeAttempt>(
-      `/study-practice-sets/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}`,
-    );
-  },
   getStudyPracticeHint(
     practiceSetId: string,
     questionId: string,
@@ -1203,6 +1205,25 @@ export const examAttemptService = {
 };
 
 export const learningPlanService = {
+  prepareMaterial(
+    examId: string,
+    studentId: string,
+    materialId: string,
+  ): Promise<import("@/types/assessment").MaterialPlanProposal> {
+    return authenticatedRequest(
+      `/study-material-plans/teacher/exams/${encodeURIComponent(examId)}/prepare`,
+      { method: "POST", body: JSON.stringify({ studentId, materialId }) },
+    );
+  },
+  getPracticeSet(id: string): Promise<StudyPracticeSet> {
+    return authenticatedRequest(`/study-practice-sets/${encodeURIComponent(id)}`);
+  },
+  cohortProgress(cohortId: string): Promise<import("@/types/assessment").LearningCohortProgress> {
+    return authenticatedRequest(`/learning-plans/teacher/cohorts/${encodeURIComponent(cohortId)}/progress`);
+  },
+  upgradeMaterial(planId: string): Promise<LearningPlan> {
+    return authenticatedRequest(`/learning-plans/teacher/${encodeURIComponent(planId)}/upgrade-material`, { method: "POST" });
+  },
   listObjectives(examId: string): Promise<LearningObjectiveEvidence[]> {
     return authenticatedRequest(
       `/learning-plans/teacher/exams/${encodeURIComponent(examId)}/objectives`,

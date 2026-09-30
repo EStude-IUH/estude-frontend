@@ -98,6 +98,12 @@ async function render(t, options = {}) {
       return { LearningSupportGroupPanel: () => null };
     if (id === "@/components/ui/button")
       return { Button: (props) => React.createElement("button", props) };
+    if (id === "@/components/ui/content-loading")
+      return {
+        ContentLoading: ({ label }) => React.createElement("p", null, label),
+        ContentLoadingOverlay: ({ label }) =>
+          React.createElement("p", null, label),
+      };
     if (id === "@/components/ui/form-control")
       return {
         Input: (props) => React.createElement("input", props),
@@ -165,7 +171,14 @@ async function render(t, options = {}) {
   );
   let renderer;
   await act(async () => {
-    renderer = create(React.createElement(loaded.exports.SubjectSupportPage));
+    renderer = create(
+      options.initialReport
+        ? React.createElement(loaded.exports.SubjectSupportDetail, {
+            examId: "exam",
+            initialReport: options.initialReport,
+          })
+        : React.createElement(loaded.exports.SubjectSupportPage),
+    );
     await flush();
   });
   t.after(async () => {
@@ -190,6 +203,12 @@ async function render(t, options = {}) {
     text: () => JSON.stringify(renderer.toJSON()),
   };
 }
+
+test("preloaded subject report renders without requesting it again", async (t) => {
+  const page = await render(t, { initialReport: report });
+  assert.match(page.text(), /Lịch sử/);
+  assert.deepEqual(page.calls, []);
+});
 
 test("teacher reviews evidence and edits message before explicitly sending to linked parents", async (t) => {
   const page = await render(t);

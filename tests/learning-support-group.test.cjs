@@ -35,6 +35,7 @@ async function render(
       topicId: "topic",
     },
   ],
+  reportMaterialAvailable = hasMaterial,
 ) {
   const calls = [];
   const suggestionCalls = [];
@@ -80,8 +81,32 @@ async function render(
           ],
         },
         learningPlanService: {
-          listObjectives: async () => objectives,
+          listObjectives: async () => [
+            ...objectives,
+            ...(hasMaterial ? [{
+              id: "material-objective",
+              title: "Tài liệu A.pdf",
+              granularity: "MATERIAL",
+              topicId: null,
+              materialId: "material",
+              topicNames: ["Chủ đề A"],
+            }] : []),
+          ],
           listForScope: async () => [],
+          prepareMaterial: async (examId, studentId, materialId) => ({
+            analysisId: `analysis-${studentId}`,
+            practiceSetId: `practice-${studentId}`,
+            materialId,
+            materialName: "Tài liệu A.pdf",
+            sourceAttemptId: `attempt-${studentId}`,
+            baselineExamAccuracy: 40,
+            missedCount: 2,
+            matchedCount: 1,
+            summary: `Ôn mục 1 cho ${studentId}`,
+            sections: [{ title: "Mục 1", page: 2, missedCount: 1, questionIds: ["q1"],
+              diagnosis: "Sai kiến thức", theory: "Lý thuyết mục 1", keyPoints: ["Ý chính"],
+              citations: [{ documentName: "Tài liệu A.pdf", page: 2, excerpt: "Đoạn nguồn" }] }],
+          }),
           suggest: async (examId, studentId, objectiveId) => {
             suggestionCalls.push({ examId, studentId, objectiveId });
             return {
@@ -131,8 +156,8 @@ async function render(
     subjectId: "subject",
     version: "v1",
     materialContext: {
-      available: hasMaterial,
-      readyMaterialCount: hasMaterial ? 1 : 0,
+      available: reportMaterialAvailable,
+      readyMaterialCount: reportMaterialAvailable ? 1 : 0,
     },
     students: [
       student("s1", "An", "Chủ đề A"),
@@ -164,6 +189,10 @@ test("groups at-risk students by topic and creates one cohort draft for the sele
   const page = await render(t, true);
   assert.match(page.text(), /Chủ đề A/);
   assert.match(page.text(), /Đã chọn 2\/2 sinh viên/);
+  assert.deepEqual(page.renderer.root.findByType("custom-select").props.options, [
+    { value: "objective", label: "Chủ đề A" },
+    { value: "material-objective", label: "Tài liệu · Tài liệu A.pdf" },
+  ]);
   await act(async () => {
     page.renderer.root
       .findByType("custom-select")
@@ -239,7 +268,7 @@ test("shows exam risk groups but no plan composer without attached material", as
   assert.doesNotMatch(page.text(), /AI đề xuất lộ trình cho nhóm đã chọn/);
 });
 
-test("unclassified questions are explained but cannot be selected as group objectives", async (t) => {
+test("offers the subject material when questions have no topic", async (t) => {
   const page = await render(t, true, [
     {
       id: "question-1",
@@ -254,20 +283,37 @@ test("unclassified questions are explained but cannot be selected as group objec
       topicId: null,
     },
   ]);
-  assert.match(page.text(), /2 câu hỏi chưa gắn chủ đề/);
+  assert.doesNotMatch(page.text(), /2 câu hỏi chưa gắn chủ đề/);
   assert.match(page.text(), /Chưa có mục tiêu theo chủ đề/);
   const objectiveSelect = page.renderer.root.findByType("custom-select");
-  assert.equal(objectiveSelect.props.disabled, true);
-  assert.equal(objectiveSelect.props.options.length, 0);
+  assert.equal(objectiveSelect.props.disabled, false);
+  assert.deepEqual(objectiveSelect.props.options, [
+    { value: "material-objective", label: "Tài liệu · Tài liệu A.pdf" },
+  ]);
+  await act(async () => objectiveSelect.props.onValueChange("material-objective"));
+  assert.match(page.text(), /đối chiếu câu sai với tài liệu/);
   const suggest = page.renderer.root
     .findAllByType("button")
     .find((item) => visibleText(item) === "Tạo đề xuất bằng AI");
-  assert.equal(suggest.props.disabled, true);
-  assert.equal(
-    page.renderer.root
-      .findAllByType("button")
-      .some((item) => visibleText(item).includes("Duyệt và giao cho")),
-    false,
-  );
-  assert.equal(page.calls.length, 0);
+  assert.equal(suggest.props.disabled, false);
+  await act(async () => suggest.props.onClick());
+  assert.match(page.text(), /Lý thuyết mục 1/);
+  assert.match(page.text(), /Đoạn nguồn/);
+  assert.equal(page.suggestionCalls.length, 0);
+  const approve = page.renderer.root
+    .findAllByType("button")
+    .find((item) => visibleText(item).includes("Duyệt và giao cho"));
+  assert.equal(approve.props.disabled, false);
+  await act(async () => approve.props.onClick());
+  assert.equal(page.calls[0].input.objectiveId, "material-objective");
+  assert.equal(page.calls[0].input.targetAccuracyPercent, 70);
+  assert.deepEqual(page.calls[0].input.tasks.map((task) => task.kind), ["MATERIAL", "PRACTICE"]);
+});
+
+test("shows material choices even when the cached report still says no material", async (t) => {
+  const page = await render(t, true, [], false);
+  assert.match(page.text(), /AI đề xuất lộ trình cho nhóm đã chọn/);
+  assert.deepEqual(page.renderer.root.findByType("custom-select").props.options, [
+    { value: "material-objective", label: "Tài liệu · Tài liệu A.pdf" },
+  ]);
 });

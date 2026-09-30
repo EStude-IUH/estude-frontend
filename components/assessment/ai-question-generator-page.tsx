@@ -20,6 +20,7 @@ import {
   LoadingPanel,
   PageHeading,
 } from "@/components/assessment/assessment-shell";
+import { UnsavedQuestionChanges } from "./unsaved-question-changes";
 import { Button } from "@/components/ui/button";
 import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
@@ -27,8 +28,8 @@ import {
   academicDataService,
   aiQuestionService,
   aiQuestionSettingsService,
+  questionBankService,
 } from "@/lib/assessment-api";
-import { ApiError } from "@/lib/auth-api";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   AiQuestionEditDraft,
@@ -112,8 +113,28 @@ export function AiQuestionGeneratorPage() {
   const [savingDifficulty, setSavingDifficulty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [bulkQuantity, setBulkQuantity] = useState(0);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const bulkInFlight = useRef(false);
+  const [reviewingState, setReviewingState] = useState<Record<string, { active: boolean; busy: boolean }>>({});
+  const reviewingIds = Object.keys(reviewingState).filter((id) => reviewingState[id].active);
+  const busyQuestionIds = Object.keys(reviewingState).filter((id) => reviewingState[id].busy);
+  const onReviewingChange = useCallback((id: string, active: boolean, busy = false) => {
+    setReviewingState((current) => {
+      const previous = current[id];
+      if (!active && !previous) return current;
+      if (active && previous?.active === active && previous.busy === busy) return current;
+      const next = { ...current };
+      if (active) next[id] = { active, busy };
+      else delete next[id];
+      return next;
+    });
+  }, []);
   const [error, setError] = useState("");
+  const [approvalFolderId, setApprovalFolderId] = useState<string | null>(null);
+  const [approvalFolderName, setApprovalFolderName] = useState("");
+  const [folderContextInvalid, setFolderContextInvalid] = useState(false);
   const [editDrafts, setEditDrafts] = useState<Record<string, AiQuestionEditDraft>>({});
   const [draftVersion, setDraftVersion] = useState(0);
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
@@ -139,55 +160,14 @@ export function AiQuestionGeneratorPage() {
   const workspaceBusy = generating || bulkApproving || savingDraft || savingDifficulty || busyQuestionIds.length > 0;
 
   useEffect(() => {
-    const savedJobId = window.sessionStorage.getItem("ai-question-generation-job");
-    if (savedJobId) {
-      setGenerationJobId(savedJobId);
-      setGenerating(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!generationJobId) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      try {
-        const job = await aiQuestionService.getJob(generationJobId);
-        if (cancelled) return;
-        if (job.status === "SUCCEEDED") {
-          setQuestions(job.questions);
-          setGenerating(false);
-          setGenerationJobId(null);
-          window.sessionStorage.removeItem("ai-question-generation-job");
-        } else if (job.status === "FAILED") {
-          setError(job.error || "Không thể tạo câu hỏi bằng AI.");
-          setGenerating(false);
-          setGenerationJobId(null);
-          window.sessionStorage.removeItem("ai-question-generation-job");
-        } else {
-          timer = setTimeout(poll, 3000);
-        }
-      } catch (cause) {
-        if (cancelled) return;
-        setError(errorMessage(cause, "Không thể kiểm tra trạng thái tạo câu hỏi"));
-        if (cause instanceof ApiError && cause.status === 404) {
-          setGenerating(false);
-          setGenerationJobId(null);
-          window.sessionStorage.removeItem("ai-question-generation-job");
-          return;
-        }
-        timer = setTimeout(poll, 5000);
-      }
-    };
-    void poll();
-    return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [generationJobId]);
-
-  useEffect(() => {
+    let active = true;
+    const requestedFolderId = typeof window === "undefined"
+      ? null : new URLSearchParams(window.location.search).get("folderId");
     Promise.all([
       academicDataService.getMaterialLibrary(),
       academicDataService.getSubjects(),
       aiQuestionSettingsService.getMine(),
+      requestedFolderId ? questionBankService.getFolders() : Promise.resolve([]),
       aiQuestionService.getDraft().catch((cause) => {
         if (active) {
           setDraftAvailable(false);
@@ -196,8 +176,18 @@ export function AiQuestionGeneratorPage() {
         return null;
       }),
     ])
-      .then(([materialItems, subjectItems, teacherSettings, storedDraft]) => {
+      .then(([materialItems, subjectItems, teacherSettings, folderItems, storedDraft]) => {
         if (!active) return;
+        if (requestedFolderId) {
+          const folder = folderItems.find((item) => item.id === requestedFolderId);
+          if (folder) {
+            setApprovalFolderId(folder.id);
+            setApprovalFolderName(folder.name);
+          } else {
+            setFolderContextInvalid(true);
+            setError("Không tìm thấy thư mục đã chọn. Hãy quay lại ngân hàng câu hỏi và chọn lại thư mục.");
+          }
+        }
         const pdfs = materialItems.filter(
           (item) =>
             item.mimeType === "application/pdf" ||
@@ -225,7 +215,10 @@ export function AiQuestionGeneratorPage() {
         if (storedDraft?.missingQuestionIds.length) setError("Một số câu hỏi trong bản nháp không còn khả dụng. Đã giữ lại các câu còn truy cập được.");
       })
       .catch((cause) => {
-        if (active) setError(errorMessage(cause, "Không thể tải dữ liệu tạo câu hỏi"));
+        if (active) {
+          if (requestedFolderId) setFolderContextInvalid(true);
+          setError(errorMessage(cause, "Không thể tải dữ liệu tạo câu hỏi"));
+        }
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -263,7 +256,7 @@ export function AiQuestionGeneratorPage() {
 
   async function generate(event: React.FormEvent) {
     event.preventDefault();
-    if (bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
+    if (folderContextInvalid || bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
     setBulkMessage("");
     setError("");
     if (!form.materialId) {
@@ -285,11 +278,10 @@ export function AiQuestionGeneratorPage() {
     setEditDrafts({});
     setDraftMessage("");
     try {
-      const job = await aiQuestionService.generate(form);
-      window.sessionStorage.setItem("ai-question-generation-job", job.id);
-      setGenerationJobId(job.id);
+      setQuestions(await aiQuestionService.generate(form));
     } catch (cause) {
       setError(errorMessage(cause, "Không thể tạo câu hỏi bằng AI"));
+    } finally {
       setGenerating(false);
     }
   }
@@ -368,7 +360,7 @@ export function AiQuestionGeneratorPage() {
   }
 
   async function approveAll() {
-    if (bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
+    if (folderContextInvalid || bulkInFlight.current || reviewingIds.length || generating || savingDraft) return;
     const pending = questions.filter((item) => item.status === "PENDING");
     if (!pending.length) return;
     bulkInFlight.current = true;
@@ -377,7 +369,7 @@ export function AiQuestionGeneratorPage() {
     setBulkMessage("");
     setError("");
     try {
-      const results = await aiQuestionService.approveMany(pending.map((question) => question.id));
+      const results = await aiQuestionService.approveMany(pending.map((question) => question.id), approvalFolderId ?? undefined);
       const approved = new Map(results.map((result) => [result.generatedQuestion.id, result.generatedQuestion]));
       setQuestions((current) => current.map((question) => approved.get(question.id) ?? question));
       setBulkMessage(`Đã duyệt ${results.length} câu vào ngân hàng.`);
@@ -412,6 +404,11 @@ export function AiQuestionGeneratorPage() {
         title="Tạo câu hỏi tự động"
         description="Chọn PDF từ thư viện của bạn. AI chỉ dùng nội dung trong tài liệu và mọi câu đều cần được duyệt trước khi vào ngân hàng."
       />
+      {approvalFolderId ? (
+        <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-brand-800">
+          Sau khi duyệt, câu hỏi sẽ được lưu vào thư mục <strong>{approvalFolderName}</strong>.
+        </p>
+      ) : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
         <div className="text-sm text-slate-600">
           <p role="status">{allQuestionsApproved ? "Tất cả câu hỏi đã vào ngân hàng" : dirty ? "Có thay đổi chưa lưu" : savedAt ? `Bản nháp đã lưu lúc ${new Date(savedAt).toLocaleString("vi-VN")}` : "Chưa có bản nháp"}</p>
@@ -625,7 +622,7 @@ export function AiQuestionGeneratorPage() {
             </div>
             <Button permission="ai_questions.create"
               type="submit"
-              disabled={generating || bulkApproving || savingDraft || reviewingIds.length > 0 || !materials.length}
+              disabled={folderContextInvalid || generating || bulkApproving || savingDraft || reviewingIds.length > 0 || !materials.length}
               className="w-full"
             >
               {generating ? (
@@ -672,13 +669,13 @@ export function AiQuestionGeneratorPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button permission="ai_questions.approve" size="sm"
-                    disabled={bulkApproving || savingDraft || reviewingIds.length > 0 || pendingCount === 0}
+                    disabled={folderContextInvalid || bulkApproving || savingDraft || reviewingIds.length > 0 || pendingCount === 0}
                     onClick={() => void approveAll()}>
                     {bulkApproving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
                     {bulkApproving ? `Đang duyệt ${bulkQuantity} câu...` : `Duyệt tất cả (${pendingCount})`}
                   </Button>
                 {approvedCount ? (
-                  <Link href="/teacher/question-bank">
+                  <Link href={approvalFolderId ? `/teacher/question-bank?folderId=${encodeURIComponent(approvalFolderId)}` : "/teacher/question-bank"}>
                     <Button variant="secondary" size="sm">
                       <Check className="size-4" />
                       Xem ngân hàng
@@ -697,7 +694,8 @@ export function AiQuestionGeneratorPage() {
                   difficultyLevels={activeDifficultyLevels}
                   onReplace={replaceQuestion}
                   onError={setError}
-                  bulkApproving={bulkApproving || savingDraft}
+                  folderId={approvalFolderId ?? undefined}
+                  bulkApproving={folderContextInvalid || bulkApproving || savingDraft}
                   onReviewingChange={onReviewingChange}
                   initialEdit={editDrafts[question.id]}
                   onEditDraftChange={onEditDraftChange}
@@ -865,6 +863,7 @@ function GeneratedQuestionCard({
   difficultyLevels,
   onReplace,
   onError,
+  folderId,
   bulkApproving,
   onReviewingChange,
   initialEdit,
@@ -875,6 +874,7 @@ function GeneratedQuestionCard({
   difficultyLevels: DifficultyLevelDefinition[];
   onReplace: (question: GeneratedQuestion) => void;
   onError: (message: string) => void;
+  folderId?: string;
   bulkApproving: boolean;
   onReviewingChange: (id: string, active: boolean, busy?: boolean) => void;
   initialEdit?: AiQuestionEditDraft;
@@ -932,7 +932,7 @@ function GeneratedQuestionCard({
     setBusy(true);
     onError("");
     try {
-      const result = await aiQuestionService.approve(question.id);
+      const result = await aiQuestionService.approve(question.id, folderId);
       onReplace(result.generatedQuestion);
     } catch (cause) {
       onError(errorMessage(cause, "Không thể duyệt câu hỏi"));

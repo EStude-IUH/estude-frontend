@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, BookOpen, RefreshCw, Search } from "lucide-react";
 import { AssessmentShell } from "@/components/assessment/assessment-shell";
 import { Button } from "@/components/ui/button";
+import {
+  ContentLoading,
+  ContentLoadingOverlay,
+} from "@/components/ui/content-loading";
 import { usePermissions } from "@/context/permissions-context";
 import { examService } from "@/lib/assessment-api";
 import {
@@ -87,7 +91,7 @@ export function LearningSupportOverviewPage() {
 
   return (
     <AssessmentShell>
-      <div className="space-y-4">
+      <div className="relative space-y-4">
         <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-card">
           <div>
             <h1 className="text-xl font-black text-slate-900">
@@ -111,22 +115,28 @@ export function LearningSupportOverviewPage() {
           <p className="rounded-xl bg-white p-5 text-sm text-slate-500">
             Bạn chưa có quyền xem theo dõi học tập.
           </p>
-        ) : error ? (
+        ) : error && !overview ? (
           <p
             role="alert"
             className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
           >
             {error}
           </p>
-        ) : loading ? (
-          <p
-            role="status"
-            className="rounded-xl bg-white p-5 text-sm text-slate-500"
-          >
-            Đang tổng hợp các lớp...
-          </p>
+        ) : loading && !overview ? (
+          <ContentLoading label="Đang tổng hợp các lớp..." />
         ) : overview ? (
           <>
+            {loading ? (
+              <ContentLoadingOverlay label="Đang cập nhật các lớp..." />
+            ) : null}
+            {error ? (
+              <p
+                role="alert"
+                className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
+              >
+                {error}
+              </p>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-3">
               <Stat label="Lớp đang dạy" value={overview.totals.classCount} />
               <Stat label="Môn theo dõi" value={overview.totals.scopeCount} />

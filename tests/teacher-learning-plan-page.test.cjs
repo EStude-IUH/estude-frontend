@@ -164,10 +164,10 @@ test("teacher sees draft tasks and can approve the plan", async (t) => {
   const { renderer, publishCalls } = await renderPage(t);
   const initialText = visibleText(renderer.toJSON());
 
-  assert.match(initialText, /Nội dung học sinh cần hoàn thành/);
+  assert.match(initialText, /Nội dung cần hoàn thành/);
   assert.match(initialText, /Đọc tài liệu Chủ đề chương I/);
   assert.match(initialText, /Luyện tập Chủ đề chương I/);
-  assert.match(initialText, /bản nháp và học sinh chưa nhìn thấy/);
+  assert.match(initialText, /Học sinh chưa nhìn thấy lộ trình này/);
   assert.equal(renderer.root.findAllByType("improvement-panel").length, 0);
 
   const approve = renderer.root

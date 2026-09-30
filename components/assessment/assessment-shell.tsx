@@ -16,7 +16,6 @@ import {
   FilePlus2,
   Library,
   ChartNoAxesCombined,
-  LoaderCircle,
   LogOut,
   Menu,
   School,
@@ -29,6 +28,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { requestWorkspaceNavigation } from "@/lib/workspace-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
+import { ContentLoading } from "@/components/ui/content-loading";
 import { StudentShell } from "@/components/student/student-shell";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
@@ -390,12 +390,7 @@ export function PageHeading({
 }
 
 export function LoadingPanel() {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500 shadow-sm">
-      <LoaderCircle className="mx-auto size-5 animate-spin text-brand-600" />
-      <span className="mt-2 block">Đang tải dữ liệu...</span>
-    </div>
-  );
+  return <ContentLoading />;
 }
 export function ErrorPanel({ message }: { message: string }) {
   return (

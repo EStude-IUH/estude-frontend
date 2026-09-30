@@ -25,6 +25,7 @@ import { examAttemptService } from "@/lib/assessment-api";
 import { loadOrCreateStudentStudyAnalysis } from "@/lib/study-analysis-loader";
 import { PracticeAttemptHistory } from "@/components/assessment/practice-attempt-history";
 import { StudyPracticeHistory } from "@/components/assessment/study-practice-history";
+import { StudyActivityDashboard } from "@/components/assessment/study-activity-dashboard";
 import Link from "next/link";
 import {
   StudyAnalysisDetails,
@@ -314,6 +315,7 @@ export function StudentStudyAnalysisPage() {
   const assessmentOnly =
     report.analysisScope === "ASSESSMENT_ONLY" ||
     report.aiStatus === "SKIPPED_NO_MATERIAL";
+  const optionalReview = !assessmentOnly && !report.performance.needsWarning;
   return (
     <StudentShell>
       <div className="mb-4">
@@ -359,11 +361,20 @@ export function StudentStudyAnalysisPage() {
             <h1 className="mt-1.5 text-2xl font-black text-slate-950 sm:text-3xl">
               {assessmentOnly
                 ? "Kết quả và đánh giá nguy cơ"
-                : "Kết quả và lộ trình ôn tập"}
+                : optionalReview
+                  ? "Kết quả và gợi ý ôn thêm"
+                  : "Kết quả và lộ trình ôn tập"}
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {report.summary}
             </p>
+            {optionalReview &&
+            report.performance.correctCount < report.performance.totalQuestions ? (
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                Gợi ý được tạo từ các câu chưa đúng để bạn tự ôn thêm. Điểm bài
+                kiểm tra không thay đổi.
+              </p>
+            ) : null}
             {!assessmentOnly ? (
               <>
                 <ReviewLabel state={report.reviewStates?.SUMMARY} />
@@ -419,6 +430,10 @@ export function StudentStudyAnalysisPage() {
           Dữ liệu bài làm cũ chưa đủ để xác nhận tiến bộ. Hãy làm bài đánh giá
           mới để giáo viên chọn mốc ban đầu.
         </p>
+      ) : null}
+
+      {!assessmentOnly ? (
+        <StudyActivityDashboard attemptId={params.id} practice={practice} />
       ) : null}
 
       {assessmentOnly ? (
@@ -521,7 +536,7 @@ export function StudentStudyAnalysisPage() {
   );
 }
 
-function PracticeSection({
+export function PracticeSection({
   practice,
   answers,
   answeredCount,
@@ -548,7 +563,7 @@ function PracticeSection({
   onSubmit: () => void;
   onRetry: () => void;
   onGetHint: (questionId: string) => void;
-  onFeedback: (
+  onFeedback?: (
     targetKey: string,
     reason: StudyAiFeedback["reason"],
     comment: string,
@@ -796,11 +811,11 @@ function PracticeSection({
                   ? "Giáo viên đã bác bỏ"
                   : "AI đề xuất"}
           </p>
-          <FeedbackControl
+          {onFeedback ? <FeedbackControl
             onSend={(reason, comment) =>
               onFeedback(`QUESTION:${currentQuestion.id}`, reason, comment)
             }
-          />
+          /> : null}
           <PracticeQuestionRunner
             practice={practice}
             question={currentQuestion}
@@ -843,11 +858,11 @@ function PracticeSection({
                           ? "Giáo viên đã bác bỏ"
                           : "AI đề xuất"}
                   </p>
-                  <FeedbackControl
+                  {onFeedback ? <FeedbackControl
                     onSend={(reason, comment) =>
                       onFeedback(`QUESTION:${question.id}`, reason, comment)
                     }
-                  />
+                  /> : null}
                 </div>
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-black ${sourceMeta[question.sourceType].tone}`}

@@ -139,7 +139,7 @@ export function StudyEvidencePanel({
     setBundle(null);
     setCandidateId(null);
     void examService
-      .getStudentEvidence(examId, studentId)
+      .getStudentEvidenceBundle(examId, studentId)
       .then((value) => {
         if (active) setBundle(value);
       })
@@ -189,12 +189,12 @@ export function StudyEvidencePanel({
       const current = bundle.baselines.find(
         (item) => item.objectiveId === evidence.objectiveId,
       );
-      await examService.selectStudentBaseline(examId, studentId, {
+      await examService.selectStudentBaselineRecord(examId, studentId, {
         evidenceId: evidence.id,
         reason: reason.trim(),
         expectedVersion: current?.version ?? 0,
       });
-      setBundle(await examService.getStudentEvidence(examId, studentId));
+      setBundle(await examService.getStudentEvidenceBundle(examId, studentId));
       setCandidateId(null);
       setReason("");
     } catch (cause) {
@@ -205,7 +205,7 @@ export function StudyEvidencePanel({
       );
       if (cause instanceof ApiError && cause.status === 409) {
         try {
-          setBundle(await examService.getStudentEvidence(examId, studentId));
+          setBundle(await examService.getStudentEvidenceBundle(examId, studentId));
         } catch {
           /* Keep the conflict visible. */
         }

@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/date-range-picker";
 import { CustomSelect, Input, Textarea } from "@/components/ui/form-control";
-import { academicDataService, learningPlanService } from "@/lib/assessment-api";
+import { learningPlanService } from "@/lib/assessment-api";
 import type {
-  ClassTopic,
   LearningObjectiveEvidence,
   LearningPlan,
   LearningPlanScopeItem,
+  MaterialPlanProposal,
+  LearningCohortProgress,
   SubjectSupportReport,
   SubjectSupportStudent,
 } from "@/types/assessment";
@@ -65,19 +66,17 @@ export function LearningSupportGroupPanel({
   examId: string;
   report: SubjectSupportReport;
 }) {
+  const [objectives, setObjectives] = useState<LearningObjectiveEvidence[]>([]);
+  const hasMaterial = report.materialContext?.available === true || objectives.some(
+    (item) => item.granularity === "MATERIAL" && item.materialId,
+  );
   const groups = useMemo(
-    () =>
-      groupStudents(
-        report.students,
-        report.materialContext?.available === true,
-      ),
-    [report.students, report.materialContext?.available],
+    () => groupStudents(report.students, hasMaterial),
+    [report.students, hasMaterial],
   );
   const [groupName, setGroupName] = useState("");
   const group = groups.find((item) => item.name === groupName) ?? groups[0];
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [objectives, setObjectives] = useState<LearningObjectiveEvidence[]>([]);
-  const [topics, setTopics] = useState<ClassTopic[]>([]);
   const [plans, setPlans] = useState<LearningPlanScopeItem[]>([]);
   const [plansError, setPlansError] = useState("");
   const [objectiveId, setObjectiveId] = useState("");
@@ -88,7 +87,10 @@ export function LearningSupportGroupPanel({
   const [threshold, setThreshold] = useState(70);
   const [dueAt, setDueAt] = useState("");
   const [proposalReady, setProposalReady] = useState(false);
+  const [materialProposals, setMaterialProposals] = useState<Record<string, MaterialPlanProposal>>({});
+  const [cohortProgress, setCohortProgress] = useState<Record<string, LearningCohortProgress>>({});
   const [busy, setBusy] = useState(false);
+  const [preparationProgress, setPreparationProgress] = useState(0);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<{
     cohortId: string;
@@ -109,23 +111,18 @@ export function LearningSupportGroupPanel({
     setThreshold(70);
     setDueAt("");
     setProposalReady(false);
+    setPreparationProgress(0);
+    setMaterialProposals({});
     setCreated(null);
     setDelivery(null);
   }, [group, report.version]);
 
   useEffect(() => {
-    if (!report.materialContext?.available) return;
     let active = true;
-    void Promise.all([
-      learningPlanService.listObjectives(examId),
-      academicDataService.getClassTopics(report.classId),
-    ])
-      .then(([loadedObjectives, loadedTopics]) => {
+    void learningPlanService.listObjectives(examId)
+      .then((loadedObjectives) => {
         if (!active) return;
         setObjectives(loadedObjectives);
-        setTopics(
-          loadedTopics.filter((topic) => topic.subjectId === report.subjectId),
-        );
       })
       .catch((cause) => {
         if (active)
@@ -142,7 +139,6 @@ export function LearningSupportGroupPanel({
     examId,
     report.classId,
     report.subjectId,
-    report.materialContext?.available,
   ]);
 
   useEffect(() => {
@@ -165,24 +161,29 @@ export function LearningSupportGroupPanel({
 
   const materials = useMemo(
     () =>
-      topics.flatMap((topic) =>
-        topic.materials
-          .filter((material) => material.status === "READY")
-          .map((material) => ({
-            id: material.id,
-            topicId: topic.id,
-            label: `${topic.name} · ${material.originalName}`,
-          })),
-      ),
-    [topics],
+      objectives
+        .filter((item) => item.granularity === "MATERIAL" && item.materialId)
+        .map((item) => ({
+          id: item.materialId!,
+          objectiveId: item.id,
+          topicNames: item.topicNames ?? [],
+          label: item.title,
+        })),
+    [objectives],
   );
   const topicObjectives = useMemo(
     () =>
       objectives.filter((item) => item.granularity === "TOPIC" && item.topicId),
     [objectives],
   );
-  const unclassifiedCount = objectives.length - topicObjectives.length;
-  const chosenObjective = topicObjectives.find(
+  const materialObjectives = objectives.filter(
+    (item) => item.granularity === "MATERIAL" && item.materialId,
+  );
+  const selectableObjectives = [...topicObjectives, ...materialObjectives];
+  const unclassifiedCount = objectives.filter(
+    (item) => item.granularity === "QUESTION",
+  ).length;
+  const chosenObjective = selectableObjectives.find(
     (item) => item.id === objectiveId,
   );
 
@@ -204,9 +205,7 @@ export function LearningSupportGroupPanel({
     materialId &&
     title.trim() &&
     criteria.trim() &&
-    Number.isInteger(threshold) &&
-    threshold >= 0 &&
-    threshold <= 100 &&
+    (Number.isInteger(threshold) && threshold >= 0 && threshold <= 100) &&
     !busy,
   );
 
@@ -217,11 +216,25 @@ export function LearningSupportGroupPanel({
     setCreated(null);
     setDelivery(null);
     setProposalReady(false);
+    setPreparationProgress(0);
     try {
-      const ideas = await Promise.all(
-        selectedIds.map((studentId) =>
-          learningPlanService.suggest(examId, studentId, chosenObjective.id),
-        ),
+      const proposed: Record<string, MaterialPlanProposal> = {};
+      if (chosenObjective.granularity === "MATERIAL" && chosenObjective.materialId) {
+        for (const studentId of selectedIds) {
+          try {
+            proposed[studentId] = await learningPlanService.prepareMaterial(
+              examId, studentId, chosenObjective.materialId,
+            );
+          } catch (cause) {
+            const name = group.students.find((student) => student.id === studentId)?.fullName ?? studentId;
+            throw new Error(`${name}: ${cause instanceof Error ? cause.message : "Không thể phân tích tài liệu"}`);
+          }
+          setPreparationProgress((current) => current + 1);
+        }
+        setMaterialProposals(proposed);
+      }
+      const ideas = chosenObjective.granularity === "MATERIAL" ? [] : await Promise.all(
+        selectedIds.map((studentId) => learningPlanService.suggest(examId, studentId, chosenObjective.id)),
       );
       const evidence = [
         ...new Set(
@@ -232,18 +245,19 @@ export function LearningSupportGroupPanel({
         ),
       ];
       const suggestedMaterial =
-        materials.find((item) => item.topicId === chosenObjective.topicId) ??
+        materials.find((item) => item.id === chosenObjective.materialId) ??
+        materials.find((item) => item.topicNames.includes(chosenObjective.title)) ??
         materials[0];
       setMaterialId(suggestedMaterial?.id ?? "");
       setTitle(`Ôn tập ${chosenObjective.title}`);
-      setSummary(
-        `AI đề xuất cho ${selectedIds.length} học sinh cùng cần củng cố ${chosenObjective.title}.${
-          evidence.length ? ` Căn cứ: ${evidence.join(" ")}` : ""
-        }`,
-      );
-      setCriteria(
-        `Hoàn thành tài liệu và đạt ít nhất 70% ở bài luyện, sau đó làm bài đánh giá lại cùng chủ đề.`,
-      );
+      setSummary(chosenObjective.granularity === "MATERIAL"
+        ? `Ôn theo ${Object.values(proposed).reduce((sum, item) => sum + item.matchedCount, 0)} câu sai đã đối chiếu với ${chosenObjective.title} cho ${selectedIds.length} học sinh. Mỗi học sinh đọc đúng mục và làm bài luyện riêng; căn cứ chi tiết nằm trong hồ sơ cá nhân.`
+        : `AI đề xuất cho ${selectedIds.length} học sinh cùng cần củng cố ${chosenObjective.title}.${
+            evidence.length ? ` Căn cứ: ${evidence.join(" ")}` : ""
+          }`);
+      setCriteria(chosenObjective.granularity === "MATERIAL"
+        ? `Đọc các mục được khoanh vùng, hoàn thành bài luyện riêng và đạt ít nhất 70%. Kết quả luyện tập được lưu theo từng lượt.`
+        : `Hoàn thành tài liệu và đạt ít nhất 70% ở bài luyện, sau đó làm bài đánh giá lại cùng chủ đề.`);
       setThreshold(70);
       setProposalReady(true);
     } catch (cause) {
@@ -267,6 +281,10 @@ export function LearningSupportGroupPanel({
       const drafts = await learningPlanService.createDrafts(examId, {
         studentIds: selectedIds,
         objectiveId,
+        ...(chosenObjective?.granularity === "MATERIAL"
+          ? { materialPreparationIds: Object.fromEntries(Object.entries(materialProposals)
+              .map(([studentId, proposal]) => [studentId, proposal.analysisId])) }
+          : {}),
         title: title.trim(),
         summary: summary.trim(),
         successCriteria: criteria.trim(),
@@ -276,16 +294,17 @@ export function LearningSupportGroupPanel({
           {
             kind: "MATERIAL",
             title: `Đọc và ôn ${chosenObjective?.title ?? group?.name ?? "kiến thức"}`,
-            description:
-              "Đọc tài liệu đã gắn và chuẩn bị cho bài đánh giá lại.",
+            description: chosenObjective?.granularity === "MATERIAL"
+              ? "Đọc các mục theo trang, đối chiếu trích đoạn và câu sai của riêng học sinh."
+              : "Đọc tài liệu đã gắn và chuẩn bị cho bài đánh giá lại.",
             materialId,
           },
-          {
+          ...([{
             kind: "PRACTICE",
             title: `Luyện tập ${chosenObjective?.title ?? group?.name ?? "kiến thức"}`,
             description:
               "Mỗi học sinh làm bộ câu luyện riêng đúng mục tiêu kiến thức trước khi đánh giá lại.",
-          },
+          } as const]),
         ],
       });
       setCreated(drafts);
@@ -365,7 +384,7 @@ export function LearningSupportGroupPanel({
         <div>
           <h2 className="font-black text-slate-900">Nhóm cần hỗ trợ</h2>
           <p className="mt-1 text-sm text-slate-500">
-            {report.materialContext?.available
+            {hasMaterial
               ? "Gom theo chủ đề của câu làm sai hoặc bỏ trống. Một sinh viên có thể thuộc nhiều nhóm."
               : "Chỉ gom theo mức nguy cơ từ kết quả bài kiểm tra vì môn học chưa có tài liệu."}
           </p>
@@ -434,21 +453,20 @@ export function LearningSupportGroupPanel({
               </div>
             </div>
           ) : null}
-          {report.materialContext?.available ? (
+          {hasMaterial ? (
             <details className="mt-4 rounded-xl border border-blue-200 bg-blue-50/30 p-4">
               <summary className="cursor-pointer font-bold text-brand-800">
                 AI đề xuất lộ trình cho nhóm đã chọn
               </summary>
               <p className="mt-2 text-sm text-slate-600">
-                AI tổng hợp phần kiến thức chung cần củng cố và tạo bản đề xuất.
-                Giáo viên kiểm tra, chỉnh sửa rồi mới duyệt giao. Mỗi học sinh
-                vẫn có hồ sơ, bài luyện và tiến độ riêng.
+                Chọn chủ đề để giao tài liệu, bài luyện và đánh giá lại; hoặc
+                chọn tài liệu của môn để khoanh vùng mục cần ôn từ câu sai và tạo bài luyện riêng.
+                Giáo viên kiểm tra, chỉnh sửa rồi mới duyệt giao.
               </p>
-              {unclassifiedCount > 0 ? (
+              {unclassifiedCount > 0 && materialObjectives.length === 0 ? (
                 <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  {unclassifiedCount} câu hỏi chưa gắn chủ đề không được đưa vào
-                  mục tiêu của lộ trình nhóm vì không xác định được kiến thức
-                  chung. Hãy gắn chủ đề trong{" "}
+                  {unclassifiedCount} câu hỏi chưa gắn chủ đề nên chưa thể dùng
+                  làm mục tiêu đánh giá chung. Hãy gắn chủ đề trong{" "}
                   <Link
                     href="/teacher/question-bank"
                     className="font-semibold underline"
@@ -460,30 +478,30 @@ export function LearningSupportGroupPanel({
               ) : null}
               {topicObjectives.length === 0 ? (
                 <p className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                  Chưa có mục tiêu theo chủ đề cho lớp/môn này. Hiện chưa thể
-                  tạo lộ trình nhóm; vẫn có thể theo dõi nguy cơ từ bài kiểm
-                  tra.
+                  {materialObjectives.length
+                    ? "Chưa có mục tiêu theo chủ đề. Chọn tài liệu để khoanh vùng câu sai và tạo lộ trình ôn tập cho nhóm."
+                    : "Chưa có chủ đề hoặc tài liệu PDF sẵn sàng cho môn này."}
                 </p>
               ) : null}
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <CustomSelect
-                  label="Mục tiêu kiến thức (chủ đề cần cải thiện)"
+                  label="Mục tiêu học tập (chủ đề hoặc tài liệu của môn)"
                   value={objectiveId}
-                  options={topicObjectives.map((objective) => ({
+                  options={selectableObjectives.map((objective) => ({
                     value: objective.id,
-                    label: objective.title,
+                    label: objective.granularity === "MATERIAL" ? `Tài liệu · ${objective.title}` : objective.title,
                   }))}
                   placeholder={
-                    topicObjectives.length
-                      ? "Chọn chủ đề cần cải thiện"
-                      : "Chưa có chủ đề hợp lệ"
+                    selectableObjectives.length
+                      ? "Chọn chủ đề hoặc tài liệu của môn"
+                      : "Chưa có chủ đề hoặc tài liệu"
                   }
                   onValueChange={(value) => {
                     setObjectiveId(value);
                     setProposalReady(false);
                   }}
-                  disabled={topicObjectives.length === 0}
-                  ariaLabel="Chọn chủ đề cần cải thiện"
+                  disabled={selectableObjectives.length === 0}
+                  ariaLabel="Chọn chủ đề hoặc tài liệu của môn"
                 />
                 <div className="flex items-end">
                   <Button
@@ -491,10 +509,19 @@ export function LearningSupportGroupPanel({
                     disabled={busy || !selectedIds.length || !chosenObjective}
                     onClick={() => void suggestGroupPlan()}
                   >
-                    {busy ? "AI đang tạo đề xuất..." : "Tạo đề xuất bằng AI"}
+                    {busy ? chosenObjective?.granularity === "MATERIAL"
+                      ? `Đang phân tích học sinh ${Math.min(preparationProgress + 1, selectedIds.length)}/${selectedIds.length}...`
+                      : "AI đang tạo đề xuất..." : "Tạo đề xuất bằng AI"}
                   </Button>
                 </div>
               </div>
+              {chosenObjective?.granularity === "MATERIAL" ? (
+                <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                  {busy
+                    ? "Đang đối chiếu câu sai với PDF, tạo câu luyện và kiểm tra đáp án theo từng mục. Tài liệu có nhiều mục có thể mất hơn một phút."
+                    : "Hệ thống sẽ đối chiếu câu sai với tài liệu, gom theo trang khi tài liệu không có chương, trích nguồn và tạo bài luyện riêng cho từng học sinh."}
+                </p>
+              ) : null}
               {proposalReady ? (
                 <>
                   <p
@@ -504,6 +531,30 @@ export function LearningSupportGroupPanel({
                     Đây là bản AI đề xuất xem trước, chưa phải lộ trình đã tạo.
                     Giáo viên có thể chỉnh sửa rồi duyệt để giao cho nhóm.
                   </p>
+                  {chosenObjective?.granularity === "MATERIAL" ? (
+                    <div className="mt-3 space-y-3">
+                      {Object.entries(materialProposals).map(([studentId, proposal]) => (
+                        <div key={studentId} className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+                          <p className="font-bold text-slate-900">
+                            {group?.students.find((student) => student.id === studentId)?.fullName ?? studentId}
+                            {" · "}{proposal.matchedCount}/{proposal.missedCount} câu sai từ {proposal.sourceExamCount ?? 1} bài kiểm tra có đoạn tài liệu phù hợp
+                          </p>
+                          <p className="mt-1 text-slate-600">Tỷ lệ đúng các bài kiểm tra nguồn: {proposal.baselineExamAccuracy === null ? "Chưa đủ dữ liệu" : `${proposal.baselineExamAccuracy}%`} · Bài luyện riêng đã tạo</p>
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {proposal.sections.map((section) => (
+                              <div key={section.id ?? section.title} className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                                <p className="font-bold text-brand-700">{section.title} · {section.missedCount} câu sai</p>
+                                <p className="mt-1 text-slate-700">{section.theory}</p>
+                                {section.mistakes?.slice(0, 2).map((mistake) => <div key={`${mistake.sourceAttemptId ?? ""}:${mistake.questionId}`} className="mt-2 rounded-md border border-amber-100 bg-amber-50/70 p-2 text-xs text-slate-700"><p className="font-semibold">Câu đã sai: {mistake.content}</p><p className="mt-1">Đã chọn: {mistake.selectedAnswer} · Đúng: {mistake.correctAnswer}</p></div>)}
+                                {section.keyPoints.length ? <ul className="mt-2 list-disc pl-5 text-slate-600">{section.keyPoints.map((point) => <li key={point}>{point}</li>)}</ul> : null}
+                                {section.citations.slice(0, 2).map((citation, index) => <p key={index} className="mt-2 border-l-2 border-brand-300 pl-2 text-xs text-slate-500">{citation.documentName}, trang {citation.page}: {citation.excerpt}</p>)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <CustomSelect
                       label="Tài liệu đã gắn với môn"
@@ -514,6 +565,7 @@ export function LearningSupportGroupPanel({
                       }))}
                       placeholder="Chọn tài liệu"
                       onValueChange={setMaterialId}
+                      disabled={chosenObjective?.granularity === "MATERIAL"}
                       ariaLabel="Chọn tài liệu đã gắn với môn"
                     />
                     <Input
@@ -536,21 +588,23 @@ export function LearningSupportGroupPanel({
                       />
                     </div>
                     <Textarea
-                      label="Tiêu chí đạt sau đánh giá lại"
+                      label={chosenObjective?.granularity === "MATERIAL" ? "Tiêu chí hoàn thành" : "Tiêu chí đạt sau đánh giá lại"}
                       value={criteria}
                       onChange={(event) => setCriteria(event.target.value)}
                       placeholder="Điều kiện cụ thể để xác nhận tiến bộ"
                     />
-                    <Input
-                      label="Ngưỡng đúng (%)"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={threshold}
-                      onChange={(event) =>
-                        setThreshold(Number(event.target.value))
-                      }
-                    />
+                    {(
+                      <Input
+                        label="Ngưỡng đúng (%)"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={threshold}
+                        onChange={(event) =>
+                          setThreshold(Number(event.target.value))
+                        }
+                      />
+                    )}
                   </div>
                 </>
               ) : null}
@@ -669,6 +723,38 @@ export function LearningSupportGroupPanel({
                   }{" "}
                   đã giao
                 </p>
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-bold text-brand-700 underline"
+                  onClick={() => void learningPlanService.cohortProgress(cohort[0].cohortId)
+                    .then((value) => setCohortProgress((current) => ({ ...current, [cohort[0].cohortId]: value })))
+                    .catch((cause) => setPlansError(cause instanceof Error ? cause.message : "Không thể tải tiến độ"))}
+                >
+                  Xem tiến độ và điểm luyện tập
+                </button>
+                {cohortProgress[cohort[0].cohortId] ? (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="font-bold text-slate-900">Tiến độ ôn tập của nhóm cần hỗ trợ</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg bg-emerald-50 p-3 text-emerald-800"><span className="block text-xs">Đạt ngưỡng</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].completed}</strong></div>
+                      <div className="rounded-lg bg-blue-50 p-3 text-brand-800"><span className="block text-xs">Đang ôn</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].rows.filter((row) => row.status === "IN_PROGRESS").length}</strong></div>
+                      <div className="rounded-lg bg-slate-100 p-3 text-slate-700"><span className="block text-xs">Chưa bắt đầu</span><strong className="text-lg">{cohortProgress[cohort[0].cohortId].rows.filter((row) => row.status === "ASSIGNED").length}</strong></div>
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">Hoàn thành {cohortProgress[cohort[0].cohortId].completed}/{cohortProgress[cohort[0].cohortId].total} học sinh</p>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`Hoàn thành ${cohortProgress[cohort[0].cohortId].completed} trên ${cohortProgress[cohort[0].cohortId].total} học sinh`}>
+                      <div className="h-full rounded-full bg-brand-600" style={{ width: `${cohortProgress[cohort[0].cohortId].total ? 100 * cohortProgress[cohort[0].cohortId].completed / cohortProgress[cohort[0].cohortId].total : 0}%` }} />
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {cohortProgress[cohort[0].cohortId].rows.map((row) => (
+                        <div key={row.planId} className="grid gap-2 border-t border-slate-100 pt-2 sm:grid-cols-[minmax(8rem,1fr)_minmax(8rem,1.4fr)_auto] sm:items-center">
+                          <Link href={`/teacher/learning-plans/${row.planId}`} className="font-semibold text-brand-700 underline">{row.studentName}</Link>
+                          <div className="min-w-0"><div className="h-2 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${row.studentName} hoàn thành ${row.completedTasks} trên ${row.totalTasks} bước`}><div className={`h-full rounded-full ${row.materialStudy?.passed ? "bg-emerald-500" : "bg-brand-500"}`} style={{ width: `${row.totalTasks ? 100 * row.completedTasks / row.totalTasks : 0}%` }} /></div><span className="mt-1 block text-xs text-slate-500">{row.completedTasks}/{row.totalTasks} bước</span></div>
+                          <span className={`text-xs font-semibold ${row.materialStudy?.passed ? "text-emerald-700" : "text-amber-700"}`}>{row.materialStudy ? `Điểm ${row.materialStudy.latestScore ?? "—"}% · ngưỡng ${row.target ?? "—"}%` : row.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {cohort.map((plan) => (
                     <Link

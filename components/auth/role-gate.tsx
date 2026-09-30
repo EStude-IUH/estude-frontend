@@ -31,9 +31,11 @@ function RoleLoadingScreen() {
 export function RoleGate({
   allowedRole,
   children,
+  loadingFallback,
 }: {
   allowedRole: UserRole;
   children: ReactNode;
+  loadingFallback?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -53,7 +55,8 @@ export function RoleGate({
 
   }, [allowedRole, isInitializing, router, user]);
 
-  if (isInitializing || loading || !user) return <RoleLoadingScreen />;
+  if (isInitializing || loading || !user)
+    return loadingFallback ?? <RoleLoadingScreen />;
   if (!isAllowed) {
     const available = MODULE_LINKS.find((item) => canVisit(item.href));
     return <main className="grid min-h-screen place-items-center bg-slate-50 p-6"><div className="text-center"><h1 className="text-xl font-bold">Bạn chưa được cấp quyền truy cập</h1><p className="mt-3 text-slate-500">Liên hệ người quản lý để được gán nhóm quyền phù hợp.</p><div className="mt-5 flex flex-wrap justify-center gap-4">

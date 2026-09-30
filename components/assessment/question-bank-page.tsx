@@ -57,6 +57,13 @@ const difficultyTone: Record<Difficulty, string> = {
   VERY_HARD: "bg-violet-50 text-violet-700",
 };
 
+function formatCreatedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short", timeStyle: "short",
+  }).format(date);
+}
+
 export function QuestionBankPage() {
   const { can } = usePermissions();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -445,7 +452,7 @@ export function QuestionBankPage() {
                   </Button>
                 </>
               ) : null}
-              <Link href="/teacher/question-bank/generate">
+              <Link href={selectedFolder === "all" || selectedFolder === "unfiled" ? "/teacher/question-bank/generate" : `/teacher/question-bank/generate?folderId=${encodeURIComponent(selectedFolder)}`}>
                 <Button permission="ai_questions.create" variant="secondary" className="!h-[42px] !rounded-lg whitespace-nowrap">
                   <Sparkles className="size-4" />
                   Tạo bằng AI
@@ -492,7 +499,7 @@ export function QuestionBankPage() {
             </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table className="min-w-[1220px]">
+            <Table className="min-w-[1360px]">
               <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
                 <tr>
                   <TableHead className="w-14 text-center">
@@ -508,15 +515,16 @@ export function QuestionBankPage() {
                   <TableHead className="w-56">Môn</TableHead>
                   <TableHead className="w-40 text-center">Loại</TableHead>
                   <TableHead className="w-36 text-center">Độ khó</TableHead>
+                  <TableHead className="w-40">Thời gian tạo</TableHead>
                   <TableHead className="w-40">Trạng thái</TableHead>
                   <TableHead className="w-32 text-right">Thao tác</TableHead>
                 </tr>
               </TableHeader>
               <TableBody>
-                {loading ? <TableLoadingBarRow colSpan={7} /> : null}
+                {loading ? <TableLoadingBarRow colSpan={8} /> : null}
                 {!loading && visibleQuestions.length === 0 ? (
                   <TableEmptyRow
-                    colSpan={7}
+                    colSpan={8}
                     icon={<FileQuestion className="size-5 text-slate-400" />}
                     message="Chưa có câu hỏi phù hợp"
                   />
@@ -576,6 +584,9 @@ export function QuestionBankPage() {
                           >
                             {DIFFICULTY_LABELS[question.difficulty]}
                           </span>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-500">
+                          <time dateTime={question.createdAt}>{formatCreatedAt(question.createdAt)}</time>
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <ToggleSwitch

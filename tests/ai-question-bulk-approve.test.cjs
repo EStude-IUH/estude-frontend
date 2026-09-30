@@ -17,6 +17,9 @@ const question = (id, status = 'PENDING') => ({ id, status, content: `Nội dung
 async function render(t, options = {}) {
   const calls = [];
   const questions = options.questions ?? [question('q1'), question('q2')];
+  const previousWindow = global.window;
+  if (options.folderId) global.window = { location: { search: `?folderId=${options.folderId}` } };
+  t.after(() => { global.window = previousWindow; });
   const filename = path.resolve('components/assessment/ai-question-generator-page.tsx');
   const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const original = loaded.require.bind(loaded);
@@ -38,14 +41,15 @@ async function render(t, options = {}) {
     if (id === '@/lib/subject-localization') return { getVietnameseSubjectName: (value) => value };
     if (id === '@/lib/assessment-api') return {
       academicDataService: { getMaterialLibrary: async () => [{ id: 'material', originalName: 'Toán.pdf', mimeType: 'application/pdf' }], getSubjects: async () => [] },
+      questionBankService: { getFolders: async () => [{ id: 'folder', name: 'Lịch sử' }] },
       aiQuestionSettingsService: { getMine: async () => ({ effectiveLevels: [{ code: 'MEDIUM', label: 'Trung bình', description: 'Vận dụng' }], defaultQuantity: questions.length }) },
       aiQuestionService: {
         getDraft: async () => options.storedDraft ?? null,
         saveDraft: async (payload) => { calls.push({ draft: payload }); if (options.saveFailure) throw new Error('Không lưu được bản nháp'); return { version: (options.storedDraft?.version ?? 0) + 1, savedAt: '2026-09-26T10:00:00Z' }; },
         update: async (id, draft) => { options.validateUpdate?.(draft); if (options.updateFailure) throw new Error('Đáp án chưa hợp lệ'); return { ...questions.find((q) => q.id === id), ...draft }; },
         generate: async () => questions,
-        approveMany: async (ids) => {
-          calls.push({ approveMany: ids });
+        approveMany: async (ids, folderId) => {
+          calls.push({ approveMany: ids, ...(folderId ? { folderId } : {}) });
           if (options.wait) await options.wait;
           if (options.fail && ids.includes(options.fail)) throw new Error('Cần chỉnh sửa đáp án');
           return ids.map((id) => ({ generatedQuestion: { ...questions.find((q) => q.id === id), status: 'APPROVED' }, question: { id: `bank-${id}` } }));
@@ -132,6 +136,14 @@ test('does not offer batch approval without the approval permission', async (t) 
   const page = await render(t, { allowed: false });
   assert.equal(page.button('Duyệt tất cả'), undefined);
   assert.deepEqual(page.calls, []);
+});
+
+test('approves generated questions into the folder opened from the question bank', async (t) => {
+  const page = await render(t, { folderId: 'folder' });
+  assert.match(page.text(), /thư mục/);
+  assert.match(page.text(), /Lịch sử/);
+  await page.approveAll();
+  assert.deepEqual(page.calls, [{ approveMany: ['q1', 'q2'], folderId: 'folder' }]);
 });
 
 test('saves configuration, pending question ids and unfinished edits without approving', async (t) => {

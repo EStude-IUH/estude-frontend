@@ -66,6 +66,11 @@ export interface GeneratedQuestion extends Omit<
   updatedAt: string;
 }
 
+export interface ApprovedAiQuestion {
+  generatedQuestion: GeneratedQuestion;
+  question: Question;
+}
+
 export interface AiQuestionJob {
   id: string;
   status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
@@ -1012,6 +1017,8 @@ export interface StudyPracticeQuestion {
   correct?: boolean;
 }
 
+export type StudyPracticeMode = "EASY" | "HARD";
+
 export interface StudyPracticeSet {
   feedback?: Array<{
     objectiveId?: string;
@@ -1024,12 +1031,6 @@ export interface StudyPracticeSet {
     recommendation: string;
   }>;
   id: string;
-  attemptId: string;
-  attemptNumber: number;
-  startedAt: string | null;
-  mode: StudyPracticeMode | "UNSPECIFIED";
-  assistance: string;
-  attemptHistory: StudyPracticeAttemptSummary[];
   analysisId: string;
   attemptId: string;
   attemptNumber: number;
@@ -1137,29 +1138,9 @@ export interface StudentEvidenceResult {
   missingSnapshotAttemptIds: string[];
 }
 
-export type StudyPracticeMode = "EASY" | "HARD";
-
-export type StudyPracticeAttemptSummary = Pick<
-  StudyPracticeSet,
-  | "attemptNumber"
-  | "status"
-  | "score"
-  | "correctCount"
-  | "startedAt"
-  | "submittedAt"
-  | "durationSeconds"
-  | "snapshotVersion"
-  | "gradingVersion"
-  | "assistance"
-  | "mode"
-  | "legacy"
-  | "hintQuestionIds"
-  | "totalQuestions"
-> & { id: string };
-
 export type StudyPracticeAttempt = StudyPracticeAttemptSummary & {
   questions: StudyPracticeQuestion[];
-  feedback: StudyPracticeSet["feedback"];
+  feedback?: StudyPracticeSet["feedback"];
 };
 
 export interface LearningObjectiveEvidence {
@@ -1171,6 +1152,8 @@ export interface LearningObjectiveEvidence {
   topicId: string | null;
   granularity: string;
   version: number;
+  materialId?: string;
+  topicNames?: string[];
 }
 
 export interface AssessmentEvidenceQuestion {
@@ -1244,6 +1227,27 @@ export interface StudyAnalysis {
   practiceSet: StudyPracticeSet | null;
 }
 
+export interface StudyActivityDashboard {
+  practice: Array<{
+    id: string;
+    attemptNumber: number;
+    submittedAt: string | null;
+    correctCount: number;
+    totalQuestions: number;
+    durationSeconds: number;
+    assistance: string;
+  }>;
+  materialViews: Array<{
+    id: string;
+    materialId: string;
+    materialName: string;
+    openedAt: string;
+    closedAt: string | null;
+    activeSeconds: number;
+  }>;
+  materials: Array<{ id: string; name: string; pages: number[] }>;
+}
+
 export type StudyAiTargetKey = string;
 export interface StudyAiFeedback {
   id: string;
@@ -1314,6 +1318,7 @@ export interface LearningPlan {
     | "ASSIGNED"
     | "IN_PROGRESS"
     | "WAITING_REASSESSMENT"
+    | "COMPLETED"
     | "ACHIEVED"
     | "NEEDS_ADJUSTMENT"
     | "CANCELLED";
@@ -1321,6 +1326,34 @@ export interface LearningPlan {
   baselineEvidenceId: string | null;
   approvedAt: string | null;
   objective: LearningObjectiveEvidence | null;
+  materialStudy?: {
+    materialId: string;
+    materialName: string;
+    sourceAttemptId: string;
+    sourceExamCount?: number;
+    baselineExamAccuracy: number | null;
+    missedCount: number;
+    matchedCount: number;
+    sections: Array<{
+      id?: string;
+      title: string;
+      page: number;
+      missedCount: number;
+      questionIds: string[];
+      mistakes?: Array<{ questionId: string; sourceAttemptId?: string; sourceExamId?: string;
+        content: string; selectedAnswer: string;
+        correctAnswer: string; explanation: string }>;
+      diagnosis: string;
+      theory: string;
+      keyPoints: string[];
+      citations: Array<{ documentName: string; page: number; excerpt: string }>;
+    }>;
+    attempts: Array<{ id: string; attemptNumber: number; score: number | null; submittedAt: string | null }>;
+    latestScore: number | null;
+    bestScore: number | null;
+    practiceScoreChange: number | null;
+    passed: boolean;
+  };
   tasks: LearningTask[];
   history: Array<{
     id: string;
@@ -1328,6 +1361,35 @@ export interface LearningPlan {
     reason: string;
     snapshot: unknown;
     changedAt: string;
+  }>;
+}
+export interface MaterialPlanProposal {
+  analysisId: string;
+  practiceSetId: string;
+  materialId: string;
+  materialName: string;
+  sourceAttemptId: string;
+  sourceExamCount?: number;
+  baselineExamAccuracy: number | null;
+  missedCount: number;
+  matchedCount: number;
+  summary: string;
+  sections: NonNullable<LearningPlan["materialStudy"]>["sections"];
+}
+
+export interface LearningCohortProgress {
+  cohortId: string;
+  completed: number;
+  total: number;
+  rows: Array<{
+    planId: string;
+    studentId: string;
+    studentName: string;
+    status: LearningPlan["status"];
+    target: number | null;
+    materialStudy: LearningPlan["materialStudy"] | null;
+    completedTasks: number;
+    totalTasks: number;
   }>;
 }
 export type LearningPlanScopeItem = Pick<
@@ -1338,6 +1400,7 @@ export type LearningPlanScopeItem = Pick<
 export interface LearningPlanDraftInput {
   studentIds: string[];
   objectiveId: string;
+  materialPreparationIds?: Record<string, string>;
   title: string;
   summary: string;
   successCriteria: string;

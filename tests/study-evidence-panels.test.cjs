@@ -103,8 +103,8 @@ test("teacher can inspect a source and select a baseline with the current versio
     "components/assessment/study-evidence-panel.tsx",
     {
       examService: {
-        getStudentEvidence: async () => bundle,
-        selectStudentBaseline: async (examId, studentId, input) => {
+        getStudentEvidenceBundle: async () => bundle,
+        selectStudentBaselineRecord: async (examId, studentId, input) => {
           selected.push({ examId, studentId, input });
         },
       },
@@ -210,7 +210,7 @@ test("an unclassified question is excluded from progress tracking", async (t) =>
     "components/assessment/study-evidence-panel.tsx",
     {
       examService: {
-        getStudentEvidence: async () => ({
+        getStudentEvidenceBundle: async () => ({
           items: [evidence],
           baselines: [],
           baselineHistory: [],

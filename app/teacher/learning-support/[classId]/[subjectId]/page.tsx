@@ -1,9 +1,15 @@
 import { RoleGate } from "@/components/auth/role-gate";
-import { LearningSupportScopePage } from "@/components/assessment/learning-support-scope-page";
+import {
+  LearningSupportScopeLoading,
+  LearningSupportScopePage,
+} from "@/components/assessment/learning-support-scope-page";
 
 export default function TeacherLearningSupportScopeRoute() {
   return (
-    <RoleGate allowedRole="TEACHER">
+    <RoleGate
+      allowedRole="TEACHER"
+      loadingFallback={<LearningSupportScopeLoading />}
+    >
       <LearningSupportScopePage />
     </RoleGate>
   );

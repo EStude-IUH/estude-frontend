@@ -16,6 +16,10 @@ import { AssessmentShell } from "@/components/assessment/assessment-shell";
 import { ExamDetailTabs } from "@/components/assessment/exam-detail-tabs";
 import { LearningSupportGroupPanel } from "@/components/assessment/learning-support-group-panel";
 import { Button } from "@/components/ui/button";
+import {
+  ContentLoading,
+  ContentLoadingOverlay,
+} from "@/components/ui/content-loading";
 import { Input, Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -57,22 +61,39 @@ export function SubjectSupportPage() {
   return <SupportContent key={id} examId={id} />;
 }
 
-export function SubjectSupportDetail({ examId }: { examId: string }) {
-  return <SupportContent key={examId} examId={examId} standalone />;
+export function SubjectSupportDetail({
+  examId,
+  initialReport,
+}: {
+  examId: string;
+  initialReport?: SubjectSupportReport;
+}) {
+  return (
+    <SupportContent
+      key={examId}
+      examId={examId}
+      initialReport={initialReport}
+      standalone
+    />
+  );
 }
 
 function SupportContent({
   examId,
+  initialReport,
   standalone = false,
 }: {
   examId: string;
+  initialReport?: SubjectSupportReport;
   standalone?: boolean;
 }) {
   const { can, loading: permissionsLoading } = usePermissions();
   const allowed = can("exams.submissions");
-  const [report, setReport] = useState<SubjectSupportReport | null>(null);
+  const [report, setReport] = useState<SubjectSupportReport | null>(
+    initialReport ?? null,
+  );
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialReport);
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState("");
   const [followUpOnly, setFollowUpOnly] = useState(false);
@@ -85,6 +106,7 @@ function SupportContent({
 
   useEffect(() => {
     if (!allowed || permissionsLoading) return;
+    if (initialReport && reload === 0) return;
     let active = true;
     setLoading(true);
     setError("");
@@ -107,7 +129,7 @@ function SupportContent({
     return () => {
       active = false;
     };
-  }, [examId, allowed, permissionsLoading, reload]);
+  }, [examId, initialReport, allowed, permissionsLoading, reload]);
 
   function openStudent(student: SubjectSupportStudent) {
     setSelected(student);
@@ -209,15 +231,9 @@ function SupportContent({
         <p className="p-4 text-sm text-slate-500">
           Bạn chưa có quyền xem đánh giá học tập.
         </p>
-      ) : loading ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-lg bg-white p-6 text-sm"
-        >
-          <LoaderCircle className="size-4 animate-spin" />
-          Đang tổng hợp các bài kiểm tra cùng môn...
-        </div>
-      ) : error ? (
+      ) : loading && !report ? (
+        <ContentLoading label="Đang tổng hợp các bài kiểm tra cùng môn..." />
+      ) : error && !report ? (
         <div
           role="alert"
           className="rounded-lg bg-white p-4 text-sm text-rose-600"
@@ -233,7 +249,15 @@ function SupportContent({
           </Button>
         </div>
       ) : report ? (
-        <div className="space-y-3 text-[13px]">
+        <div className="relative space-y-3 text-[13px]">
+          {loading ? (
+            <ContentLoadingOverlay label="Đang cập nhật đánh giá..." />
+          ) : null}
+          {error ? (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-700">
+              {error}
+            </p>
+          ) : null}
           {report.cache?.stale ? (
             <p
               role="alert"
