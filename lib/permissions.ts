@@ -133,6 +133,11 @@ export function routePermission(path: string): string | null {
     path.startsWith("/student/study-coach/")
   )
     return "study.read";
+  if (
+    path === "/student/learning-plans" ||
+    path.startsWith("/student/learning-plans/")
+  )
+    return "study.read";
   if (path === "/admin/users") return "accounts.read";
   if (/^\/(admin\/users|teacher)\/students\/[^/]+$/.test(path))
     return "student_reports.read";

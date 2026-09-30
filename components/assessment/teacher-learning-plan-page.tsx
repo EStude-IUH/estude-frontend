@@ -18,6 +18,7 @@ import {
   LoadingPanel,
 } from "@/components/assessment/assessment-shell";
 import { TeacherImprovementPanel } from "@/components/assessment/learning-improvement-panel";
+import { useActionNotification } from "@/components/ui/action-notification";
 import { Button } from "@/components/ui/button";
 import { learningPlanService } from "@/lib/assessment-api";
 import type { LearningPlan, LearningTask } from "@/types/assessment";
@@ -64,6 +65,7 @@ function taskState(task: LearningTask) {
 
 export function TeacherLearningPlanPage() {
   const { id } = useParams<{ id: string }>();
+  const { notify } = useActionNotification();
   const [plan, setPlan] = useState<LearningPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -109,12 +111,19 @@ export function TeacherLearningPlanPage() {
       );
       setPlan(published);
       setNotice("Đã duyệt và giao lộ trình cho học sinh.");
+      notify("Đã duyệt và giao lộ trình cho học sinh.", {
+        key: `learning-plan-published-${plan.id}`,
+      });
     } catch (cause) {
-      setError(
+      const message =
         cause instanceof Error
           ? cause.message
-          : "Không thể duyệt và giao lộ trình",
-      );
+          : "Không thể duyệt và giao lộ trình";
+      setError(message);
+      notify(message, {
+        key: `learning-plan-publish-error-${plan.id}`,
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
@@ -280,6 +289,14 @@ export function TeacherLearningPlanPage() {
                     Kiểm tra các bước học và điều kiện hoàn thành, sau đó duyệt
                     để giao cho học sinh.
                   </p>
+                  {error ? (
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700"
+                    >
+                      {error}
+                    </p>
+                  ) : null}
                   <Button
                     className="mt-4"
                     disabled={busy}

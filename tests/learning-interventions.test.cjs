@@ -150,6 +150,15 @@ test("teacher can open a created learning plan with the support permission", () 
   );
 });
 
+test("student can open assigned learning plans with the study permission", () => {
+  const { routePermission } = loadPermissions();
+  assert.equal(routePermission("/student/learning-plans"), "study.read");
+  assert.equal(
+    routePermission("/student/learning-plans/plan-id"),
+    "study.read",
+  );
+});
+
 test("multi-class support and cohort delivery use scoped endpoints", async () => {
   const { examService, learningPlanService, calls } = loadApi();
   await examService.getLearningSupportOverview();

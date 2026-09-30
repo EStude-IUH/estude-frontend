@@ -114,6 +114,8 @@ async function renderPage(t) {
       };
     if (id === "@/components/ui/button")
       return { Button: (props) => React.createElement("button", props) };
+    if (id === "@/components/ui/action-notification")
+      return { useActionNotification: () => ({ notify: () => {} }) };
     if (id === "@/lib/assessment-api")
       return {
         learningPlanService: {
