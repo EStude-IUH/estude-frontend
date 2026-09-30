@@ -31,14 +31,14 @@ test("practice actions send the current attempt id and use the server methods", 
   const { examAttemptService, calls } = loadApi();
   await examAttemptService.startStudyPractice("set", "attempt", "HARD");
   await examAttemptService.submitStudyPractice("set", "attempt", [{ questionId: "question", selectedOptionIds: ["option"] }]);
-  await examAttemptService.retryStudyPractice("set", "attempt");
+  await examAttemptService.retryStudyPractice("set", "attempt", "WRONG_QUESTIONS");
   await examAttemptService.getStudyPracticeHint("set", "question", "attempt");
   await examAttemptService.getStudyPracticeAttempt("set", "attempt");
   await examAttemptService.getStudyPracticeAttemptById("attempt");
   assert.deepEqual(calls, [
     { url: "/study-practice-sets/set/start", method: "POST", body: { attemptId: "attempt", mode: "HARD" } },
     { url: "/study-practice-sets/set/submit", method: "POST", body: { attemptId: "attempt", answers: [{ questionId: "question", selectedOptionIds: ["option"] }] } },
-    { url: "/study-practice-sets/set/retry", method: "POST", body: { attemptId: "attempt" } },
+    { url: "/study-practice-sets/set/retry", method: "POST", body: { attemptId: "attempt", practiceType: "WRONG_QUESTIONS" } },
     { url: "/study-practice-sets/set/questions/question/hint", method: "POST", body: { attemptId: "attempt" } },
     { url: "/study-practice-sets/set/attempts/attempt", method: "GET", body: null },
     { url: "/study-practice-attempts/attempt", method: "GET", body: null },

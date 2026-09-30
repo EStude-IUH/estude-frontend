@@ -36,6 +36,8 @@ import type { StudyAiFeedback } from "@/types/assessment";
 import type {
   StudyAnalysis,
   LearningPlan,
+  StudyPracticeContentType,
+  StudyPracticeAttemptSummary,
   StudyPracticeMode,
   StudyPracticeSet,
 } from "@/types/assessment";
@@ -55,15 +57,8 @@ export function StudentStudyAnalysisPage() {
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [supportPlans, setSupportPlans] = useState<LearningPlan[]>([]);
-  const isLegacyPracticeRoute = searchParams.get("tab") === "practice";
 
   useEffect(() => {
-    if (isLegacyPracticeRoute)
-      router.replace(`/student/study-coach/practice/${params.id}`);
-  }, [isLegacyPracticeRoute, params.id, router]);
-
-  useEffect(() => {
-    if (isLegacyPracticeRoute) return;
     let active = true;
     setLoading(true);
     setGenerating(false);
@@ -108,7 +103,7 @@ export function StudentStudyAnalysisPage() {
     return () => {
       active = false;
     };
-  }, [isLegacyPracticeRoute, params.id]);
+  }, [params.id]);
 
   useEffect(() => {
     let active = true;
@@ -144,7 +139,18 @@ export function StudentStudyAnalysisPage() {
 
   function choose(questionId: string, optionId: string) {
     if (practice?.status === "SUBMITTED" || !practice?.startedAt) return;
-    setAnswers((current) => ({ ...current, [questionId]: [optionId] }));
+    const question = practice.questions.find((item) => item.id === questionId);
+    setAnswers((current) => {
+      if (question?.type !== "MULTIPLE_CHOICE")
+        return { ...current, [questionId]: [optionId] };
+      const selected = current[questionId] ?? [];
+      return {
+        ...current,
+        [questionId]: selected.includes(optionId)
+          ? selected.filter((id) => id !== optionId)
+          : [...selected, optionId],
+      };
+    });
   }
 
   async function startPractice(mode: StudyPracticeMode) {
@@ -205,7 +211,9 @@ export function StudentStudyAnalysisPage() {
     }
   }
 
-  async function retryPractice() {
+  async function retryPractice(
+    practiceType: StudyPracticeContentType = "SOURCE_REGION",
+  ) {
     if (!practice) return;
     setRetrying(true);
     setError("");
@@ -213,6 +221,7 @@ export function StudentStudyAnalysisPage() {
       const updated = await examAttemptService.retryStudyPractice(
         practice.id,
         practice.attemptId,
+        practiceType,
       );
       setAnalysis((current) =>
         current ? { ...current, practiceSet: updated } : current,
@@ -283,11 +292,7 @@ export function StudentStudyAnalysisPage() {
   }
 
   function openTab(tab: "theory" | "practice") {
-    router.push(
-      tab === "practice"
-        ? `/student/study-coach/practice/${params.id}`
-        : `/student/attempts/${params.id}/study?tab=theory`,
-    );
+    router.push(`/student/attempts/${params.id}/study?tab=${tab}`);
   }
 
   async function sendFeedback(
@@ -303,16 +308,6 @@ export function StudentStudyAnalysisPage() {
     });
     setFeedbackMessage(
       "Đã gửi phản hồi đến giáo viên. Báo cáo chỉ đổi khi giáo viên xử lý.",
-    );
-  }
-
-  if (isLegacyPracticeRoute) {
-    return (
-      <StudentShell>
-        <div className="grid min-h-56 place-items-center rounded-2xl border border-slate-200 bg-white">
-          <LoaderCircle className="size-7 animate-spin text-brand-600" />
-        </div>
-      </StudentShell>
     );
   }
 
@@ -570,9 +565,15 @@ export function StudentStudyAnalysisPage() {
           onChoose={choose}
           onStart={(mode) => void startPractice(mode)}
           onSubmit={() => void submitPractice()}
-          onRetry={() => void retryPractice()}
+          onRetry={(practiceType) => void retryPractice(practiceType)}
           onGetHint={(questionId) => void getHint(questionId)}
           onFeedback={sendFeedback}
+          onOpenWorkspace={() =>
+            router.push(`/student/study-coach/practice/${params.id}`)
+          }
+          onViewAttempt={(attempt) =>
+            router.push(`/student/study-coach/practice-results/${attempt.id}`)
+          }
         />
       ) : null}
     </StudentShell>
@@ -593,6 +594,8 @@ export function PracticeSection({
   onRetry,
   onGetHint,
   onFeedback,
+  onOpenWorkspace,
+  onViewAttempt,
   openWorkspace = false,
   showAttemptHistory = true,
 }: {
@@ -606,13 +609,15 @@ export function PracticeSection({
   onChoose: (questionId: string, optionId: string) => void;
   onStart: (mode: StudyPracticeMode) => void;
   onSubmit: () => void;
-  onRetry: () => void;
+  onRetry: (practiceType: StudyPracticeContentType) => void;
   onGetHint: (questionId: string) => void;
   onFeedback?: (
     targetKey: string,
     reason: StudyAiFeedback["reason"],
     comment: string,
   ) => Promise<void>;
+  onOpenWorkspace?: () => void;
+  onViewAttempt?: (attempt: StudyPracticeAttemptSummary) => void;
   openWorkspace?: boolean;
   showAttemptHistory?: boolean;
 }) {
@@ -707,10 +712,10 @@ export function PracticeSection({
           items={practice.attemptHistory ?? []}
           activeAttemptId={practice.attemptId}
           creating={retrying}
-          onCreate={() => {
-            setShowWorkspace(true);
-            onRetry();
+          onCreate={(practiceType) => {
+            onRetry(practiceType);
           }}
+          onViewAttempt={onViewAttempt}
         />
       </section>
     );
@@ -725,7 +730,8 @@ export function PracticeSection({
             practiceSetId={practice.id}
             items={practice.attemptHistory ?? []}
             activeAttemptId={practice.attemptId}
-            onContinue={() => setShowWorkspace(true)}
+            onContinue={onOpenWorkspace ?? (() => setShowWorkspace(true))}
+            onViewAttempt={onViewAttempt}
           />
         ) : null}
         <div className="mt-5 rounded-xl border border-dashed border-violet-200 bg-violet-50/50 p-4 text-sm text-slate-600">
@@ -744,7 +750,8 @@ export function PracticeSection({
           practiceSetId={practice.id}
           items={practice.attemptHistory ?? []}
           activeAttemptId={practice.attemptId}
-          onContinue={() => setShowWorkspace(true)}
+          onContinue={onOpenWorkspace ?? (() => setShowWorkspace(true))}
+          onViewAttempt={onViewAttempt}
         />
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1066,7 +1073,9 @@ function PracticeQuestionRunner({
             Câu {questionIndex + 1}. {question.content}
           </p>
           <p className="mt-2 text-sm text-slate-500">
-            Chủ đề: {question.topicName} · Chọn một đáp án phù hợp nhất.
+            Chủ đề: {question.topicName} · {question.type === "MULTIPLE_CHOICE"
+              ? "Chọn tất cả đáp án đúng."
+              : "Chọn một đáp án phù hợp nhất."}
           </p>
           <div className="mt-6 space-y-3">
             {question.options.map((option) => {

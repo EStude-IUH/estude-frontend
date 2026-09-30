@@ -89,6 +89,18 @@ test("shows an empty state when only active attempts exist", async (t) => {
   assert.match(text(), /Chưa có học sinh nộp bài kiểm tra này/);
 });
 
+test("shows scores below five out of ten in red", async (t) => {
+  const { renderer } = await renderPanel(t, { submissions: [
+    attempt("low", "a", { score: 4 }),
+    attempt("passing", "b", { score: 5 }),
+  ] });
+  const scoreSpans = renderer.root.findAllByType("span");
+  const low = scoreSpans.find((span) => span.props.children === "4/10");
+  const passing = scoreSpans.find((span) => span.props.children === "5/10");
+  assert.match(low.props.className, /text-rose-600/);
+  assert.match(passing.props.className, /text-brand-700/);
+});
+
 test("does not fetch submissions without permission", async (t) => {
   const { calls, text } = await renderPanel(t, { allowed: false });
   assert.equal(calls(), 0);

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { BookOpenCheck, CircleX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { examAttemptService } from "@/lib/assessment-api";
 import type {
   StudyPracticeAttemptResult,
   StudyPracticeAttemptSummary,
+  StudyPracticeContentType,
 } from "@/types/assessment";
 
 export const assistanceLabel = (value: string) =>
@@ -31,7 +33,7 @@ export function PracticeAttemptHistory({
   items: StudyPracticeAttemptSummary[];
   activeAttemptId?: string;
   onContinue?: () => void;
-  onCreate?: () => void;
+  onCreate?: (practiceType: StudyPracticeContentType) => void;
   creating?: boolean;
   showCreateButton?: boolean;
   showHeading?: boolean;
@@ -42,6 +44,7 @@ export function PracticeAttemptHistory({
   );
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [choosingType, setChoosingType] = useState(false);
   async function open(id: string) {
     setLoading(id);
     setError("");
@@ -74,7 +77,7 @@ export function PracticeAttemptHistory({
         {showCreateButton ? (
           <Button
             disabled={!onCreate || creating}
-            onClick={onCreate}
+            onClick={() => setChoosingType(true)}
             title={!onCreate ? "Hoàn thành bài đang mở trước khi tạo bài mới" : undefined}
           >
             {creating ? "Đang tạo..." : "+ Tạo bài luyện mới"}
@@ -88,12 +91,13 @@ export function PracticeAttemptHistory({
         </p>
       ) : null}
       <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3">Bài luyện</th>
               <th className="py-3">Thời gian</th>
               <th>Kết quả</th>
+              <th>Loại bài luyện</th>
               <th>Hỗ trợ</th>
               <th>Trạng thái</th>
               <th className="px-4 py-3 text-right">Thao tác</th>
@@ -122,6 +126,11 @@ export function PracticeAttemptHistory({
                   {item.status === "SUBMITTED"
                     ? `${item.correctCount ?? "—"}/${item.totalQuestions} câu đúng`
                     : "Đang chuẩn bị / luyện"}
+                </td>
+                <td className="text-xs font-semibold text-slate-600">
+                  {item.practiceType === "WRONG_QUESTIONS"
+                    ? "Ôn lại câu sai"
+                    : "Luyện theo vùng kiến thức"}
                 </td>
                 <td className="text-xs">{assistanceLabel(item.assistance)}</td>
                 <td>
@@ -171,6 +180,49 @@ export function PracticeAttemptHistory({
           {error}
         </p>
       ) : null}
+      <Modal
+        open={choosingType}
+        title="Chọn loại bài luyện"
+        description="Chọn cách tạo câu hỏi cho lượt luyện mới."
+        onClose={() => setChoosingType(false)}
+        width="max-w-xl"
+        layerClassName="z-[110]"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            className="rounded-2xl border border-slate-200 p-4 text-left transition hover:border-brand-400 hover:bg-brand-50"
+            onClick={() => {
+              setChoosingType(false);
+              onCreate?.("WRONG_QUESTIONS");
+            }}
+          >
+            <CircleX className="size-6 text-rose-600" />
+            <span className="mt-3 block font-black text-slate-950">
+              Ôn lại câu sai
+            </span>
+            <span className="mt-1 block text-sm leading-5 text-slate-600">
+              Làm lại đúng các câu đã trả lời sai trong bài kiểm tra gốc.
+            </span>
+          </button>
+          <button
+            type="button"
+            className="rounded-2xl border border-slate-200 p-4 text-left transition hover:border-brand-400 hover:bg-brand-50"
+            onClick={() => {
+              setChoosingType(false);
+              onCreate?.("SOURCE_REGION");
+            }}
+          >
+            <BookOpenCheck className="size-6 text-brand-600" />
+            <span className="mt-3 block font-black text-slate-950">
+              Luyện theo vùng kiến thức
+            </span>
+            <span className="mt-1 block text-sm leading-5 text-slate-600">
+              Làm câu hỏi mới bám sát phần tài liệu chứa nội dung của các câu sai.
+            </span>
+          </button>
+        </div>
+      </Modal>
       <Modal
         open={selected !== null}
         title={`Lượt ôn tập ${selected?.attemptNumber ?? ""}`}

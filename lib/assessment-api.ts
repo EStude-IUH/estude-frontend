@@ -1222,10 +1222,14 @@ export const examAttemptService = {
       { method: "POST", body: JSON.stringify({ attemptId, answers }) },
     );
   },
-  retryStudyPractice(id: string, attemptId: string): Promise<StudyPracticeSet> {
+  retryStudyPractice(
+    id: string,
+    attemptId: string,
+    practiceType: "WRONG_QUESTIONS" | "SOURCE_REGION" = "SOURCE_REGION",
+  ): Promise<StudyPracticeSet> {
     return authenticatedRequest<StudyPracticeSet>(
       `/study-practice-sets/${encodeURIComponent(id)}/retry`,
-      { method: "POST", body: JSON.stringify({ attemptId }) },
+      { method: "POST", body: JSON.stringify({ attemptId, practiceType }) },
     );
   },
   getStudyPracticeHint(

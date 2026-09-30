@@ -18,6 +18,39 @@ const capabilities = (insights = true) => Object.fromEntries(["processing", "mat
 const materialPage = () => ({ items: [{ id: "doc", title: "cells.pdf", readyForStudy: true }], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } });
 const insightProgress = (hasData = true) => ({ items: [{ conceptId: "concept", conceptName: "Tế bào", topicId: "topic", documentId: "doc", masteryScore: hasData ? 0.4 : 0.5, evidenceCount: hasData ? 3 : 0, correctEvidence: hasData ? 1 : 0, incorrectEvidence: hasData ? 2 : 0, state: hasData ? "NEEDS_SUPPORT" : "NEW", targetDifficulty: "EASY", updatedAt: new Date().toISOString() }], total: 1, activity: { flashcardReviewCount: hasData ? 2 : 0, quizAnswerCount: hasData ? 3 : 0, totalActivityCount: hasData ? 5 : 0 }, policy: { minimumEvidenceRequired: 3 } });
 
+test("exam review combines required and optional review into one table", () => {
+  const source = fs.readFileSync(path.resolve("components/student/student-review-page.tsx"), "utf8");
+  assert.match(source, /Danh sách bài kiểm tra để ôn tập/);
+  assert.match(source, /Loại ôn tập/);
+  assert.match(source, /Tự chọn ôn thêm/);
+  assert.equal((source.match(/<Table className=/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /<h2[^>]*>Tự chọn ôn thêm với AI<\/h2>/);
+  assert.doesNotMatch(source, /Danh sách bài luyện|openPracticeHistory/);
+  assert.doesNotMatch(source, /Ôn lý thuyết/);
+  assert.match(source, /study\?tab=practice/);
+});
+
+test("practice history lives inside the practice tab and opens dedicated pages", () => {
+  const source = fs.readFileSync(path.resolve("components/assessment/study-analysis-page.tsx"), "utf8");
+  assert.match(source, /activeTab === "practice"/);
+  assert.match(source, /<PracticeAttemptHistory/);
+  assert.doesNotMatch(source, /router\.replace\(`\/student\/study-coach\/practice/);
+  assert.match(source, /study\?tab=\$\{tab\}/);
+  assert.match(source, /study-coach\/practice\/\$\{params\.id\}/);
+  assert.match(source, /study-coach\/practice-results\/\$\{attempt\.id\}/);
+  const workspace = fs.readFileSync(path.resolve("components/student/exam-practice-workspace.tsx"), "utf8");
+  const page = fs.readFileSync(path.resolve("components/student/student-exam-practice-page.tsx"), "utf8");
+  assert.match(workspace, /Quay lại danh sách bài luyện/);
+  assert.match(page, /attempts\/\$\{attemptId\}\/study\?tab=practice/);
+});
+
+test("student study progress shows the AI evaluation after self-study", () => {
+  const source = fs.readFileSync(path.resolve("components/assessment/study-activity-dashboard.tsx"), "utf8");
+  assert.match(source, /Đánh giá sau quá trình tự ôn/);
+  assert.match(source, /dashboard\.activityReview\.comment/);
+  assert.match(source, /studyActivityReviewSections/);
+});
+
 async function renderComponent(t, file, exportName, api, options = {}) {
   const previousWindow = global.window;
   const location = {

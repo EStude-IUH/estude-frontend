@@ -11,10 +11,8 @@ import {
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { ErrorPanel, LoadingPanel } from "@/components/assessment/assessment-shell";
-import { PracticeAttemptHistory } from "@/components/assessment/practice-attempt-history";
 import { StudentShell } from "@/components/student/student-shell";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import {
   Table,
   TableBody,
@@ -24,11 +22,9 @@ import {
   TableHeader,
 } from "@/components/ui/data-table";
 import { CustomSelect, Input } from "@/components/ui/form-control";
-import { examAttemptService, studentOverviewService } from "@/lib/assessment-api";
+import { studentOverviewService } from "@/lib/assessment-api";
 import { normalizeSearchKeyword } from "@/lib/search-keyword";
-import { loadOrCreateStudentStudyAnalysis } from "@/lib/study-analysis-loader";
 import { toVietnameseSubjectName } from "@/lib/subject-localization";
-import type { StudyPracticeSet } from "@/types/assessment";
 import type { StudentExamScore, StudentOverview } from "@/types/student-overview";
 
 const REVIEW_THRESHOLD = 50;
@@ -85,12 +81,6 @@ export function StudentExamReviewPanel({
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [subjectId, setSubjectId] = useState("all");
-  const [practiceHistory, setPracticeHistory] = useState<StudyPracticeSet | null>(null);
-  const [practiceHistoryAttemptId, setPracticeHistoryAttemptId] = useState<string | null>(null);
-  const [practiceHistoryTitle, setPracticeHistoryTitle] = useState("");
-  const [practiceHistoryLoading, setPracticeHistoryLoading] = useState(false);
-  const [practiceHistoryError, setPracticeHistoryError] = useState("");
-  const [practiceCreating, setPracticeCreating] = useState(false);
   useEffect(() => {
     void studentOverviewService
       .getMyOverview()
@@ -182,49 +172,6 @@ export function StudentExamReviewPanel({
         : Math.min(lowest, item.percentage ?? lowest),
     null,
   );
-
-  async function openPracticeHistory(item: StudentExamScore) {
-    setPracticeHistoryAttemptId(item.id);
-    setPracticeHistoryTitle(item.title);
-    setPracticeHistory(null);
-    setPracticeHistoryError("");
-    setPracticeCreating(false);
-    setPracticeHistoryLoading(true);
-    try {
-      const analysis = await loadOrCreateStudentStudyAnalysis(item.id);
-      setPracticeHistory(analysis.practiceSet ?? null);
-    } catch (cause) {
-      setPracticeHistoryError(
-        cause instanceof Error
-          ? cause.message
-          : "Không thể tải danh sách bài luyện",
-      );
-    } finally {
-      setPracticeHistoryLoading(false);
-    }
-  }
-
-  async function createPracticeAttempt() {
-    if (!practiceHistory || practiceHistory.status !== "SUBMITTED") return;
-    setPracticeCreating(true);
-    setPracticeHistoryError("");
-    try {
-      setPracticeHistory(
-        await examAttemptService.retryStudyPractice(
-          practiceHistory.id,
-          practiceHistory.attemptId,
-        ),
-      );
-    } catch (cause) {
-      setPracticeHistoryError(
-        cause instanceof Error
-          ? cause.message
-          : "Không thể tạo bài luyện mới",
-      );
-    } finally {
-      setPracticeCreating(false);
-    }
-  }
 
   if (loading) {
     return <LoadingPanel />;
@@ -435,32 +382,24 @@ export function StudentExamReviewPanel({
                     </TableCell>
                     <TableCell className="!px-3">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant={requiredReview ? "outline" : "primary"}
-                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
-                        >
-                          {requiredReview ? <BookOpenCheck className="size-3.5" /> : <BrainCircuit className="size-3.5" />}
-                          {requiredReview ? "Ôn lý thuyết" : "Xem gợi ý AI"}
-                        </Button>
+                        {!requiredReview ? (
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                            onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
+                          >
+                            <BrainCircuit className="size-3.5" /> Xem gợi ý AI
+                          </Button>
+                        ) : null}
                         {requiredReview ? (
                           <Button
                             size="sm"
                             className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                            onClick={() => router.push(`/student/study-coach/practice/${item.id}`)}
+                            onClick={() => router.push(`/student/attempts/${item.id}/study?tab=practice`)}
                           >
                             <BrainCircuit className="size-3.5" /> Luyện tập
                           </Button>
                         ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 whitespace-nowrap px-2.5"
-                          onClick={() => void openPracticeHistory(item)}
-                        >
-                          Bài luyện
-                        </Button>
                       </div>
                     </TableCell>
                   </tr>
@@ -471,139 +410,6 @@ export function StudentExamReviewPanel({
         </div>
       </section>
 
-      <Modal
-        open={practiceHistoryAttemptId !== null}
-        title="Danh sách bài luyện"
-        description={practiceHistoryTitle}
-        width="max-w-6xl"
-        bodyClassName="max-h-[75vh] overflow-y-auto"
-        onClose={() => {
-          setPracticeHistoryAttemptId(null);
-          setPracticeHistory(null);
-          setPracticeHistoryError("");
-          setPracticeCreating(false);
-        }}
-      >
-          {practiceHistoryLoading ? (
-            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-              Đang tải danh sách bài luyện...
-            </p>
-          ) : practiceHistoryError ? (
-            <p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
-              {practiceHistoryError}
-            </p>
-          ) : practiceHistory ? (
-            <PracticeAttemptHistory
-              practiceSetId={practiceHistory.id}
-              items={practiceHistory.attemptHistory ?? []}
-              activeAttemptId={practiceHistory.attemptId}
-              showHeading={false}
-              creating={practiceCreating}
-              onCreate={
-                practiceHistory.status === "SUBMITTED"
-                  ? () => void createPracticeAttempt()
-                  : undefined
-              }
-              onContinue={() =>
-                router.push(`/student/study-coach/practice/${practiceHistoryAttemptId}`)
-              }
-              onViewAttempt={(attempt) => {
-                if (!practiceHistoryAttemptId) return;
-                router.push(
-                  `/student/study-coach/practice-results/${attempt.id}`,
-                );
-              }}
-            />
-          ) : (
-            <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-              Chưa có bài luyện cho bài kiểm tra này.
-            </p>
-          )}
-      </Modal>
-
-      <section className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-card">
-        <header className="flex flex-col gap-2 border-b border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-700">
-              AI Study Coach
-            </p>
-            <h2 className="mt-1 font-black text-slate-950">Tự chọn ôn thêm với AI</h2>
-            <p className="mt-0.5 text-xs leading-5 text-slate-600">
-              Xem lại gợi ý từ các câu chưa đúng của bài 50–99%. Đây là hoạt động tự ôn, không phải lộ trình giáo viên giao.
-            </p>
-          </div>
-          <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-700 shadow-sm">
-            {optionalReviewItems.length} bài có thể ôn
-          </span>
-        </header>
-        <div className="overflow-x-auto">
-          <Table className="min-w-[760px]">
-            <TableHeader className="!bg-brand-600 !text-white">
-              <tr>
-                <TableHead className="w-14 text-center !text-white">#</TableHead>
-                <TableHead className="!text-white">Bài kiểm tra</TableHead>
-                <TableHead className="!text-white">Môn học / lớp</TableHead>
-                <TableHead className="text-center !text-white">Kết quả</TableHead>
-                <TableHead className="w-64 text-right !text-white">Thao tác</TableHead>
-              </tr>
-            </TableHeader>
-            <TableBody>
-              {visibleOptionalItems.length === 0 ? (
-                <TableEmptyRow
-                  colSpan={5}
-                  icon={<BrainCircuit className="size-5 text-brand-600" />}
-                  message={
-                    optionalReviewItems.length === 0
-                      ? "Bạn chưa có bài kiểm tra từ 50–99% có gợi ý ôn thêm."
-                      : "Không tìm thấy bài phù hợp với bộ lọc."
-                  }
-                />
-              ) : null}
-              {visibleOptionalItems.map((item, index) => {
-                const percentage = Math.round(item.percentage ?? 0);
-                return (
-                  <tr key={item.id} className="transition hover:bg-blue-50/40">
-                    <TableCell className="text-center text-slate-500">{index + 1}</TableCell>
-                    <TableCell>
-                      <p className="font-bold text-slate-950">{item.title}</p>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
-                        <CalendarDays className="size-3.5" /> Đã nộp {formatDate(item.submittedAt)}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <p className="font-bold text-slate-800">{toVietnameseSubjectName(item.subjectName)}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-brand-600">{item.className}</p>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="font-black text-brand-700">{tenPointScore(item.percentage)}/10</span>
-                      <span className="ml-1 text-xs text-slate-400">{percentage}%</span>
-                    </TableCell>
-                    <TableCell className="!px-3">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
-                        >
-                          <BrainCircuit className="size-3.5" /> Xem gợi ý AI
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 whitespace-nowrap px-2.5"
-                          onClick={() => void openPracticeHistory(item)}
-                        >
-                          Bài luyện
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </tr>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
     </>
   );
 }

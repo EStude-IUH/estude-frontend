@@ -23,6 +23,16 @@ function load(api) {
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
     if (id === "@/lib/assessment-api") return api;
+    if (id === "@/lib/study-activity-review") {
+      const helper = path.resolve("lib/study-activity-review.ts");
+      const helperModule = new Module(helper, module);
+      helperModule.filename = helper;
+      helperModule.paths = Module._nodeModulePaths(path.dirname(helper));
+      helperModule._compile(ts.transpileModule(fs.readFileSync(helper, "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      }).outputText, helper);
+      return helperModule.exports;
+    }
     if (id === "next/link") return { __esModule: true, default: (props) => React.createElement("a", props) };
     if (id === "@/components/ui/button")
       return { Button: (props) => React.createElement("button", props) };

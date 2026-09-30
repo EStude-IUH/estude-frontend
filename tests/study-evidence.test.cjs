@@ -302,3 +302,44 @@ test("student views the historical attempt from its own immutable snapshot", asy
   assert.match(text(renderer), /Có dùng gợi ý hệ thống/);
   assert.match(text(renderer), /các lượt từng bị ghi đè/);
 });
+
+test("student chooses between wrong-question and source-region practice", async (t) => {
+  const calls = [];
+  const { PracticeAttemptHistory } = load(
+    "practice-attempt-history.tsx",
+    {},
+    [],
+  );
+  let renderer;
+  await act(async () => {
+    renderer = create(
+      React.createElement(PracticeAttemptHistory, {
+        practiceSetId: "set",
+        items: [{
+          id: "attempt1",
+          attemptNumber: 1,
+          status: "SUBMITTED",
+          assistance: "NO_SYSTEM_HINTS",
+          correctCount: 1,
+          totalQuestions: 3,
+          practiceType: "SOURCE_REGION",
+        }],
+        onCreate: (practiceType) => calls.push(practiceType),
+      }),
+    );
+  });
+  t.after(async () => {
+    await act(async () => renderer.unmount());
+  });
+
+  const buttonWithText = (label) => renderer.root
+    .findAllByType("button")
+    .find((button) => button.findAll(
+      (node) => typeof node.props.children === "string" && node.props.children.includes(label),
+    ).length > 0);
+  await act(async () => buttonWithText("Tạo bài luyện mới").props.onClick());
+  assert.match(text(renderer), /Ôn lại câu sai/);
+  assert.match(text(renderer), /Luyện theo vùng kiến thức/);
+  await act(async () => buttonWithText("Ôn lại câu sai").props.onClick());
+  assert.deepEqual(calls, ["WRONG_QUESTIONS"]);
+});

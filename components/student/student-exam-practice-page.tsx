@@ -12,7 +12,9 @@ export function StudentExamPracticePage() {
     <StudentShell>
       <ExamPracticeWorkspace
         attemptId={attemptId}
-        onBack={() => router.push("/student/study-coach#exam-review")}
+        onBack={() =>
+          router.push(`/student/attempts/${attemptId}/study?tab=practice`)
+        }
       />
     </StudentShell>
   );

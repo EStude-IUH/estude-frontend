@@ -78,7 +78,18 @@ export function ExamPracticeWorkspace({
   function choose(questionId: string, optionId: string) {
     if (!practice || practice.status === "SUBMITTED" || !practice.startedAt)
       return;
-    setAnswers((current) => ({ ...current, [questionId]: [optionId] }));
+    const question = practice.questions.find((item) => item.id === questionId);
+    setAnswers((current) => {
+      if (question?.type !== "MULTIPLE_CHOICE")
+        return { ...current, [questionId]: [optionId] };
+      const selected = current[questionId] ?? [];
+      return {
+        ...current,
+        [questionId]: selected.includes(optionId)
+          ? selected.filter((id) => id !== optionId)
+          : [...selected, optionId],
+      };
+    });
   }
 
   async function start(mode: StudyPracticeMode) {
@@ -166,7 +177,7 @@ export function ExamPracticeWorkspace({
   return (
     <section className="mx-auto max-w-6xl">
       <Button variant="ghost" onClick={onBack}>
-        <ChevronLeft className="size-4" /> Quay lại Study Coach
+        <ChevronLeft className="size-4" /> Quay lại danh sách bài luyện
       </Button>
       {loading ? (
         <div className="mt-4 grid min-h-64 place-items-center rounded-2xl border border-slate-200 bg-white">

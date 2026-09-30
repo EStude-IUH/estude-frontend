@@ -1006,6 +1006,7 @@ export interface StudyAnalysisReport {
 export interface StudyPracticeQuestion {
   reviewDecision?: "CONFIRMED" | "EDITED" | "REJECTED";
   id: string;
+  type?: QuestionType;
   objectiveId?: string;
   topicName: string;
   sourceType: StudySourceType;
@@ -1018,6 +1019,7 @@ export interface StudyPracticeQuestion {
 }
 
 export type StudyPracticeMode = "EASY" | "HARD";
+export type StudyPracticeContentType = "WRONG_QUESTIONS" | "SOURCE_REGION";
 
 export interface StudyPracticeSet {
   feedback?: Array<{
@@ -1045,6 +1047,7 @@ export interface StudyPracticeSet {
   gradingVersion: string;
   assistance: "NO_SYSTEM_HINTS" | "SYSTEM_HINTS_USED" | "UNKNOWN";
   mode: StudyPracticeMode | "UNSPECIFIED";
+  practiceType: StudyPracticeContentType;
   legacy: boolean;
   hintQuestionIds: string[];
   questions: StudyPracticeQuestion[];
@@ -1062,6 +1065,7 @@ export interface StudyPracticeAttemptSummary {
   submittedAt: string | null;
   durationSeconds: number | null;
   mode: StudyPracticeMode | "UNSPECIFIED";
+  practiceType: StudyPracticeContentType;
   assistance: string;
   hintQuestionIds: string[];
   legacy: boolean;
