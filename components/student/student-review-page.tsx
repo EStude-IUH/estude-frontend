@@ -326,9 +326,9 @@ export function StudentExamReviewPanel({
       <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         <header className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-black text-slate-950">Danh sách bài kiểm tra cần ôn lại</h2>
+            <h2 className="font-black text-slate-950">Danh sách bài kiểm tra để ôn tập</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              AI tự ưu tiên bài dưới 50%. Bạn vẫn có thể chọn bài khác để tự ôn thêm ở danh sách bên dưới.
+              Bài dưới 50% được ưu tiên củng cố; bài từ 50–99% có thể tự chọn ôn thêm với AI.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[300px_220px]">
@@ -363,7 +363,7 @@ export function StudentExamReviewPanel({
                 <TableHead className="!text-white">Môn học / lớp</TableHead>
                 <TableHead className="!text-white">Học kỳ</TableHead>
                 <TableHead className="text-center !text-white">Kết quả</TableHead>
-                <TableHead className="text-center !text-white">Mức ưu tiên</TableHead>
+                <TableHead className="text-center !text-white">Loại ôn tập</TableHead>
                 <TableHead className="w-80 text-right !text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
@@ -373,15 +373,18 @@ export function StudentExamReviewPanel({
                   colSpan={7}
                   icon={<BookOpenCheck className="size-5 text-emerald-600" />}
                   message={
-                    reviewItems.length === 0
-                      ? "Bạn chưa có bài kiểm tra dưới 50% cần ôn tập."
-                      : "Không tìm thấy lộ trình phù hợp với bộ lọc."
+                    allReviewItems.length === 0
+                      ? "Bạn chưa có bài kiểm tra cần ôn thêm."
+                      : "Không tìm thấy bài kiểm tra phù hợp với bộ lọc."
                   }
                 />
               ) : null}
               {visibleItems.map((item, index) => {
-                const priority = priorityFor(item.percentage);
                 const percentage = Math.round(item.percentage ?? 0);
+                const requiredReview = percentage < REVIEW_THRESHOLD;
+                const priority = requiredReview
+                  ? priorityFor(item.percentage)
+                  : { label: "Tự chọn ôn thêm", tone: "bg-violet-50 text-violet-700" };
                 return (
                   <tr key={item.id} className="transition hover:bg-slate-50/80">
                     <TableCell className="text-center text-slate-500">
@@ -412,14 +415,14 @@ export function StudentExamReviewPanel({
                     <TableCell>
                       <div className="mx-auto w-28">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-black text-rose-700">
+                          <span className={`font-black ${requiredReview ? "text-rose-700" : "text-brand-700"}`}>
                             {tenPointScore(item.percentage)}/10
                           </span>
                           <span className="text-slate-400">{percentage}%</span>
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-rose-500"
+                            className={`h-full rounded-full ${requiredReview ? "bg-rose-500" : "bg-brand-500"}`}
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
@@ -434,19 +437,22 @@ export function StudentExamReviewPanel({
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant={requiredReview ? "outline" : "primary"}
                           className="h-8 gap-1.5 whitespace-nowrap px-2.5"
                           onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
                         >
-                          <BookOpenCheck className="size-3.5" /> Ôn lý thuyết
+                          {requiredReview ? <BookOpenCheck className="size-3.5" /> : <BrainCircuit className="size-3.5" />}
+                          {requiredReview ? "Ôn lý thuyết" : "Xem gợi ý AI"}
                         </Button>
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/study-coach/practice/${item.id}`)}
-                        >
-                          <BrainCircuit className="size-3.5" /> Luyện tập
-                        </Button>
+                        {requiredReview ? (
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                            onClick={() => router.push(`/student/study-coach/practice/${item.id}`)}
+                          >
+                            <BrainCircuit className="size-3.5" /> Luyện tập
+                          </Button>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"
