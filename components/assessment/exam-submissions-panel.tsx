@@ -88,7 +88,7 @@ export function ExamSubmissionsPanel({ examId, totalPoints }: { examId: string; 
                     <TableCell className="text-center text-slate-400">{(currentPage - 1) * pageSize + index + 1}</TableCell>
                     <TableCell><p className="min-w-36 font-bold text-slate-900">{attempt.studentName}</p><p className="mt-1 text-xs text-slate-500">{attempt.studentCode || "Chưa có mã học sinh"}</p></TableCell>
                     <TableCell><p className="whitespace-nowrap">{attempt.submittedAt ? dateFormat.format(new Date(attempt.submittedAt)) : "—"}</p><p className="mt-1 text-xs text-slate-500">{count} lượt đã nộp</p></TableCell>
-                    <TableCell className="whitespace-nowrap text-center"><span className="font-bold text-brand-700">{attempt.score === null ? "Chưa có điểm" : `${numberFormat.format(attempt.score)}/${numberFormat.format(totalPoints)}`}</span></TableCell>
+                    <TableCell className="whitespace-nowrap text-center"><span className={`font-bold ${attempt.score !== null && totalPoints > 0 && attempt.score / totalPoints < 0.5 ? "text-rose-600" : "text-brand-700"}`}>{attempt.score === null ? "Chưa có điểm" : `${numberFormat.format(attempt.score)}/${numberFormat.format(totalPoints)}`}</span></TableCell>
                     <TableCell className="text-right"><Button permission="exams.submissions" variant="ghost" size="sm" className="text-brand-700" title="Xem bài làm" aria-label={`Xem bài làm của ${attempt.studentName}`} onClick={() => router.push(`/teacher/exams/${examId}/submissions/${attempt.id}`)}><Eye size={18} strokeWidth={2.5} /></Button></TableCell>
                   </tr>
                 ))}

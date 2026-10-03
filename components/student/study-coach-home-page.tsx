@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowRight, BrainCircuit, Layers, Lightbulb, LoaderCircle, Map as MapIcon, RotateCcw, Sparkles, Target } from "lucide-react";
+import { ArrowRight, BookOpenCheck, BrainCircuit, Layers, Lightbulb, LoaderCircle, Map as MapIcon, RotateCcw, Sparkles, Target } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StudentShell } from "@/components/student/student-shell";
+import { StudentExamReviewPanel } from "@/components/student/student-review-page";
 import { StudyCoachMaterialLibrary } from "@/components/student/study-coach-material-library";
 import { Button } from "@/components/ui/button";
 import { studyCoachService } from "@/lib/study-coach-api";
@@ -11,6 +12,7 @@ import { actionHref, actionLabels, masteryLabels, masteryTones, studentError } f
 import type { ConceptMasteryState, ConceptMasteryView, LearningInsight, StudyCoachCapabilities, StudyCoachMaterial } from "@/types/study-coach";
 
 const states: ConceptMasteryState[] = ["STRONG", "PROFICIENT", "DEVELOPING", "NEEDS_SUPPORT", "NEW"];
+type StudyCoachMenu = "self-study" | "exam-review";
 
 export function StudyCoachHomePage() {
   const router = useRouter();
@@ -21,6 +23,7 @@ export function StudyCoachHomePage() {
   const [dueCount, setDueCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeMenu, setActiveMenu] = useState<StudyCoachMenu>("self-study");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +49,15 @@ export function StudyCoachHomePage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const syncMenuWithHash = () =>
+      setActiveMenu(
+        window.location.hash === "#exam-review" ? "exam-review" : "self-study",
+      );
+    syncMenuWithHash();
+    window.addEventListener("hashchange", syncMenuWithHash);
+    return () => window.removeEventListener("hashchange", syncMenuWithHash);
+  }, []);
   const masteryByDocument = useMemo(() => new Map(
     materials.map((material) => [
       material.id,
@@ -58,10 +70,52 @@ export function StudyCoachHomePage() {
     (nextAction.actionType === "LEARN" && capabilities.knowledgeMap.enabled) ||
     ((nextAction.actionType === "PRACTICE" || nextAction.actionType === "CHALLENGE") && capabilities.quiz.enabled)
   ) ? nextAction : null;
-  const chooseMaterial = () => document.getElementById("study-coach-materials")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const selectMenu = (menu: StudyCoachMenu) => {
+    setActiveMenu(menu);
+    const url = new URL(window.location.href);
+    url.hash = menu === "exam-review" ? "exam-review" : "";
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+  const chooseMaterial = () => {
+    selectMenu("self-study");
+    window.requestAnimationFrame(() =>
+      document.getElementById("study-coach-materials")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+    );
+  };
 
   return <StudentShell><div data-testid="study-coach-home">
-    <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 to-blue-500 p-6 text-white shadow-card sm:p-8">
+    <nav
+      className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-card sm:inline-grid sm:grid-cols-2"
+      aria-label="Chọn nội dung Study Coach"
+    >
+      <button
+        type="button"
+        onClick={() => selectMenu("self-study")}
+        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black transition ${activeMenu === "self-study" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+        aria-current={activeMenu === "self-study" ? "page" : undefined}
+      >
+        <Layers className="size-4" /> Tự học
+      </button>
+      <button
+        type="button"
+        onClick={() => selectMenu("exam-review")}
+        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black transition ${activeMenu === "exam-review" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+        aria-current={activeMenu === "exam-review" ? "page" : undefined}
+      >
+        <BookOpenCheck className="size-4" /> Ôn tập bài kiểm tra
+      </button>
+    </nav>
+
+    {activeMenu === "exam-review" ? (
+      <section id="exam-review" className="mt-5">
+        <StudentExamReviewPanel embedded />
+      </section>
+    ) : (
+      <>
+    <header className="mt-5 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 to-blue-500 p-6 text-white shadow-card sm:p-8">
       <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">AI Study Coach</p>
       <h1 className="mt-2 text-3xl font-black">Học tiếp từ đúng nơi bạn cần</h1>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50">Hoạt động học của bạn được tổng hợp thành tiến độ, gợi ý ôn tập và lời giải thích dễ hiểu.</p>
@@ -86,6 +140,8 @@ export function StudyCoachHomePage() {
         {capabilities.insights.enabled ? <Shortcut icon={Sparkles} label="Phân tích AI" detail="Gợi ý từ kết quả học" onClick={() => router.push("/student/study-coach/insights")} /> : null}
       </section>
     </> : null}
+      </>
+    )}
   </div></StudentShell>;
 }
 

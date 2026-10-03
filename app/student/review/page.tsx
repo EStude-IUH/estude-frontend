@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { RoleGate } from "@/components/auth/role-gate";
-import { StudentReviewPage } from "@/components/student/student-review-page";
 
 export const metadata: Metadata = {
   title: "Ôn tập cùng AI",
@@ -10,7 +10,12 @@ export const metadata: Metadata = {
 export default function StudentReviewRoute() {
   return (
     <RoleGate allowedRole="STUDENT">
-      <StudentReviewPage />
+      <ReviewRedirect />
     </RoleGate>
   );
+}
+
+function ReviewRedirect() {
+  redirect("/student/study-coach#exam-review");
+  return null;
 }

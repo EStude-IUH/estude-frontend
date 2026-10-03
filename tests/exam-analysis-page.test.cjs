@@ -10,7 +10,14 @@ const { create, act } = require("react-test-renderer");
 global.IS_REACT_ACT_ENVIRONMENT = true;
 global.window = { addEventListener() {}, removeEventListener() {} };
 const flush = () => new Promise(setImmediate);
-const childText = (value) => (Array.isArray(value) ? value.map(childText).join("") : React.isValidElement(value) ? childText(value.props.children) : typeof value === "string" ? value : "");
+const childText = (value) =>
+  Array.isArray(value)
+    ? value.map(childText).join("")
+    : React.isValidElement(value)
+      ? childText(value.props.children)
+      : typeof value === "string"
+        ? value
+        : "";
 
 const analysis = {
   generatedAt: "2026-09-21T15:00:00Z",
@@ -63,17 +70,24 @@ async function renderPage(t, initial, allowed = true, reportFixture = null) {
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
     if (id === "next/navigation") return { useParams: () => ({ id: "exam" }) };
-    if (id === "lucide-react") return new Proxy({}, { get: () => () => React.createElement("svg") });
-    if (id === "@/context/permissions-context") return { usePermissions: () => ({ can: () => allowed, loading: false }) };
-    if (id === "@/components/assessment/assessment-shell") return { AssessmentShell: (props) => React.createElement("main", props) };
+    if (id === "lucide-react")
+      return new Proxy({}, { get: () => () => React.createElement("svg") });
+    if (id === "@/context/permissions-context")
+      return { usePermissions: () => ({ can: () => allowed, loading: false }) };
+    if (id === "@/components/assessment/assessment-shell")
+      return { AssessmentShell: (props) => React.createElement("main", props) };
     if (id === "@/components/assessment/exam-detail-tabs")
       return {
         ExamDetailTabs: () => React.createElement("nav", null, "Phân tích AI"),
       };
-    if (id === "@/components/ui/button") return { Button: (props) => React.createElement("button", props) };
-    if (id === "@/components/ui/form-control") return { Textarea: (props) => React.createElement("textarea", props) };
-    if (id === "@/components/ui/action-notification") return { useActionNotification: () => ({ notify() {} }) };
-    if (id === "@/lib/subject-localization") return { toVietnameseSubjectName: (value) => value };
+    if (id === "@/components/ui/button")
+      return { Button: (props) => React.createElement("button", props) };
+    if (id === "@/components/ui/form-control")
+      return { Textarea: (props) => React.createElement("textarea", props) };
+    if (id === "@/components/ui/action-notification")
+      return { useActionNotification: () => ({ notify() {} }) };
+    if (id === "@/lib/subject-localization")
+      return { toVietnameseSubjectName: (value) => value };
     if (id === "@/lib/assessment-api")
       return {
         examService: {
@@ -100,7 +114,11 @@ async function renderPage(t, initial, allowed = true, reportFixture = null) {
           },
           createInsightAction: async (examId, payload) => {
             store.actions.push({ examId, payload });
-            return { id: "notification", recipientCount: payload.studentIds.length, alreadySent: false };
+            return {
+              id: "notification",
+              recipientCount: payload.studentIds.length,
+              alreadySent: false,
+            };
           },
         },
       };
@@ -152,6 +170,30 @@ test("reopening a saved report never calls AI and hides model metadata", async (
   assert.doesNotMatch(page.text(), /internal-model-id/);
   await page.remount();
   assert.deepEqual(page.store.requests, []);
+});
+
+test("shows exam-risk only and hides learning guidance when no course material is attached", async (t) => {
+  const page = await renderPage(t, {
+    ...saved,
+    analysis: {
+      ...analysis,
+      source: "ASSESSMENT_ONLY",
+      analysisScope: "ASSESSMENT_ONLY",
+      headline: "42,9% học sinh thuộc nhóm cần hỗ trợ",
+      materialContext: { available: false, readyMaterialCount: 0 },
+      riskSummary: {
+        basis: "EXAM_RESULTS_ONLY",
+        atRiskStudentCount: 3,
+        evaluatedStudentCount: 7,
+        atRiskPercentage: 42.9,
+      },
+    },
+  });
+
+  assert.match(page.text(), /42,9%/);
+  assert.match(page.text(), /không gọi AI và không tạo lộ trình/);
+  assert.doesNotMatch(page.text(), /Kế hoạch hỗ trợ/);
+  assert.doesNotMatch(page.text(), /Giao bài ôn tập/);
 });
 
 test("waits for explicit confirmation before the first analysis, resumes polling after reload, then displays the persisted result", async (t) => {
@@ -234,14 +276,21 @@ test("turns a weak-topic insight into an assignment for the suggested student gr
     ],
   };
   const page = await renderPage(t, saved, true, report);
-  const assignmentButton = page.buttons().find((button) => childText(button.props.children).includes("Giao bài ôn tập"));
+  const assignmentButton = page
+    .buttons()
+    .find((button) =>
+      childText(button.props.children).includes("Giao bài ôn tập"),
+    );
   assert.ok(assignmentButton);
   await act(async () => {
     assignmentButton.props.onClick();
     await flush();
   });
   assert.equal(page.store.actions.length, 1);
-  assert.deepEqual(page.store.actions[0].payload.studentIds, ["student-a", "student-b"]);
+  assert.deepEqual(page.store.actions[0].payload.studentIds, [
+    "student-a",
+    "student-b",
+  ]);
   assert.equal(page.store.actions[0].payload.kind, "ASSIGNMENT");
   assert.match(page.store.actions[0].payload.message, /Kết quả|ngưỡng hỗ trợ/);
 });

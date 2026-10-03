@@ -1,4 +1,5 @@
-export type QuestionType = "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESSAY";
+export type QuestionType =
+  "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESSAY";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "VERY_HARD";
 
 export interface QuestionOption {
@@ -51,7 +52,10 @@ export interface QuestionSource {
 
 export type GeneratedQuestionStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-export interface GeneratedQuestion extends Omit<Question, "createdAt" | "updatedAt"> {
+export interface GeneratedQuestion extends Omit<
+  Question,
+  "createdAt" | "updatedAt"
+> {
   teacherId: string;
   materialId: string;
   source: QuestionSource;
@@ -65,6 +69,13 @@ export interface GeneratedQuestion extends Omit<Question, "createdAt" | "updated
 export interface ApprovedAiQuestion {
   generatedQuestion: GeneratedQuestion;
   question: Question;
+}
+
+export interface AiQuestionJob {
+  id: string;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  error?: string | null;
+  questions: GeneratedQuestion[];
 }
 
 export interface GenerateAiQuestionsInput {
@@ -93,7 +104,10 @@ export interface AiQuestionDraftInput {
   edits: AiQuestionEditDraft[];
   expectedVersion: number;
 }
-export interface AiQuestionDraft extends Omit<AiQuestionDraftInput, "expectedVersion"> {
+export interface AiQuestionDraft extends Omit<
+  AiQuestionDraftInput,
+  "expectedVersion"
+> {
   questions: GeneratedQuestion[];
   version: number;
   savedAt: string;
@@ -310,7 +324,10 @@ export interface TeacherManagedStudent {
 
 export type StudentCourse = SubjectTeacherAssignment;
 
-export type StudentCourseMaterial = Omit<LearningMaterial, "s3Key" | "keyword" | "deletedAt">;
+export type StudentCourseMaterial = Omit<
+  LearningMaterial,
+  "s3Key" | "keyword" | "deletedAt"
+>;
 
 export interface StudentCourseTopic {
   id: string;
@@ -327,7 +344,10 @@ export interface StudentCourseTopic {
 
 export interface StudentCourseDetail extends StudentCourse {
   enrollment: { joinedAt: string };
-  academicYear: Pick<AcademicYear, "id" | "name" | "startsAt" | "endsAt" | "status"> | null;
+  academicYear: Pick<
+    AcademicYear,
+    "id" | "name" | "startsAt" | "endsAt" | "status"
+  > | null;
   terms: Array<
     Pick<
       Term,
@@ -415,7 +435,8 @@ export interface Topic {
 }
 
 export type ExamStatus = "DRAFT" | "SCHEDULED" | "ONGOING" | "ENDED";
-export type StudentExamStatus = "UPCOMING" | "AVAILABLE" | "IN_PROGRESS" | "SUBMITTED" | "ENDED";
+export type StudentExamStatus =
+  "UPCOMING" | "AVAILABLE" | "IN_PROGRESS" | "SUBMITTED" | "ENDED";
 
 export interface StudentExamAttemptSummary {
   id: string;
@@ -546,7 +567,8 @@ export interface ExamAttempt {
   teacherReview?: ExamClassReportReview | null;
 }
 
-export type ExamClassParticipationStatus = "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED";
+export type ExamClassParticipationStatus =
+  "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED";
 export type TeacherReviewStatus = "DRAFT" | "PUBLISHED";
 
 export interface ExamClassReportAttempt {
@@ -713,8 +735,19 @@ export interface ExamClassAiAnalysis {
     remediation: string;
   }>;
   generatedAt: string;
-  source: "AI" | "FALLBACK";
+  source: "AI" | "FALLBACK" | "ASSESSMENT_ONLY";
   model: string | null;
+  analysisScope?: "MATERIAL_GROUNDED" | "ASSESSMENT_ONLY";
+  materialContext?: {
+    available: boolean;
+    readyMaterialCount: number;
+  };
+  riskSummary?: {
+    basis: "EXAM_RESULTS_ONLY";
+    atRiskStudentCount: number;
+    evaluatedStudentCount: number;
+    atRiskPercentage: number | null;
+  };
   headline: string;
   summary: string;
   strengths: Array<{ title: string; evidence: string }>;
@@ -804,12 +837,50 @@ export interface SubjectSupportReport {
   version: string;
   generatedAt: string;
   examCount: number;
+  riskSummary?: {
+    basis: "EXAM_RESULTS_ONLY";
+    atRiskStudentCount: number;
+    evaluatedStudentCount: number;
+    atRiskPercentage: number | null;
+  };
+  materialContext?: {
+    available: boolean;
+    readyMaterialCount: number;
+  };
   policy: string;
   students: SubjectSupportStudent[];
   cache?: {
     source: "CACHE" | "COMPUTED";
     stale: boolean;
     expiresAt: string;
+  };
+}
+
+export interface LearningSupportOverview {
+  generatedAt: string;
+  scopes: Array<{
+    classId: string;
+    classCode: string;
+    className: string;
+    subjectId: string;
+    subjectCode: string;
+    subjectName: string;
+    studentCount: number;
+    anchorExamId: string | null;
+    error: string | null;
+    examCount: number;
+    generatedAt: string | null;
+    riskSummary: SubjectSupportReport["riskSummary"] | null;
+    materialContext: SubjectSupportReport["materialContext"] | null;
+    levelCounts: Record<SubjectSupportStudent["level"], number>;
+  }>;
+  totals: {
+    scopeCount: number;
+    classCount: number;
+    studentCount: number;
+    evaluatedStudentCount: number;
+    atRiskStudentCount: number;
+    missingMaterialScopeCount: number;
   };
 }
 
@@ -820,7 +891,8 @@ export interface ExamListAiAnalysis extends ExamClassAiAnalysis {
   };
 }
 
-export type StudySourceType = "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
+export type StudySourceType =
+  "COURSE_MATERIAL" | "EXTERNAL_KNOWLEDGE" | "SOURCE_UNAVAILABLE";
 
 export interface StudyLearningProfile {
   objectiveId?: string;
@@ -860,7 +932,8 @@ export interface StudyWeakArea {
   sourceReferences: Array<{ documentName: string; page: number }>;
 }
 
-export type StudyPerformanceLevel = "PENDING" | "BELOW_AVERAGE" | "AVERAGE_TO_GOOD" | "STRONG";
+export type StudyPerformanceLevel =
+  "PENDING" | "BELOW_AVERAGE" | "AVERAGE_TO_GOOD" | "STRONG";
 
 export interface StudyLearningPathStep {
   objectiveId?: string;
@@ -878,10 +951,31 @@ export interface StudyLearningPath {
 }
 
 export interface StudyAnalysisReport {
+  topicSuggestions?: Array<{
+    questionId: string;
+    order: number;
+    content: string;
+    topicName: string;
+    sourceReferences: Array<{ materialId: string; documentName: string; page: number; excerpt: string }>;
+  }>;
+  reviewStates?: Record<
+    string,
+    {
+      decision: "CONFIRMED" | "EDITED" | "REJECTED";
+      version: number;
+      reason: string;
+    }
+  >;
   version?: number;
   learningProfile?: StudyLearningProfile[];
   historyAnalysisCount?: number;
-  aiStatus: "READY" | "FALLBACK";
+  aiStatus: "READY" | "FALLBACK" | "SKIPPED_NO_MATERIAL";
+  analysisScope?: "MATERIAL_GROUNDED" | "ASSESSMENT_ONLY";
+  materialContext?: {
+    available: boolean;
+    readyMaterialCount: number;
+    reason: "NO_ATTACHED_READY_MATERIAL" | null;
+  };
   summary: string;
   exam: {
     id: string;
@@ -910,7 +1004,9 @@ export interface StudyAnalysisReport {
 }
 
 export interface StudyPracticeQuestion {
+  reviewDecision?: "CONFIRMED" | "EDITED" | "REJECTED";
   id: string;
+  type?: QuestionType;
   objectiveId?: string;
   topicName: string;
   sourceType: StudySourceType;
@@ -921,6 +1017,17 @@ export interface StudyPracticeQuestion {
   selectedOptionIds?: string[];
   correct?: boolean;
 }
+
+export interface TeacherPracticePreview {
+  planId: string;
+  taskId: string;
+  practiceSetId: string | null;
+  totalQuestions: number;
+  questions: StudyPracticeQuestion[];
+}
+
+export type StudyPracticeMode = "EASY" | "HARD";
+export type StudyPracticeContentType = "WRONG_QUESTIONS" | "SOURCE_REGION";
 
 export interface StudyPracticeSet {
   feedback?: Array<{
@@ -934,17 +1041,23 @@ export interface StudyPracticeSet {
     recommendation: string;
   }>;
   id: string;
+  analysisId: string;
   attemptId: string;
   attemptNumber: number;
-  startedAt: string | null;
-  mode: StudyPracticeMode | "UNSPECIFIED";
-  assistance: string;
   attemptHistory: StudyPracticeAttemptSummary[];
-  analysisId: string;
   status: "READY" | "SUBMITTED";
   score: number | null;
   correctCount: number | null;
+  startedAt: string | null;
   submittedAt: string | null;
+  durationSeconds: number | null;
+  snapshotVersion: string;
+  gradingVersion: string;
+  assistance: "NO_SYSTEM_HINTS" | "SYSTEM_HINTS_USED" | "UNKNOWN";
+  mode: StudyPracticeMode | "UNSPECIFIED";
+  practiceType: StudyPracticeContentType;
+  legacy: boolean;
+  hintQuestionIds: string[];
   questions: StudyPracticeQuestion[];
   totalQuestions: number;
 }
@@ -960,6 +1073,7 @@ export interface StudyPracticeAttemptSummary {
   submittedAt: string | null;
   durationSeconds: number | null;
   mode: StudyPracticeMode | "UNSPECIFIED";
+  practiceType: StudyPracticeContentType;
   assistance: string;
   hintQuestionIds: string[];
   legacy: boolean;
@@ -1036,7 +1150,81 @@ export interface StudentEvidenceResult {
   missingSnapshotAttemptIds: string[];
 }
 
-export type StudyPracticeMode = "EASY" | "HARD";
+export type StudyPracticeAttempt = StudyPracticeAttemptSummary & {
+  questions: StudyPracticeQuestion[];
+  feedback?: StudyPracticeSet["feedback"];
+};
+
+export interface LearningObjectiveEvidence {
+  id: string;
+  key: string;
+  title: string;
+  classId: string;
+  subjectId: string;
+  topicId: string | null;
+  granularity: string;
+  version: number;
+  materialId?: string;
+  topicNames?: string[];
+}
+
+export interface AssessmentEvidenceQuestion {
+  questionId: string;
+  objectiveId: string;
+  topicName: string;
+  content: string;
+  type: string;
+  difficulty: string;
+  points: number;
+  order: number;
+  options: Array<{ id: string; label: string; text: string }>;
+  correctOptionIds: string[];
+  imageUrl?: string | null;
+}
+
+export interface AssessmentEvidenceRecord {
+  id: string;
+  objectiveId: string;
+  source: "ASSIGNED_EXAM" | "STUDY_PRACTICE";
+  sourceTitle: string;
+  sourceAttemptId: string;
+  examId: string;
+  observedAt: string;
+  totalQuestions: number;
+  scorableCount: number;
+  correctCount: number;
+  accuracy: number | null;
+  gradingStatus: string;
+  snapshotOrigin: string;
+  assistance: string;
+  gradingVersion: string;
+  questionSnapshot: AssessmentEvidenceQuestion[];
+  answers: Array<{
+    questionId: string;
+    selectedOptionIds: string[];
+    essayText?: string;
+  }>;
+  objective?: LearningObjectiveEvidence;
+  baselineEligible: boolean;
+  ineligibleReason: string | null;
+}
+
+export interface BaselineSelectionRecord {
+  id: string;
+  objectiveId: string;
+  evidenceId: string;
+  teacherId: string;
+  reason: string;
+  version: number;
+  selectedAt: string;
+}
+
+export interface StudyEvidenceBundle {
+  items: AssessmentEvidenceRecord[];
+  baselines: BaselineSelectionRecord[];
+  baselineHistory: Array<BaselineSelectionRecord & { selectionId: string }>;
+  missingSnapshotAttemptIds: string[];
+}
 
 export interface StudyAnalysis {
   id: string;
@@ -1049,6 +1237,377 @@ export interface StudyAnalysis {
   generatedAt: string;
   updatedAt: string;
   practiceSet: StudyPracticeSet | null;
+}
+
+export interface StudyActivityReview {
+  source: "AI" | "ERROR" | "EMPTY";
+  comment: string | null;
+  generatedAt: string | null;
+  model: string | null;
+}
+
+export interface StudyActivityDashboard {
+  activityReview?: StudyActivityReview;
+  analysisHistory?: Array<{
+    id: string;
+    attemptId: string | null;
+    examId: string | null;
+    examTitle: string;
+    generatedAt: string;
+    score: number | null;
+    totalPoints: number | null;
+    accuracy: number | null;
+    aiStatus: string;
+    summary: string;
+    weakAreaCount: number;
+  }>;
+  practice: Array<{
+    id: string;
+    attemptNumber: number;
+    status: "READY" | "SUBMITTED";
+    startedAt: string | null;
+    submittedAt: string | null;
+    correctCount: number;
+    totalQuestions: number;
+    durationSeconds: number;
+    assistance: string;
+  }>;
+  materialViews: Array<{
+    id: string;
+    materialId: string;
+    materialName: string;
+    openedAt: string;
+    lastActiveAt: string;
+    closedAt: string | null;
+    activeSeconds: number;
+  }>;
+  materials: Array<{ id: string; name: string; pages: number[] }>;
+}
+
+export type StudyAiTargetKey = string;
+export interface StudyAiFeedback {
+  id: string;
+  analysisId: string;
+  targetKey: StudyAiTargetKey;
+  reporterId: string;
+  reason:
+    "WRONG_KNOWLEDGE" | "OUT_OF_SCOPE" | "INSUFFICIENT_EVIDENCE" | "UNCLEAR";
+  comment: string;
+  createdAt: string;
+}
+export interface StudyAiReview {
+  id: string;
+  targetKey: StudyAiTargetKey;
+  teacherId: string;
+  originalText: string;
+  effectiveText: string | null;
+  decision: "CONFIRMED" | "EDITED" | "REJECTED";
+  reason: string;
+  version: number;
+  reviewedAt: string;
+}
+export interface TeacherStudyAnalysis extends StudyAnalysis {
+  rawReport: StudyAnalysisReport;
+  rawPracticeQuestions: StudyPracticeQuestion[];
+  reviews: StudyAiReview[];
+  reviewHistory: Array<StudyAiReview & { reviewId: string }>;
+  feedback: StudyAiFeedback[];
+}
+export interface LearningTask {
+  id: string;
+  planId: string;
+  order: number;
+  kind: "MATERIAL" | "PRACTICE";
+  title: string;
+  description: string;
+  materialId: string | null;
+  practiceSetId: string | null;
+  actionUrl: string | null;
+  dueAt: string | null;
+  status: "DRAFT" | "ASSIGNED" | "CANCELLED";
+  version: number;
+  overdue: boolean;
+  progress: {
+    status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+    startedAt: string | null;
+    completedAt: string | null;
+    difficultyNote: string | null;
+    sourceAttemptId: string | null;
+  } | null;
+}
+
+export type LearningSupportStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED";
+
+export interface LearningSupportMessage {
+  id: string;
+  requestId: string;
+  authorId: string;
+  authorRole: "STUDENT" | "TEACHER";
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface LearningSupportRequest {
+  id: string;
+  planId: string;
+  taskId: string;
+  studentId: string;
+  teacherId: string;
+  status: LearningSupportStatus;
+  teacherReadAt: string | null;
+  studentReadAt: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  planTitle: string;
+  classId: string | null;
+  subjectId: string | null;
+  taskTitle: string;
+  taskOrder: number | null;
+  taskKind: "MATERIAL" | "PRACTICE" | null;
+  studentName: string;
+  teacherName: string;
+  unreadForTeacher: boolean;
+  unreadForStudent: boolean;
+  messages: LearningSupportMessage[];
+  latestMessage: LearningSupportMessage | null;
+}
+
+export interface LearningSupportInbox {
+  items: LearningSupportRequest[];
+  unreadCount: number;
+  counts: {
+    all: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+  };
+}
+
+export interface LearningPlan {
+  id: string;
+  cohortId: string;
+  examId: string;
+  studentId: string;
+  teacherId: string;
+  classId: string;
+  subjectId: string;
+  objectiveId: string;
+  title: string;
+  summary: string;
+  successCriteria: string;
+  targetAccuracyPercent: number | null;
+  dueAt: string | null;
+  status:
+    | "DRAFT"
+    | "ASSIGNED"
+    | "IN_PROGRESS"
+    | "WAITING_REASSESSMENT"
+    | "COMPLETED"
+    | "ACHIEVED"
+    | "NEEDS_ADJUSTMENT"
+    | "CANCELLED";
+  version: number;
+  baselineEvidenceId: string | null;
+  approvedAt: string | null;
+  objective: LearningObjectiveEvidence | null;
+  materialStudy?: {
+    materialId: string;
+    materialName: string;
+    sourceAttemptId: string;
+    sourceExamCount?: number;
+    baselineExamAccuracy: number | null;
+    missedCount: number;
+    matchedCount: number;
+    sections: Array<{
+      id?: string;
+      title: string;
+      page: number;
+      missedCount: number;
+      questionIds: string[];
+      mistakes?: Array<{ questionId: string; sourceAttemptId?: string; sourceExamId?: string;
+        content: string; selectedAnswer: string;
+        correctAnswer: string; explanation: string }>;
+      diagnosis: string;
+      theory: string;
+      keyPoints: string[];
+      citations: Array<{ documentName: string; page: number; excerpt: string }>;
+    }>;
+    attempts: Array<{ id: string; attemptNumber: number; score: number | null; submittedAt: string | null }>;
+    latestScore: number | null;
+    bestScore: number | null;
+    practiceScoreChange: number | null;
+    passed: boolean;
+  };
+  tasks: LearningTask[];
+  history: Array<{
+    id: string;
+    version: number;
+    reason: string;
+    snapshot: unknown;
+    changedAt: string;
+  }>;
+}
+export interface MaterialPlanProposal {
+  analysisId: string;
+  practiceSetId: string;
+  materialId: string;
+  materialName: string;
+  sourceAttemptId: string;
+  sourceExamCount?: number;
+  baselineExamAccuracy: number | null;
+  missedCount: number;
+  matchedCount: number;
+  summary: string;
+  sections: NonNullable<LearningPlan["materialStudy"]>["sections"];
+}
+
+export interface LearningCohortProgress {
+  cohortId: string;
+  title: string;
+  classId: string;
+  subjectId: string;
+  createdAt: string;
+  completed: number;
+  total: number;
+  rows: Array<{
+    planId: string;
+    studentId: string;
+    studentName: string;
+    studentCode: string;
+    status: LearningPlan["status"];
+    target: number | null;
+    materialStudy: LearningPlan["materialStudy"] | null;
+    completedTasks: number;
+    totalTasks: number;
+  }>;
+}
+export type LearningPlanScopeItem = Pick<
+  LearningPlan,
+  "id" | "cohortId" | "studentId" | "title" | "status"
+> & { createdAt: string };
+
+export interface LearningPlanDraftInput {
+  studentIds: string[];
+  objectiveId: string;
+  materialPreparationIds?: Record<string, string>;
+  title: string;
+  summary: string;
+  successCriteria: string;
+  targetAccuracyPercent?: number;
+  dueAt?: string;
+  tasks: Array<{
+    kind: "MATERIAL" | "PRACTICE";
+    title: string;
+    description: string;
+    materialId?: string;
+    practiceSetId?: string;
+    dueAt?: string;
+  }>;
+}
+
+export type ImprovementStatus =
+  | "INSUFFICIENT_EVIDENCE"
+  | "IMPROVED_NOT_MET"
+  | "ACHIEVED_TARGET"
+  | "NO_IMPROVEMENT";
+export interface ImprovementComparison {
+  status: ImprovementStatus;
+  reasons: string[];
+  baselineAccuracy: number | null;
+  afterAccuracy: number | null;
+  deltaPercentagePoints: number | null;
+  baselineQuestions: number;
+  afterQuestions: number;
+  baselineDifficulty: Record<string, number>;
+  afterDifficulty: Record<string, number>;
+  targetAccuracyPercent: number | null;
+  baselineEvidenceId: string | null;
+  afterEvidenceId: string | null;
+}
+export interface LearningReassessment {
+  id: string;
+  planId: string;
+  phase: "AFTER" | "RETENTION";
+  examId: string;
+  teacherId: string;
+  minimumQuestions: number;
+  equivalenceRationale: string;
+  assignedAt: string;
+  scheduledFor: string | null;
+  dueAt: string | null;
+  evidenceId: string | null;
+  decision: "CONFIRMED" | "NEEDS_ADJUSTMENT" | null;
+  decisionReason: string | null;
+  computedStatus: ImprovementStatus | null;
+  commentary: string | null;
+  commentarySource: "AI" | "FALLBACK" | null;
+  reviewedAt: string | null;
+  version: number;
+  candidates: AssessmentEvidenceRecord[];
+  selectedEvidence: AssessmentEvidenceRecord | null;
+  comparison: ImprovementComparison;
+  history: Array<{
+    id: string;
+    version: number;
+    reason: string;
+    changedAt: string;
+  }>;
+}
+export interface LearningImprovementProfile {
+  plan: LearningPlan;
+  baseline: AssessmentEvidenceRecord | null;
+  reassessments: LearningReassessment[];
+  timeline: Array<{
+    at: string;
+    kind: string;
+    evidenceId: string | null;
+    label: string;
+  }>;
+}
+export interface ClassImprovementReport {
+  denominator: { assignedPlans: number; pairedStudents: number };
+  counts: {
+    assigned: number;
+    inProgress: number;
+    waitingReassessment: number;
+    overdue: number;
+    achieved: number;
+    needsAdjustment: number;
+    insufficientEvidence: number;
+    awaitingTeacher: number;
+  };
+  achievedRateAmongPaired: number | null;
+  reassessmentCoverage: number | null;
+  averagePairedChange: number | null;
+  method: string;
+  rows: Array<{
+    planId: string;
+    studentId: string;
+    studentName: string;
+    cohortId: string;
+    objectiveId: string;
+    objectiveTitle: string;
+    title: string;
+    status: LearningPlan["status"];
+    taskCompleted: number;
+    taskTotal: number;
+    overdue: boolean;
+    baselineAccuracy: number | null;
+    afterAccuracy: number | null;
+    deltaPercentagePoints: number | null;
+    afterStatus: ImprovementStatus | null;
+    retentionStatus:
+      | "NOT_SCHEDULED"
+      | "NOT_YET_TESTED"
+      | "AWAITING_TEACHER"
+      | "CONFIRMED"
+      | "INSUFFICIENT_EVIDENCE"
+      | "NEEDS_ADJUSTMENT";
+    hasSubmittedReassessment: boolean;
+    paired: boolean;
+  }>;
 }
 
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {

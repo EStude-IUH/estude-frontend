@@ -57,6 +57,13 @@ const difficultyTone: Record<Difficulty, string> = {
   VERY_HARD: "bg-violet-50 text-violet-700",
 };
 
+function formatCreatedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short", timeStyle: "short",
+  }).format(date);
+}
+
 export function QuestionBankPage() {
   const { can } = usePermissions();
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -383,70 +390,76 @@ export function QuestionBankPage() {
 
       <div className="flex h-[calc(100dvh-86px)] min-h-0 w-full flex-col overflow-hidden">
         <section className="shrink-0 rounded-lg border border-slate-200 bg-white p-2.5 shadow-card">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[360px_170px_190px]">
-              <DebouncedSearchInput
-                className="!h-[42px] !rounded-lg focus:!ring-0"
-                value={search}
-                onValueChange={setSearch}
-                onSearch={(value) => {
-                  setPage(1);
-                  setSubmittedSearch(value);
-                }}
-                placeholder="Tìm theo nội dung câu hỏi..."
-              />
-              <CustomSelect
-                value={difficulty}
-                options={[
-                  { value: "", label: "Mọi độ khó" },
-                  ...Object.entries(DIFFICULTY_LABELS).map(
-                    ([value, label]) => ({ value, label }),
-                  ),
-                ]}
-                buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
-                ariaLabel="Lọc theo độ khó"
-                onValueChange={(value) => {
-                  setPage(1);
-                  setDifficulty(value as Difficulty | "");
-                }}
-              />
-              <CustomSelect
-                value={type}
-                options={[
-                  { value: "", label: "Mọi loại câu hỏi" },
-                  ...Object.entries(QUESTION_TYPE_LABELS).map(
-                    ([value, label]) => ({ value, label }),
-                  ),
-                ]}
-                buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
-                ariaLabel="Lọc theo loại câu hỏi"
-                onValueChange={(value) => {
-                  setPage(1);
-                  setType(value as QuestionType | "");
-                }}
-              />
+          <div className="flex min-w-0 flex-col gap-3 2xl:flex-row 2xl:items-center">
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+                <DebouncedSearchInput
+                  className="!h-[42px] !rounded-lg focus:!ring-0"
+                  value={search}
+                  onValueChange={setSearch}
+                  onSearch={(value) => {
+                    setPage(1);
+                    setSubmittedSearch(value);
+                  }}
+                  placeholder="Tìm theo nội dung câu hỏi..."
+                />
+              </div>
+              <div className="min-w-0">
+                <CustomSelect
+                  value={difficulty}
+                  options={[
+                    { value: "", label: "Mọi độ khó" },
+                    ...Object.entries(DIFFICULTY_LABELS).map(
+                      ([value, label]) => ({ value, label }),
+                    ),
+                  ]}
+                  buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
+                  ariaLabel="Lọc theo độ khó"
+                  onValueChange={(value) => {
+                    setPage(1);
+                    setDifficulty(value as Difficulty | "");
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <CustomSelect
+                  value={type}
+                  options={[
+                    { value: "", label: "Mọi loại câu hỏi" },
+                    ...Object.entries(QUESTION_TYPE_LABELS).map(
+                      ([value, label]) => ({ value, label }),
+                    ),
+                  ]}
+                  buttonClassName="!h-[42px] !rounded-lg focus:!ring-0"
+                  ariaLabel="Lọc theo loại câu hỏi"
+                  onValueChange={(value) => {
+                    setPage(1);
+                    setType(value as QuestionType | "");
+                  }}
+                />
+              </div>
             </div>
 
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <div className="flex min-w-0 flex-wrap justify-start gap-2 sm:justify-end 2xl:shrink-0">
               {selectedIds.length ? (
                 <>
-                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg" onClick={() => { setFolderError(""); setTargetFolderId(selectedFolder === "all" || selectedFolder === "unfiled" ? "" : selectedFolder); setFolderMoveOpen(true); }}>
+                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg whitespace-nowrap" onClick={() => { setFolderError(""); setTargetFolderId(selectedFolder === "all" || selectedFolder === "unfiled" ? "" : selectedFolder); setFolderMoveOpen(true); }}>
                     <FolderInput className="size-4" />
                     Chuyển vào thư mục ({selectedIds.length})
                   </Button>
-                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg" onClick={() => void openMoveModal()}>
+                  <Button permission="questions.update" variant="outline" className="!h-[42px] !rounded-lg whitespace-nowrap" onClick={() => void openMoveModal()}>
                     Di chuyển môn
                   </Button>
                 </>
               ) : null}
-              <Link href="/teacher/question-bank/generate">
-                <Button permission="ai_questions.create" variant="secondary" className="!h-[42px] !rounded-lg">
+              <Link href={selectedFolder === "all" || selectedFolder === "unfiled" ? "/teacher/question-bank/generate" : `/teacher/question-bank/generate?folderId=${encodeURIComponent(selectedFolder)}`}>
+                <Button permission="ai_questions.create" variant="secondary" className="!h-[42px] !rounded-lg whitespace-nowrap">
                   <Sparkles className="size-4" />
                   Tạo bằng AI
                 </Button>
               </Link>
               <Link href={selectedFolder === "all" || selectedFolder === "unfiled" ? "/teacher/question-bank/new" : `/teacher/question-bank/new?folderId=${encodeURIComponent(selectedFolder)}`}>
-                <Button permission="questions.create" className="!h-[42px] !rounded-lg">
+                <Button permission="questions.create" className="!h-[42px] !rounded-lg whitespace-nowrap">
                   <Plus className="size-4" />
                   Tạo câu hỏi
                 </Button>
@@ -486,7 +499,7 @@ export function QuestionBankPage() {
             </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-auto">
-            <Table className="min-w-[1220px]">
+            <Table className="min-w-[1360px]">
               <TableHeader className="sticky top-0 z-10 !bg-brand-600 !text-white">
                 <tr>
                   <TableHead className="w-14 text-center">
@@ -502,15 +515,16 @@ export function QuestionBankPage() {
                   <TableHead className="w-56">Môn</TableHead>
                   <TableHead className="w-40 text-center">Loại</TableHead>
                   <TableHead className="w-36 text-center">Độ khó</TableHead>
+                  <TableHead className="w-40">Thời gian tạo</TableHead>
                   <TableHead className="w-40">Trạng thái</TableHead>
                   <TableHead className="w-32 text-right">Thao tác</TableHead>
                 </tr>
               </TableHeader>
               <TableBody>
-                {loading ? <TableLoadingBarRow colSpan={7} /> : null}
+                {loading ? <TableLoadingBarRow colSpan={8} /> : null}
                 {!loading && visibleQuestions.length === 0 ? (
                   <TableEmptyRow
-                    colSpan={7}
+                    colSpan={8}
                     icon={<FileQuestion className="size-5 text-slate-400" />}
                     message="Chưa có câu hỏi phù hợp"
                   />
@@ -570,6 +584,9 @@ export function QuestionBankPage() {
                           >
                             {DIFFICULTY_LABELS[question.difficulty]}
                           </span>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-500">
+                          <time dateTime={question.createdAt}>{formatCreatedAt(question.createdAt)}</time>
                         </TableCell>
                         <TableCell onClick={(event) => event.stopPropagation()}>
                           <ToggleSwitch

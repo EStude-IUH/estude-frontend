@@ -13,16 +13,23 @@ import {
   CircleUserRound,
   ClipboardCheck,
   LayoutDashboard,
+  ListChecks,
   LoaderCircle,
   LogOut,
   Settings,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
+import { StudentNotificationPopup } from "@/components/student/student-notification-popup";
+import { StudyReviewReminderPopup } from "@/components/student/study-review-reminder-popup";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
-import { NOTIFICATIONS_CHANGED_EVENT, notificationService } from "@/lib/engagement-api";
+import {
+  NOTIFICATIONS_CHANGED_EVENT,
+  notificationService,
+} from "@/lib/engagement-api";
+import type { PortalNotification } from "@/types/engagement";
 
 interface StudentNavItem {
   icon: ComponentType<{ className?: string }>;
@@ -39,8 +46,12 @@ const studentNavItems: StudentNavItem[] = [
   { icon: BookOpen, label: "Môn học", href: "/student/courses" },
   { icon: ClipboardCheck, label: "Bài thi", href: "/student/exams" },
   { icon: BrainCircuit, label: "Study Coach", href: "/student/study-coach" },
+  {
+    icon: ListChecks,
+    label: "Lộ trình học",
+    href: "/student/learning-plans",
+  },
   { icon: BarChart3, label: "Điểm số", href: "/student/grades" },
-  { icon: Bell, label: "Hoạt động", href: "/student/activity" },
 ];
 
 function isNavItemActive(pathname: string, href?: string): boolean {
@@ -51,20 +62,25 @@ function isNavItemActive(pathname: string, href?: string): boolean {
   );
 
   if (href === "/student/study-coach") {
-    return pathname === href || pathname.startsWith(`${href}/`) ||
-      pathname === "/student/review" || pathname.startsWith("/student/review/") || isStudyRoute;
-  }
-
-  if (href === "/student/courses") {
     return (
       pathname === href ||
-      pathname.startsWith(`${href}/`)
+      pathname.startsWith(`${href}/`) ||
+      pathname === "/student/review" ||
+      pathname.startsWith("/student/review/") ||
+      isStudyRoute
     );
   }
 
+  if (href === "/student/courses") {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   if (href === "/student/exams") {
-    return pathname === href || pathname.startsWith(`${href}/`) ||
-      (pathname.startsWith("/student/attempts/") && !isStudyRoute);
+    return (
+      pathname === href ||
+      pathname.startsWith(`${href}/`) ||
+      (pathname.startsWith("/student/attempts/") && !isStudyRoute)
+    );
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -93,8 +109,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
   const { canVisit } = usePermissions();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isNotificationPopupOpen, setIsNotificationPopupOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -111,15 +129,30 @@ export function StudentShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const refreshUnreadCount = () => {
-      void notificationService.getMine().then((items) => {
-        if (active) setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
-      }).catch(() => undefined);
+      void notificationService
+        .getMine()
+        .then((items) => {
+          if (active) {
+            setNotifications(items);
+            setUnreadNotificationCount(
+              items.filter((item) => !item.readAt).length,
+            );
+          }
+        })
+        .catch(() => undefined);
     };
     refreshUnreadCount();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshUnreadCount();
+    }, 60_000);
     window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshUnreadCount);
     return () => {
       active = false;
-      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refreshUnreadCount);
+      window.clearInterval(timer);
+      window.removeEventListener(
+        NOTIFICATIONS_CHANGED_EVENT,
+        refreshUnreadCount,
+      );
     };
   }, [pathname]);
 
@@ -130,6 +163,38 @@ export function StudentShell({ children }: { children: ReactNode }) {
     } finally {
       router.replace("/login");
     }
+  }
+
+  async function openStudyReminder(item: PortalNotification) {
+    await notificationService.markRead(item.id);
+    setNotifications((current) => current.map((entry) =>
+      entry.id === item.id ? { ...entry, readAt: new Date().toISOString() } : entry,
+    ));
+    setUnreadNotificationCount((count) => Math.max(0, count - 1));
+    window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    router.push(item.actionUrl ?? "/student/review");
+  }
+
+  async function openNotification(item: PortalNotification) {
+    if (!item.readAt) {
+      await notificationService.markRead(item.id);
+      setNotifications((current) =>
+        current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, readAt: new Date().toISOString() }
+            : entry,
+        ),
+      );
+      setUnreadNotificationCount((count) => Math.max(0, count - 1));
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
+    }
+    setIsNotificationPopupOpen(false);
+    const href = item.actionUrl?.startsWith("/student/")
+      ? item.actionUrl
+      : item.examId
+        ? `/student/exams/${item.examId}`
+        : null;
+    if (href) router.push(href);
   }
 
   if (!user) return <StudentShellLoading />;
@@ -152,38 +217,48 @@ export function StudentShell({ children }: { children: ReactNode }) {
             className="hidden h-full items-center gap-1 lg:flex"
             aria-label="Điều hướng sinh viên"
           >
-            {studentNavItems.filter((item) => !item.href || canVisit(item.href)).map(({ icon: Icon, label, href }) => {
-              const active = isNavItemActive(pathname, href);
+            {studentNavItems
+              .filter((item) => !item.href || canVisit(item.href))
+              .map(({ icon: Icon, label, href }) => {
+                const active = isNavItemActive(pathname, href);
 
-              return (
-                <button
-                  type="button"
-                  key={label}
-                  onClick={() => href && router.push(href)}
-                  className={`relative flex h-full items-center gap-2 px-3 text-sm font-semibold transition ${
-                    active
-                      ? "text-brand-700"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  <Icon className="size-4" /> {label}
-                  {active ? (
-                    <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />
-                  ) : null}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    onClick={() => href && router.push(href)}
+                    className={`relative flex h-full items-center gap-2 px-3 text-sm font-semibold transition ${
+                      active
+                        ? "text-brand-700"
+                        : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon className="size-4" /> {label}
+                    {active ? (
+                      <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand-600" />
+                    ) : null}
+                  </button>
+                );
+              })}
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => router.push("/student/activity")}
+              onClick={() => setIsNotificationPopupOpen(true)}
               className="relative grid size-10 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-              aria-label={unreadNotificationCount ? `Thông báo, ${unreadNotificationCount} chưa đọc` : "Thông báo"}
+              aria-label={
+                unreadNotificationCount
+                  ? `Thông báo, ${unreadNotificationCount} chưa đọc`
+                  : "Thông báo"
+              }
             >
               <Bell className="size-4.5" />
-              {unreadNotificationCount ? <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-4 text-white ring-2 ring-white">{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</span> : null}
+              {unreadNotificationCount ? (
+                <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-4 text-white ring-2 ring-white">
+                  {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                </span>
+              ) : null}
             </button>
 
             <div ref={accountMenuRef} className="relative">
@@ -196,8 +271,13 @@ export function StudentShell({ children }: { children: ReactNode }) {
               >
                 <span className="relative grid size-9 overflow-hidden place-items-center rounded-full bg-brand-600 text-xs font-extrabold text-white">
                   {user.avatarUrl ? (
-                    <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
-                  ) : initials}
+                    <span
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url(${user.avatarUrl})` }}
+                    />
+                  ) : (
+                    initials
+                  )}
                 </span>
                 <span className="hidden min-w-0 text-left sm:block">
                   <span className="block max-w-40 truncate text-sm font-bold leading-5 text-slate-800">
@@ -231,7 +311,10 @@ export function StudentShell({ children }: { children: ReactNode }) {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => { setIsAccountMenuOpen(false); router.push("/help"); }}
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      router.push("/help");
+                    }}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     <CircleHelp className="size-4" /> Trợ giúp
@@ -268,6 +351,16 @@ export function StudentShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      <StudyReviewReminderPopup
+        notifications={notifications}
+        onStartReview={openStudyReminder}
+      />
+      <StudentNotificationPopup
+        open={isNotificationPopupOpen}
+        notifications={notifications}
+        onClose={() => setIsNotificationPopupOpen(false)}
+        onOpenNotification={openNotification}
+      />
 
       <main className="mx-auto max-w-[1480px] px-4 pb-8 pt-20 sm:px-6 lg:px-8">
         {children}
@@ -280,19 +373,19 @@ export function StudentShell({ children }: { children: ReactNode }) {
         {studentNavItems
           .filter((item) => item.href && canVisit(item.href))
           .map(({ icon: Icon, label, href }) => {
-          const active = isNavItemActive(pathname, href);
+            const active = isNavItemActive(pathname, href);
 
-          return (
-            <button
-              type="button"
-              key={label}
-              onClick={() => href && router.push(href)}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-bold ${active ? "text-brand-700" : "text-slate-400"}`}
-            >
-              <Icon className="size-5" /> {label}
-            </button>
-          );
-        })}
+            return (
+              <button
+                type="button"
+                key={label}
+                onClick={() => href && router.push(href)}
+                className={`flex flex-col items-center justify-center gap-1 text-[10px] font-bold ${active ? "text-brand-700" : "text-slate-400"}`}
+              >
+                <Icon className="size-5" /> {label}
+              </button>
+            );
+          })}
       </nav>
       <ProfileModal
         open={isProfileModalOpen}

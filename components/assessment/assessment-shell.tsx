@@ -15,9 +15,10 @@ import {
   CheckCircle2,
   FilePlus2,
   Library,
-  LoaderCircle,
+  ChartNoAxesCombined,
   LogOut,
   Menu,
+  MessageCircleQuestion,
   School,
   Settings,
   UsersRound,
@@ -28,10 +29,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { requestWorkspaceNavigation } from "@/lib/workspace-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { ProfileModal } from "@/components/auth/profile-modal";
+import { ContentLoading } from "@/components/ui/content-loading";
 import { StudentShell } from "@/components/student/student-shell";
 import { useAuth } from "@/context/auth-context";
 import { usePermissions } from "@/context/permissions-context";
 import { getRoleSessionSettings } from "@/lib/role-routes";
+import {
+  LEARNING_SUPPORT_CHANGED_EVENT,
+  learningSupportService,
+} from "@/lib/learning-support-api";
 
 interface WorkspaceLink {
   href?: string;
@@ -60,6 +66,7 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,6 +77,30 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
     document.addEventListener("mousedown", closeAccountMenu);
     return () => document.removeEventListener("mousedown", closeAccountMenu);
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const refreshSupportCount = () => {
+      void learningSupportService
+        .unreadCount()
+        .then(({ count }) => {
+          if (active) setSupportUnreadCount(count);
+        })
+        .catch(() => undefined);
+    };
+    refreshSupportCount();
+    const timer = window.setInterval(refreshSupportCount, 30_000);
+    window.addEventListener(LEARNING_SUPPORT_CHANGED_EVENT, refreshSupportCount);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener(
+        LEARNING_SUPPORT_CHANGED_EVENT,
+        refreshSupportCount,
+      );
+    };
+  }, [user]);
 
   const links: WorkspaceLink[] = [
     { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
@@ -94,6 +125,16 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       icon: FilePlus2,
     },
     { href: "/teacher/exams", label: "Bài kiểm tra", icon: ClipboardCheck },
+    {
+      href: "/teacher/learning-support",
+      label: "Theo dõi học tập",
+      icon: ChartNoAxesCombined,
+    },
+    {
+      href: "/teacher/support-requests",
+      label: "Yêu cầu hỗ trợ",
+      icon: MessageCircleQuestion,
+    },
     { href: "/teacher/attendance", label: "Điểm danh", icon: CheckCircle2 },
     { href: "/teacher/notifications", label: "Thông báo", icon: BellRing },
     {
@@ -141,7 +182,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             aria-label="Vị trí hiện tại"
           >
             {breadcrumbs.map((item, index) => (
-              <div key={item.label} className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div
+                key={item.label}
+                className="flex min-w-0 items-center gap-2 sm:gap-3"
+              >
                 {index > 0 ? (
                   <ChevronRight
                     aria-hidden="true"
@@ -171,11 +215,24 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
         <div className="ml-auto flex items-center gap-2 sm:gap-4">
           <button
             type="button"
+            onClick={() =>
+              requestWorkspaceNavigation(() =>
+                router.push("/teacher/support-requests"),
+              )
+            }
             className="relative grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
-            aria-label="Thông báo"
+            aria-label={
+              supportUnreadCount
+                ? `${supportUnreadCount} yêu cầu hỗ trợ chưa đọc`
+                : "Yêu cầu hỗ trợ"
+            }
           >
             <Bell className="size-5" />
-            <span className="absolute right-2 top-2 size-2 rounded-full bg-amber-500 ring-2 ring-white" />
+            {supportUnreadCount ? (
+              <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-4 text-white ring-2 ring-white">
+                {supportUnreadCount > 9 ? "9+" : supportUnreadCount}
+              </span>
+            ) : null}
           </button>
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
           <div ref={accountMenuRef} className="relative">
@@ -188,8 +245,13 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
             >
               <span className="relative grid size-10 overflow-hidden place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 text-sm font-bold text-white shadow-md shadow-indigo-500/20">
                 {user?.avatarUrl ? (
-                  <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${user.avatarUrl})` }} />
-                ) : initials}
+                  <span
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${user.avatarUrl})` }}
+                  />
+                ) : (
+                  initials
+                )}
               </span>
               {user ? (
                 <span className="hidden md:block">
@@ -224,7 +286,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setIsAccountMenuOpen(false); requestWorkspaceNavigation(() => router.push("/help")); }}
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    requestWorkspaceNavigation(() => router.push("/help"));
+                  }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
                   <CircleHelp className="size-4" /> Trợ giúp
@@ -234,7 +299,10 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                   role="menuitem"
                   onClick={() => {
                     setIsAccountMenuOpen(false);
-                    if (user) requestWorkspaceNavigation(() => router.push(getRoleSessionSettings(user.role)));
+                    if (user)
+                      requestWorkspaceNavigation(() =>
+                        router.push(getRoleSessionSettings(user.role)),
+                      );
                   }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                 >
@@ -244,7 +312,9 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => requestWorkspaceNavigation(() => void handleSignOut())}
+                  onClick={() =>
+                    requestWorkspaceNavigation(() => void handleSignOut())
+                  }
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-rose-600 hover:bg-rose-50"
                 >
                   <LogOut className="size-4" /> Đăng xuất
@@ -294,25 +364,38 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="mt-4 space-y-1.5" aria-label="Điều hướng khu vực">
-          {links.filter((link) => !link.href || canVisit(link.href)).map(({ href, label, icon: Icon }, index) => {
-            const active = Boolean(href && pathname.startsWith(href));
-            return (
-              <div key={`${label}-${index}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (href) requestWorkspaceNavigation(() => router.push(href));
-                    setIsMenuOpen(false);
-                  }}
-                  title={isSidebarCollapsed ? label : undefined}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all ${active ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"} ${isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : ""}`}
-                >
-                  <Icon className="size-5 shrink-0" />
-                  <span className={sidebarLabelClass}>{label}</span>
-                </button>
-              </div>
-            );
-          })}
+          {links
+            .filter((link) => !link.href || canVisit(link.href))
+            .map(({ href, label, icon: Icon }, index) => {
+              const active = Boolean(
+                href &&
+                  (pathname.startsWith(href) ||
+                    (href === "/teacher/learning-support" &&
+                      pathname.startsWith("/teacher/cohorts/"))),
+              );
+              return (
+                <div key={`${label}-${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (href)
+                        requestWorkspaceNavigation(() => router.push(href));
+                      setIsMenuOpen(false);
+                    }}
+                    title={isSidebarCollapsed ? label : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all ${active ? "bg-brand-600 text-white ring-1 ring-inset ring-brand-600" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"} ${isSidebarCollapsed ? "lg:gap-0 lg:px-[18px]" : ""}`}
+                  >
+                    <Icon className="size-5 shrink-0" />
+                    <span className={sidebarLabelClass}>{label}</span>
+                    {href === "/teacher/support-requests" && supportUnreadCount ? (
+                      <span className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                        {supportUnreadCount > 99 ? "99+" : supportUnreadCount}
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+              );
+            })}
         </nav>
       </aside>
       <main
@@ -320,13 +403,16 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
       >
         <div
           className={
-            pathname.startsWith("/teacher/question-bank")
-              || pathname === "/teacher/exams"
-              || pathname === "/teacher/exams/new"
-              || pathname.startsWith("/teacher/exams/")
-              || pathname === "/teacher/attendance"
-              || pathname === "/teacher/notifications"
-              || pathname === "/teacher/settings/exam-defaults"
+            pathname.startsWith("/teacher/question-bank") ||
+            pathname === "/teacher/exams" ||
+            pathname === "/teacher/exams/new" ||
+            pathname.startsWith("/teacher/exams/") ||
+            pathname.startsWith("/teacher/learning-support") ||
+            pathname.startsWith("/teacher/cohorts/") ||
+            pathname.startsWith("/teacher/support-requests") ||
+            pathname === "/teacher/attendance" ||
+            pathname === "/teacher/notifications" ||
+            pathname === "/teacher/settings/exam-defaults"
               ? "w-full"
               : "mx-auto max-w-[1280px]"
           }
@@ -364,12 +450,7 @@ export function PageHeading({
 }
 
 export function LoadingPanel() {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500 shadow-sm">
-      <LoaderCircle className="mx-auto size-5 animate-spin text-brand-600" />
-      <span className="mt-2 block">Đang tải dữ liệu...</span>
-    </div>
-  );
+  return <ContentLoading />;
 }
 export function ErrorPanel({ message }: { message: string }) {
   return (
@@ -380,14 +461,24 @@ export function ErrorPanel({ message }: { message: string }) {
 }
 
 function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
+  if (pathname.startsWith("/teacher/support-requests"))
+    return "Hộp thư hỗ trợ học sinh";
+  if (pathname.startsWith("/teacher/learning-plans/"))
+    return "Chi tiết lộ trình học";
+  if (/^\/teacher\/cohorts\/[^/]+$/.test(pathname))
+    return "Chi tiết đợt hỗ trợ";
+  if (pathname.startsWith("/teacher/learning-support/"))
+    return "Theo dõi học tập theo môn";
   if (pathname === "/teacher/question-bank/generate")
     return "Tạo câu hỏi bằng AI";
   if (pathname === "/teacher/question-bank/new") return "Tạo câu hỏi mới";
   if (/^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname))
     return "Chỉnh sửa câu hỏi";
   if (pathname === "/teacher/exams/new") return "Tạo mới bài kiểm tra";
-  if (/^\/teacher\/exams\/[^/]+\/analysis$/.test(pathname)) return "Phân tích AI";
-  if (/^\/teacher\/exams\/[^/]+\/subject-support$/.test(pathname)) return "Theo dõi học tập theo môn";
+  if (/^\/teacher\/exams\/[^/]+\/analysis$/.test(pathname))
+    return "Phân tích AI";
+  if (/^\/teacher\/exams\/[^/]+\/subject-support$/.test(pathname))
+    return "Theo dõi học tập theo môn";
   if (/^\/teacher\/exams\/[^/]+\/submissions\/[^/]+$/.test(pathname))
     return "Chấm bài";
   if (/^\/teacher\/exams\/[^/]+\/submissions$/.test(pathname))
@@ -406,6 +497,27 @@ function getWorkspaceTitle(pathname: string, links: WorkspaceLink[]): string {
 function getWorkspaceBreadcrumbs(
   pathname: string,
 ): Array<{ label: string; href?: string }> {
+  if (pathname.startsWith("/teacher/support-requests")) {
+    return [{ label: "Hộp thư hỗ trợ học sinh" }];
+  }
+  if (pathname.startsWith("/teacher/learning-plans/")) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết lộ trình học" },
+    ];
+  }
+  if (/^\/teacher\/cohorts\/[^/]+$/.test(pathname)) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết đợt hỗ trợ" },
+    ];
+  }
+  if (pathname.startsWith("/teacher/learning-support/")) {
+    return [
+      { label: "Theo dõi học tập", href: "/teacher/learning-support" },
+      { label: "Chi tiết môn học" },
+    ];
+  }
   if (pathname === "/teacher/exams/new") {
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
@@ -413,13 +525,26 @@ function getWorkspaceBreadcrumbs(
     ];
   }
 
-  const supportMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/subject-support$/);
-  if (supportMatch) return [{ label: "Bài kiểm tra", href: "/teacher/exams" }, { label: "Tổng quan & bài nộp", href: `/teacher/exams/${supportMatch[1]}` }, { label: "Theo dõi học tập theo môn" }];
+  const supportMatch = pathname.match(
+    /^\/teacher\/exams\/([^/]+)\/subject-support$/,
+  );
+  if (supportMatch)
+    return [
+      { label: "Bài kiểm tra", href: "/teacher/exams" },
+      {
+        label: "Tổng quan & bài nộp",
+        href: `/teacher/exams/${supportMatch[1]}`,
+      },
+      { label: "Theo dõi học tập theo môn" },
+    ];
   const analysisMatch = pathname.match(/^\/teacher\/exams\/([^/]+)\/analysis$/);
   if (analysisMatch) {
     return [
       { label: "Bài kiểm tra", href: "/teacher/exams" },
-      { label: "Tổng quan & bài nộp", href: `/teacher/exams/${analysisMatch[1]}` },
+      {
+        label: "Tổng quan & bài nộp",
+        href: `/teacher/exams/${analysisMatch[1]}`,
+      },
       { label: "Phân tích AI" },
     ];
   }
@@ -457,13 +582,14 @@ function getWorkspaceBreadcrumbs(
 
   if (!pathname.startsWith("/teacher/question-bank/")) return [];
 
-  const currentLabel = pathname === "/teacher/question-bank/generate"
-    ? "Tạo câu hỏi bằng AI"
-    : pathname === "/teacher/question-bank/new"
-      ? "Tạo câu hỏi mới"
-      : /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname)
-        ? "Chỉnh sửa câu hỏi"
-        : "Ngân hàng câu hỏi";
+  const currentLabel =
+    pathname === "/teacher/question-bank/generate"
+      ? "Tạo câu hỏi bằng AI"
+      : pathname === "/teacher/question-bank/new"
+        ? "Tạo câu hỏi mới"
+        : /^\/teacher\/question-bank\/[^/]+\/edit$/.test(pathname)
+          ? "Chỉnh sửa câu hỏi"
+          : "Ngân hàng câu hỏi";
 
   return [
     { label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },

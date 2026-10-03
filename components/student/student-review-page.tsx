@@ -63,13 +63,24 @@ function priorityFor(percentage: number | null) {
 }
 
 export function StudentReviewPage() {
+  return (
+    <StudentShell>
+      <StudentExamReviewPanel />
+    </StudentShell>
+  );
+}
+
+export function StudentExamReviewPanel({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [overview, setOverview] = useState<StudentOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [subjectId, setSubjectId] = useState("all");
-
   useEffect(() => {
     void studentOverviewService
       .getMyOverview()
@@ -105,9 +116,29 @@ export function StudentReviewPage() {
     [submittedAttempts],
   );
 
+  const optionalReviewItems = useMemo(
+    () =>
+      submittedAttempts
+        .filter((item) => {
+          const percentage = item.percentage ?? 100;
+          return percentage >= REVIEW_THRESHOLD && percentage < 100;
+        })
+        .sort(
+          (left, right) =>
+            (left.percentage ?? 100) - (right.percentage ?? 100) ||
+            (right.submittedAt ?? "").localeCompare(left.submittedAt ?? ""),
+        ),
+    [submittedAttempts],
+  );
+
+  const allReviewItems = useMemo(
+    () => [...reviewItems, ...optionalReviewItems],
+    [reviewItems, optionalReviewItems],
+  );
+
   const subjects = useMemo(() => {
     const unique = new Map<string, { id: string; name: string }>();
-    for (const item of reviewItems) {
+    for (const item of allReviewItems) {
       unique.set(item.subjectId, {
         id: item.subjectId,
         name: toVietnameseSubjectName(item.subjectName),
@@ -116,11 +147,11 @@ export function StudentReviewPage() {
     return [...unique.values()].sort((left, right) =>
       left.name.localeCompare(right.name, "vi"),
     );
-  }, [reviewItems]);
+  }, [allReviewItems]);
 
   const visibleItems = useMemo(() => {
     const keyword = normalizeSearchKeyword(search);
-    return reviewItems.filter(
+    return allReviewItems.filter(
       (item) =>
         (subjectId === "all" || item.subjectId === subjectId) &&
         (!keyword ||
@@ -132,9 +163,9 @@ export function StudentReviewPage() {
             item.termName,
           ).includes(keyword)),
     );
-  }, [reviewItems, search, subjectId]);
+  }, [allReviewItems, search, subjectId]);
 
-  const lowestPercentage = reviewItems.reduce<number | null>(
+  const lowestPercentage = submittedAttempts.reduce<number | null>(
     (lowest, item) =>
       lowest === null
         ? item.percentage
@@ -143,22 +174,14 @@ export function StudentReviewPage() {
   );
 
   if (loading) {
-    return (
-      <StudentShell>
-        <LoadingPanel />
-      </StudentShell>
-    );
+    return <LoadingPanel />;
   }
   if (error) {
-    return (
-      <StudentShell>
-        <ErrorPanel message={error} />
-      </StudentShell>
-    );
+    return <ErrorPanel message={error} />;
   }
 
   return (
-    <StudentShell>
+    <>
       <section className={`rounded-2xl border p-5 shadow-card sm:p-6 ${reviewItems.length ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
         <div className="flex items-start gap-3">
           <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${reviewItems.length ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"}`}>
@@ -171,17 +194,23 @@ export function StudentReviewPage() {
             <h1 className="mt-1 text-xl font-black text-slate-950 sm:text-2xl">
               {reviewItems.length
                 ? `Có ${reviewItems.length} bài kiểm tra cần được ôn lại`
-                : "Bạn chưa có bài kiểm tra điểm thấp cần ôn tập"}
+                : optionalReviewItems.length
+                  ? `Bạn có ${optionalReviewItems.length} bài có thể tự chọn ôn thêm`
+                  : "Bạn chưa có bài kiểm tra cần ôn thêm"}
             </h1>
             <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
               {reviewItems.length
                 ? "Ưu tiên các bài có điểm thấp trước. Với mỗi bài, bạn có thể xem lại kiến thức hoặc bắt đầu luyện tập ngay."
-                : "Các bài kiểm tra có kết quả dưới 50% sẽ xuất hiện tại đây để bạn chủ động củng cố kiến thức."}
+                : optionalReviewItems.length
+                  ? "Kết quả của bạn đã đạt ngưỡng cơ bản. Bạn vẫn có thể chọn bài còn câu sai để AI tạo gợi ý ôn tập cá nhân."
+                  : "Các bài có câu trả lời chưa đúng sẽ xuất hiện tại đây để bạn chủ động củng cố kiến thức."}
             </p>
           </div>
         </div>
       </section>
 
+      {!embedded ? (
+        <>
       <section className="mt-4 flex flex-col gap-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
@@ -214,6 +243,8 @@ export function StudentReviewPage() {
           Làm Quiz Study Coach
         </Button>
       </section>
+        </>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <SummaryCard
@@ -225,9 +256,9 @@ export function StudentReviewPage() {
         />
         <SummaryCard
           icon={BookOpenCheck}
-          label="Môn cần củng cố"
-          value={subjects.length.toString()}
-          detail="Tổng hợp từ kết quả thực tế"
+          label="Bài tự chọn ôn thêm"
+          value={optionalReviewItems.length.toString()}
+          detail="Bài 50–99% có thể tự ôn"
           tone="violet"
         />
         <SummaryCard
@@ -242,9 +273,9 @@ export function StudentReviewPage() {
       <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         <header className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-black text-slate-950">Danh sách bài kiểm tra cần ôn lại</h2>
+            <h2 className="font-black text-slate-950">Danh sách bài kiểm tra để ôn tập</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Mỗi bài lấy lượt làm có kết quả tốt nhất; bài đã đạt sẽ tự rời danh sách.
+              Bài dưới 50% được ưu tiên củng cố; bài từ 50–99% có thể tự chọn ôn thêm với AI.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-[300px_220px]">
@@ -279,8 +310,8 @@ export function StudentReviewPage() {
                 <TableHead className="!text-white">Môn học / lớp</TableHead>
                 <TableHead className="!text-white">Học kỳ</TableHead>
                 <TableHead className="text-center !text-white">Kết quả</TableHead>
-                <TableHead className="text-center !text-white">Mức ưu tiên</TableHead>
-                <TableHead className="w-64 text-right !text-white">Thao tác</TableHead>
+                <TableHead className="text-center !text-white">Loại ôn tập</TableHead>
+                <TableHead className="w-80 text-right !text-white">Thao tác</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -289,15 +320,18 @@ export function StudentReviewPage() {
                   colSpan={7}
                   icon={<BookOpenCheck className="size-5 text-emerald-600" />}
                   message={
-                    reviewItems.length === 0
-                      ? "Bạn chưa có bài kiểm tra dưới 50% cần ôn tập."
-                      : "Không tìm thấy lộ trình phù hợp với bộ lọc."
+                    allReviewItems.length === 0
+                      ? "Bạn chưa có bài kiểm tra cần ôn thêm."
+                      : "Không tìm thấy bài kiểm tra phù hợp với bộ lọc."
                   }
                 />
               ) : null}
               {visibleItems.map((item, index) => {
-                const priority = priorityFor(item.percentage);
                 const percentage = Math.round(item.percentage ?? 0);
+                const requiredReview = percentage < REVIEW_THRESHOLD;
+                const priority = requiredReview
+                  ? priorityFor(item.percentage)
+                  : { label: "Tự chọn ôn thêm", tone: "bg-violet-50 text-violet-700" };
                 return (
                   <tr key={item.id} className="transition hover:bg-slate-50/80">
                     <TableCell className="text-center text-slate-500">
@@ -328,14 +362,14 @@ export function StudentReviewPage() {
                     <TableCell>
                       <div className="mx-auto w-28">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-black text-rose-700">
+                          <span className={`font-black ${requiredReview ? "text-rose-700" : "text-brand-700"}`}>
                             {tenPointScore(item.percentage)}/10
                           </span>
                           <span className="text-slate-400">{percentage}%</span>
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-rose-500"
+                            className={`h-full rounded-full ${requiredReview ? "bg-rose-500" : "bg-brand-500"}`}
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
@@ -348,21 +382,24 @@ export function StudentReviewPage() {
                     </TableCell>
                     <TableCell className="!px-3">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
-                        >
-                          <BookOpenCheck className="size-3.5" /> Ôn lý thuyết
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1.5 whitespace-nowrap px-2.5"
-                          onClick={() => router.push(`/student/attempts/${item.id}/study?tab=practice`)}
-                        >
-                          <BrainCircuit className="size-3.5" /> Luyện tập
-                        </Button>
+                        {!requiredReview ? (
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                            onClick={() => router.push(`/student/attempts/${item.id}/study?tab=theory`)}
+                          >
+                            <BrainCircuit className="size-3.5" /> Xem gợi ý AI
+                          </Button>
+                        ) : null}
+                        {requiredReview ? (
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1.5 whitespace-nowrap px-2.5"
+                            onClick={() => router.push(`/student/attempts/${item.id}/study?tab=practice`)}
+                          >
+                            <BrainCircuit className="size-3.5" /> Luyện tập
+                          </Button>
+                        ) : null}
                       </div>
                     </TableCell>
                   </tr>
@@ -372,7 +409,8 @@ export function StudentReviewPage() {
           </Table>
         </div>
       </section>
-    </StudentShell>
+
+    </>
   );
 }
 

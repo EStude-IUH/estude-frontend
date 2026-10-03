@@ -256,6 +256,10 @@ test("teacher class report separates students from attempts and supports reviewe
       return {
         Modal: ({ open, title, children, footer }) => (open ? React.createElement("section", null, title, children, footer) : null),
       };
+    if (id === "@/components/assessment/study-evidence-panel")
+      return { StudyEvidencePanel: () => null };
+    if (id === "@/components/assessment/student-intervention-panel")
+      return { StudentInterventionPanel: () => null };
     if (id === "@/lib/assessment-api")
       return {
         examService: {

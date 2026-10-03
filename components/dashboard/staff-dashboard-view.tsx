@@ -5,9 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   Bell,
+  BellRing,
   BookOpenCheck,
   CalendarDays,
   CalendarClock,
+  ChartNoAxesCombined,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -67,8 +69,13 @@ const staffNavItems = [
     href: "/teacher/question-bank",
   },
   { icon: ClipboardCheck, label: "Bài kiểm tra", href: "/teacher/exams" },
+  {
+    icon: ChartNoAxesCombined,
+    label: "Theo dõi học tập",
+    href: "/teacher/learning-support",
+  },
   { icon: CheckCircle2, label: "Điểm danh", href: "/teacher/attendance" },
-  { icon: Bell, label: "Gửi thông báo", href: "/teacher/notifications" },
+  { icon: BellRing, label: "Thông báo", href: "/teacher/notifications" },
   {
     icon: Settings,
     label: "Cấu hình",
@@ -257,7 +264,7 @@ export function StaffDashboardView() {
     );
   }
 
-  const roleLabel = user.role === "ADMIN" ? "Quản trị viên" : "Giảng viên";
+  const roleLabel = user.role === "ADMIN" ? "Quản trị viên" : "Giáo viên";
   const firstName = user.fullName.trim().split(/\s+/).at(-1) ?? user.fullName;
   const initials = user.fullName
     .trim()
@@ -274,7 +281,8 @@ export function StaffDashboardView() {
       label: user.role === "TEACHER" ? "Lịch học" : "Tổng quan",
       href: dashboardPath,
     },
-    ...[
+    ...(user.role === "ADMIN"
+      ? [
           {
             icon: CircleUserRound,
             label: "Tài khoản",
@@ -310,7 +318,8 @@ export function StaffDashboardView() {
             label: "Phân công giáo viên môn học",
             href: "/admin/subject-assignments",
           },
-        ],
+        ]
+      : []),
     ...staffNavItems,
   ].filter((item) => canVisit(item.href));
   const isAccountsPage = pathname === "/admin/accounts";

@@ -11,6 +11,7 @@ import {
   Edit3,
   FileCheck2,
   FileText,
+  FolderInput,
   LoaderCircle,
   Plus,
   Search,
@@ -29,6 +30,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
+import { ClassTopicLibraryPicker } from "@/components/teacher/class-topic-library-picker";
 import { GradebookPanel } from "@/components/teacher/gradebook-panel";
 import { usePermissions } from "@/context/permissions-context";
 import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader, TableLoadingBarRow } from "@/components/ui/data-table";
@@ -93,6 +95,7 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<ClassTopic | null>(null);
   const [deletingTopic, setDeletingTopic] = useState<ClassTopic | null>(null);
+  const [assigningTopic, setAssigningTopic] = useState<ClassTopic | null>(null);
   const [form, setForm] = useState<ClassTopicInput>(emptyForm);
   const [analyzingExams, setAnalyzingExams] = useState(false);
   const [examAnalysisOpen, setExamAnalysisOpen] = useState(false);
@@ -422,7 +425,12 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
             <section key={topic.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
               <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-black text-brand-700">{topic.subject.code}</span><h3 className="truncate font-black text-slate-900">{topic.name}</h3></div>{topic.description ? <p className="mt-2 text-sm text-slate-500">{topic.description}</p> : null}</div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
+                  {can("materials.read") && can("materials.assign") ? (
+                    <Button permission="materials.assign" variant="outline" size="sm" onClick={() => setAssigningTopic(topic)}>
+                      <FolderInput className="size-4" />Chọn từ thư viện
+                    </Button>
+                  ) : null}
                   <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 text-xs font-bold text-white transition hover:bg-brand-700 ${uploadingTopicId ? "pointer-events-none opacity-60" : ""}`}>
                     {uploadingTopicId === topic.id ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}Tải tài liệu
                     <input type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(topic, event.target.files); event.currentTarget.value = ""; }} />
@@ -449,6 +457,18 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
         </div>
       </div>
       </div>
+
+      {assigningTopic ? (
+        <ClassTopicLibraryPicker
+          key={assigningTopic.id}
+          topic={assigningTopic}
+          onClose={() => setAssigningTopic(null)}
+          onAssigned={async () => {
+            await load();
+            setAssigningTopic(null);
+          }}
+        />
+      ) : null}
 
       <Modal
         open={examAnalysisOpen}

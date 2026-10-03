@@ -18,9 +18,60 @@ const capabilities = (insights = true) => Object.fromEntries(["processing", "mat
 const materialPage = () => ({ items: [{ id: "doc", title: "cells.pdf", readyForStudy: true }], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } });
 const insightProgress = (hasData = true) => ({ items: [{ conceptId: "concept", conceptName: "Tế bào", topicId: "topic", documentId: "doc", masteryScore: hasData ? 0.4 : 0.5, evidenceCount: hasData ? 3 : 0, correctEvidence: hasData ? 1 : 0, incorrectEvidence: hasData ? 2 : 0, state: hasData ? "NEEDS_SUPPORT" : "NEW", targetDifficulty: "EASY", updatedAt: new Date().toISOString() }], total: 1, activity: { flashcardReviewCount: hasData ? 2 : 0, quizAnswerCount: hasData ? 3 : 0, totalActivityCount: hasData ? 5 : 0 }, policy: { minimumEvidenceRequired: 3 } });
 
+test("exam review combines required and optional review into one table", () => {
+  const source = fs.readFileSync(path.resolve("components/student/student-review-page.tsx"), "utf8");
+  assert.match(source, /Danh sách bài kiểm tra để ôn tập/);
+  assert.match(source, /Loại ôn tập/);
+  assert.match(source, /Tự chọn ôn thêm/);
+  assert.equal((source.match(/<Table className=/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /<h2[^>]*>Tự chọn ôn thêm với AI<\/h2>/);
+  assert.doesNotMatch(source, /Danh sách bài luyện|openPracticeHistory/);
+  assert.doesNotMatch(source, /Ôn lý thuyết/);
+  assert.match(source, /study\?tab=practice/);
+});
+
+test("practice history lives inside the practice tab and opens dedicated pages", () => {
+  const source = fs.readFileSync(path.resolve("components/assessment/study-analysis-page.tsx"), "utf8");
+  assert.match(source, /activeTab === "practice"/);
+  assert.match(source, /<PracticeAttemptHistory/);
+  assert.doesNotMatch(source, /router\.replace\(`\/student\/study-coach\/practice/);
+  assert.match(source, /study\?tab=\$\{tab\}/);
+  assert.match(source, /study-coach\/practice\/\$\{params\.id\}/);
+  assert.match(source, /study-coach\/practice-results\/\$\{attempt\.id\}/);
+  const workspace = fs.readFileSync(path.resolve("components/student/exam-practice-workspace.tsx"), "utf8");
+  const page = fs.readFileSync(path.resolve("components/student/student-exam-practice-page.tsx"), "utf8");
+  assert.match(workspace, /Quay lại danh sách bài luyện/);
+  assert.match(page, /attempts\/\$\{attemptId\}\/study\?tab=practice/);
+});
+
+test("student study progress shows the AI evaluation after self-study", () => {
+  const source = fs.readFileSync(path.resolve("components/assessment/study-activity-dashboard.tsx"), "utf8");
+  assert.match(source, /Đánh giá sau quá trình tự ôn/);
+  assert.match(source, /dashboard\.activityReview\.comment/);
+  assert.match(source, /studyActivityReviewSections/);
+});
+
 async function renderComponent(t, file, exportName, api, options = {}) {
   const previousWindow = global.window;
-  global.window = { location: { search: options.search ?? "" } };
+  const location = {
+    search: options.search ?? "",
+    hash: options.hash ?? "",
+    href: `http://localhost/student/study-coach${options.search ?? ""}${options.hash ?? ""}`,
+  };
+  global.window = {
+    location,
+    history: {
+      replaceState(_state, _title, value) {
+        const next = new URL(value, "http://localhost");
+        location.search = next.search;
+        location.hash = next.hash;
+        location.href = next.href;
+      },
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    requestAnimationFrame(callback) { callback(); },
+  };
   const filename = path.resolve(file);
   const compiled = ts.transpileModule(fs.readFileSync(filename, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = new Module(filename, module); loaded.filename = filename; loaded.paths = Module._nodeModulePaths(path.dirname(filename)); const originalRequire = loaded.require.bind(loaded);
@@ -28,6 +79,7 @@ async function renderComponent(t, file, exportName, api, options = {}) {
     if (id === "next/navigation") return { useRouter: () => ({ push() {} }), useParams: () => ({ materialId: options.materialId }) };
     if (id === "lucide-react") return new Proxy({}, { get: (_target, name) => (props) => React.createElement("svg", { ...props, "data-icon": String(name) }) });
     if (id === "@/components/student/student-shell") return { StudentShell: ({ children }) => React.createElement("main", null, children) };
+    if (id === "@/components/student/student-review-page") return { StudentExamReviewPanel: () => React.createElement("section", { "data-testid": "exam-review-panel" }, "Ôn tập bài kiểm tra") };
     if (id === "@/components/student/study-coach-material-library") return { StudyCoachMaterialLibrary: () => React.createElement("section", { "data-testid": "material-library" }) };
     if (id === "@/components/ui/button") return { Button: ({ children, ...props }) => React.createElement("button", props, children) };
     if (id === "@/components/ui/form-control") return { Select: ({ children, label, ...props }) => React.createElement("label", null, label, React.createElement("select", props, children)) };
@@ -79,7 +131,15 @@ test("Study Coach groups mastery by material instead of mixing concepts", async 
   assert.match(ui.text(), /Năng lực theo từng tài liệu/);
   assert.match(ui.text(), /Sinh học\.pdf/);
   assert.match(ui.text(), /Tin học\.pdf/);
+  assert.match(ui.text(), /Học tiếp từ đúng nơi bạn cần/);
   assert.doesNotMatch(ui.text(), /Năng lực theo khái niệm/);
+  assert.ok(ui.button("Tự học"));
+  assert.ok(ui.button("Ôn tập bài kiểm tra"));
+  assert.doesNotMatch(ui.text(), /exam-review-panel/);
+  await act(async () => { ui.button("Ôn tập bài kiểm tra").props.onClick(); await flush(); });
+  assert.match(ui.text(), /exam-review-panel/);
+  assert.doesNotMatch(ui.text(), /Học tiếp từ đúng nơi bạn cần/);
+  assert.doesNotMatch(ui.text(), /Năng lực theo từng tài liệu/);
 });
 
 test("insights render safe ready/fallback states, preserve action order and prevent duplicate generation", async (t) => {
