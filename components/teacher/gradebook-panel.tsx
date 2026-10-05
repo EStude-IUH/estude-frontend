@@ -18,6 +18,7 @@ import type {
 } from "@/types/gradebook";
 import { outcomeText } from "@/components/assessment/official-grade-report";
 import { usePermissions } from "@/context/permissions-context";
+import { UnifiedGradeItems } from "@/components/teacher/unified-grade-items";
 
 const field =
   "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100";
@@ -194,12 +195,14 @@ export function GradebookPanel({
     setImportPreview(null);
   }, [subjectId, termId]);
   const historicalReadOnly = view?.year?.status === "COMPLETED" || view?.schoolClass?.isActive === false;
-  const locked =
+  const baseLocked =
     !canWrite ||
     saving ||
     !view ||
     historicalReadOnly ||
     ["COMPLETED", "LOCKED"].includes(view.term.status);
+  const legacyManualLocked = (view?.items ?? []).some((item) => item.officialSlot && item.sourceType !== "MANUAL");
+  const locked = baseLocked || legacyManualLocked;
   const requiredRegular = view?.requiredRegular ?? 0;
   const specialized = view?.book?.specialized ?? false;
   const filteredStudents = (view?.students ?? []).filter((student) => {
@@ -386,8 +389,15 @@ export function GradebookPanel({
       {!loading && view && !view.book ? (
         <p className="m-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Quản trị viên chưa cấu hình sổ điểm cho môn học và học kỳ này.</p>
       ) : null}
+      {!loading && view && view.pendingGradeItemCount > 0 ? (
+        <p className="m-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          {view.pendingGradeItemCount} hoạt động đã công bố đang chờ cấu hình sổ điểm. Quản trị viên cần cấu hình sổ điểm đúng lớp, môn và học kỳ; hệ thống không tự chọn chính sách đánh giá.
+        </p>
+      ) : null}
       {view?.book ? (
         <>
+          <UnifiedGradeItems view={view} disabled={baseLocked} onChanged={(message) => { setNotice(message); setRefresh((value) => value + 1); }} onError={setError} />
+          {legacyManualLocked ? <p className="m-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Một cột TX/GK/CK đang lấy điểm từ bài tập hoặc bài kiểm tra. Sửa điểm ở hoạt động gốc; bảng nhập tay/Excel bên dưới chỉ để xem.</p> : null}
           {view.book && entryMode === "excel" ? <div className="m-3 space-y-4 rounded-xl border border-slate-200 bg-white p-4">
             <div><h3 className="font-bold text-slate-900">Nhập điểm từ Excel</h3><p className="mt-1 text-sm text-slate-500">Tải tệp mẫu của lớp này, điền điểm vào các cột, sau đó kiểm tra dữ liệu trước khi lưu. Ô trống được xem là chưa đánh giá.</p></div>
             <div className="flex flex-wrap items-end gap-3">
@@ -432,7 +442,7 @@ export function GradebookPanel({
                       <TableCell className="text-center">{isEditing ? markInput(current.final, `${student.fullName} cuối kỳ`, (value) => setMarks((previous) => ({ ...previous, final: value }))) : markText(current.final)}</TableCell>
                       <TableCell className="text-center font-bold text-slate-800">{outcomeText(student.outcome)}</TableCell>
                       <TableCell className="max-w-40 truncate text-xs text-slate-500" title={student.record?.comment ?? ""}>{student.record?.comment || "—"}</TableCell>
-                      <TableCell className="text-right">{isEditing ? <div className="flex justify-end gap-2"><button type="button" className="font-bold text-brand-700 disabled:opacity-50" disabled={locked} onClick={() => void save()}>{saving ? "Đang lưu..." : "Lưu"}</button><button type="button" className="text-slate-500 disabled:opacity-50" disabled={saving} onClick={() => setEditing("")}>Hủy</button></div> : canWrite && !historicalReadOnly && !["COMPLETED", "LOCKED"].includes(view.term.status) ? <button type="button" className="font-bold text-brand-700 hover:underline disabled:text-slate-400" disabled={Boolean(editing) || saving} onClick={() => { setEditing(student.id); setMarks(emptyMarks(requiredRegular, student.record?.marks)); setComment(student.record?.comment ?? ""); setNotice(""); setError(""); }}>{student.record ? "Sửa điểm" : "Nhập điểm"}</button> : null}</TableCell>
+                      <TableCell className="text-right">{isEditing ? <div className="flex justify-end gap-2"><button type="button" className="font-bold text-brand-700 disabled:opacity-50" disabled={locked} onClick={() => void save()}>{saving ? "Đang lưu..." : "Lưu"}</button><button type="button" className="text-slate-500 disabled:opacity-50" disabled={saving} onClick={() => setEditing("")}>Hủy</button></div> : canWrite && !historicalReadOnly && !legacyManualLocked && !["COMPLETED", "LOCKED"].includes(view.term.status) ? <button type="button" className="font-bold text-brand-700 hover:underline disabled:text-slate-400" disabled={Boolean(editing) || saving} onClick={() => { setEditing(student.id); setMarks(emptyMarks(requiredRegular, student.record?.marks)); setComment(student.record?.comment ?? ""); setNotice(""); setError(""); }}>{student.record ? "Sửa điểm" : "Nhập điểm"}</button> : null}</TableCell>
                     </tr>;
                   })}
                 </TableBody>

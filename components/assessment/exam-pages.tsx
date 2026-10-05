@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Archive,
   BookOpen,
   CalendarClock,
   Check,
@@ -35,9 +36,11 @@ import { Button } from "@/components/ui/button";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { ExamSubmissionsPanel } from "@/components/assessment/exam-submissions-panel";
+import { LearningExceptionForm } from "@/components/learning/learning-exception-form";
 import { ExamResultsOverview } from "@/components/assessment/exam-results-overview";
 import { ExamDetailTabs } from "@/components/assessment/exam-detail-tabs";
 import { QuestionFolderTree, folderDescendantIds, type FolderSelection } from "@/components/assessment/question-folder-tree";
+import { ExamRecoveryPanel } from "@/components/assessment/exam-recovery-panel";
 import {
   Table,
   TableBody,
@@ -64,6 +67,7 @@ import {
 } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { eligibleExamQuestions, examPickerFolderCounts } from "@/lib/exam-question-picker";
+import { contentService } from "@/lib/content-api";
 import {
   getVietnameseSubjectName,
   toVietnameseSubjectName,
@@ -177,6 +181,7 @@ function statusClass(status: Exam["status"]) {
     SCHEDULED: "bg-amber-50 text-amber-700",
     ONGOING: "bg-emerald-50 text-emerald-700",
     ENDED: "bg-blue-50 text-blue-700",
+    ARCHIVED: "bg-slate-100 text-slate-500",
   }[status];
 }
 
@@ -290,6 +295,16 @@ export function TeacherExamsPage() {
       setError(
         cause instanceof Error ? cause.message : "Không thể xóa bài kiểm tra",
       );
+    }
+  }
+
+  async function archive(exam: Exam) {
+    if (!window.confirm(`Lưu trữ bài kiểm tra “${exam.title}”? Bài làm và điểm lịch sử sẽ được giữ lại.`)) return;
+    try {
+      const updated = await examService.archiveExam(exam.id);
+      setExams((items) => items.map((item) => item.id === exam.id ? updated : item));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể lưu trữ bài kiểm tra");
     }
   }
 
@@ -524,7 +539,11 @@ export function TeacherExamsPage() {
                               <FileCheck2 size={18} strokeWidth={2.5} />
                             </Button>
                           )}
-                          <Button permission="exams.delete"
+                          {exam.status === "ENDED" ? <Button permission="exams.update" size="sm" variant="ghost"
+                            onClick={() => void archive(exam)} aria-label={`Lưu trữ ${exam.title}`} title="Lưu trữ">
+                            <Archive size={18} strokeWidth={2.5} />
+                          </Button> : null}
+                          {!exam.published ? <Button permission="exams.delete"
                             size="sm"
                             variant="ghost"
                             className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
@@ -533,7 +552,7 @@ export function TeacherExamsPage() {
                             title="Xóa"
                           >
                             <Trash2 size={18} strokeWidth={2.5} />
-                          </Button>
+                          </Button> : null}
                         </div>
                       </TableCell>
                     </tr>
@@ -584,11 +603,13 @@ export function TeacherExamsPage() {
 
 export function ExamWizardPage({
   examId,
+  makeup,
   embedded = false,
   onClose,
   onSaved,
 }: {
   examId?: string;
+  makeup?: { source: Exam; studentIds: string[]; reason: string };
   embedded?: boolean;
   onClose?: () => void;
   onSaved?: (exam: Exam) => void | Promise<void>;
@@ -611,6 +632,8 @@ export function ExamWizardPage({
   const [publishedExam, setPublishedExam] = useState(false);
   const [lockedExam, setLockedExam] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [makeupRequestKey] = useState(() => crypto.randomUUID());
+  const [createdMakeupId, setCreatedMakeupId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [questionPickerOpen, setQuestionPickerOpen] = useState(false);
   const [draftQuestionIds, setDraftQuestionIds] = useState<Set<string>>(
@@ -619,6 +642,9 @@ export function ExamWizardPage({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<TeacherAssignedClass[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [courseLessons, setCourseLessons] = useState<Array<{ id: string; title: string; topicName: string }>>([]);
+  const [progressLessonId, setProgressLessonId] = useState('');
+  const [requiredForCompletion, setRequiredForCompletion] = useState(true);
   const [info, setInfo] = useState({
     title: "",
     subjectId: "",
@@ -648,7 +674,7 @@ export function ExamWizardPage({
   useEffect(() => {
     const examRequest = examId
       ? examService.getExamById(examId)
-      : Promise.resolve(null);
+      : Promise.resolve(makeup?.source ?? null);
     const settingsRequest = examId
       ? Promise.resolve(null)
       : teacherSettingsService.getExamDefaults();
@@ -670,13 +696,15 @@ export function ExamWizardPage({
         setSubjects(assignedSubjects);
         setClasses(loadedClasses);
         if (exam) {
-          setPublishedExam(exam.published);
+          setProgressLessonId(exam.lessonId ?? '');
+          setRequiredForCompletion(makeup ? false : exam.requiredForCompletion !== false);
+          setPublishedExam(makeup ? false : exam.published);
           setLockedExam(
-            exam.published &&
+            !makeup && exam.published &&
               (exam.status !== "SCHEDULED" || (exam.attemptedCount ?? 0) > 0),
           );
           setInfo({
-            title: exam.title,
+            title: makeup ? `Thi bù — ${exam.title}` : exam.title,
             subjectId: exam.subjectId,
             subjectName: exam.subjectName,
             classId: exam.classId,
@@ -684,14 +712,16 @@ export function ExamWizardPage({
             topicName: exam.topicName,
             description: exam.description,
           });
-          setSettings({
+          setSettings(makeup ? createBlankSettings({ durationMinutes: exam.settings.durationMinutes,
+            attemptsAllowed: 1, availabilityDays: 1, shuffleQuestions: true, shuffleAnswers: true,
+            showScoreImmediately: false, showCorrectAnswers: false }) : {
             ...exam.settings,
             examVersionCount: exam.settings.examVersionCount ?? 1,
             startsAt: toDateTimeLocal(exam.settings.startsAt),
             endsAt: toDateTimeLocal(exam.settings.endsAt),
           });
-          setRequiresAccessCode(exam.requiresAccessCode);
-          setHadAccessCode(exam.requiresAccessCode);
+          setRequiresAccessCode(makeup ? false : exam.requiresAccessCode);
+          setHadAccessCode(makeup ? false : exam.requiresAccessCode);
           const examQuestions = [...exam.questions].sort(
             (left, right) => left.order - right.order,
           );
@@ -699,7 +729,7 @@ export function ExamWizardPage({
             exam.totalPoints > 0
               ? Math.min(exam.totalPoints, DEFAULT_MAX_POINTS)
               : DEFAULT_MAX_POINTS;
-          setSelected(examQuestions);
+          setSelected(makeup ? [] : examQuestions);
           setMaximumPoints(examMaximumPoints);
           setScoreDistributionMode(
             hasEvenPointDistribution(examQuestions, examMaximumPoints)
@@ -741,7 +771,16 @@ export function ExamWizardPage({
         ),
       )
       .finally(() => setInitializing(false));
-  }, [examId, reportError]);
+  }, [examId, makeup, reportError]);
+
+  useEffect(() => {
+    if (!info.classId || !info.subjectId) { setCourseLessons([]); return; }
+    let active = true;
+    void contentService.topics(info.classId)
+      .then((rows) => { if (active) setCourseLessons(rows.filter((topic) => topic.subjectId === info.subjectId && topic.status === 'PUBLISHED').flatMap((topic) => (topic.lessons ?? []).filter((lesson) => lesson.status === 'PUBLISHED').map((lesson) => ({ id: lesson.id, title: lesson.title, topicName: topic.name })))); })
+      .catch(() => { if (active) setCourseLessons([]); });
+    return () => { active = false; };
+  }, [info.classId, info.subjectId]);
 
   useEffect(() => {
     if (!info.subjectId) {
@@ -778,9 +817,10 @@ export function ExamWizardPage({
       return;
     }
     setLoadingQuestions(true);
-    void Promise.all([questionBankService.getQuestions(), questionBankService.getFolders()])
+    void Promise.all([questionBankService.getQuestions({ subjectId: info.subjectId }), questionBankService.getFolders()])
       .then(([loadedQuestions, loadedFolders]) => {
-        setQuestions(loadedQuestions);
+        setQuestions(makeup ? loadedQuestions.filter((question) =>
+          !makeup.source.questions.some((old) => old.questionId === question.id)) : loadedQuestions);
         setQuestionFolders(loadedFolders);
       })
       .catch((cause) =>
@@ -789,7 +829,7 @@ export function ExamWizardPage({
         ),
       )
       .finally(() => setLoadingQuestions(false));
-  }, [info.subjectId, reportError]);
+  }, [info.subjectId, makeup, reportError]);
 
   const availableClasses = classes.filter((schoolClass) =>
     schoolClass.subjects.some((subject) => subject.id === info.subjectId),
@@ -806,6 +846,7 @@ export function ExamWizardPage({
   function chooseSubject(value: string) {
     const subject = subjects.find((item) => item.id === value);
     if (!subject) return;
+    setProgressLessonId('');
     const firstCompatibleClass = classes.find((schoolClass) =>
       schoolClass.subjects.some((item) => item.id === subject.id),
     );
@@ -1060,6 +1101,9 @@ export function ExamWizardPage({
     setSaving(true);
     const payload: ExamInput = {
       ...info,
+      ...(makeup ? { termId: makeup.source.termId ?? undefined } : {}),
+      lessonId: progressLessonId || undefined,
+      requiredForCompletion,
       requiresAccessCode,
       ...(accessCode.trim() ? { accessCode: accessCode.trim() } : {}),
       questions: normalizeOrder(selected),
@@ -1071,8 +1115,12 @@ export function ExamWizardPage({
     };
     try {
       let savedExam: Exam;
-      if (examId) {
-        savedExam = await examService.updateExam(examId, payload);
+      if (examId || createdMakeupId) {
+        savedExam = await examService.updateExam((examId ?? createdMakeupId)!, payload);
+      } else if (makeup) {
+        savedExam = await examService.createMakeup(makeup.source.id, { ...payload,
+          studentIds: makeup.studentIds, reason: makeup.reason, requestKey: makeupRequestKey });
+        setCreatedMakeupId(savedExam.id);
       } else {
         savedExam = await examService.createExam(payload);
       }
@@ -1190,6 +1238,7 @@ export function ExamWizardPage({
                 </div>
                 <CustomSelect
                   label="Môn học"
+                  disabled={Boolean(makeup)}
                   value={info.subjectId}
                   options={subjects.map((subject) => ({
                     value: subject.id,
@@ -1201,6 +1250,7 @@ export function ExamWizardPage({
                 />
                 <CustomSelect
                   label="Lớp học"
+                  disabled={Boolean(makeup)}
                   value={info.classId}
                   options={availableClasses.map((item) => ({
                     value: item.id,
@@ -1214,6 +1264,7 @@ export function ExamWizardPage({
                         (item) => item.id === value,
                       ) ?? availableClasses[0];
                     if (!item) return;
+                    setProgressLessonId('');
                     setInfo((current) => ({
                       ...current,
                       classId: item.id,
@@ -1239,6 +1290,17 @@ export function ExamWizardPage({
                   ariaLabel="Chọn chủ đề bài kiểm tra"
                   onValueChange={(value) => updateInfo("topicName", value)}
                 />
+                <div className="md:col-span-2 grid gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+                  <label className="grid gap-1">Bài học gắn với tiến độ (không bắt buộc)
+                    <select className="rounded-lg border border-slate-200 p-2" value={progressLessonId} disabled={publishedExam || Boolean(makeup)} onChange={(event) => setProgressLessonId(event.target.value)}>
+                      <option value="">Không gắn bài học — không tính vào tiến độ môn</option>
+                      {courseLessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.topicName} / {lesson.title}</option>)}
+                    </select>
+                  </label>
+                  {progressLessonId && !makeup ? <label className="flex items-center gap-2"><input type="checkbox" checked={requiredForCompletion} onChange={(event) => setRequiredForCompletion(event.target.checked)} />Bắt buộc để hoàn thành bài học</label> : null}
+                  {makeup ? <p className="text-sm text-brand-700">Đề thi bù cho {makeup.studentIds.length} học sinh; hoàn thành thay cho bài gốc, không thêm cột điểm.</p> : null}
+                  <p className="text-xs text-slate-500">Chỉ bài kiểm tra đã gắn với bài học và attempt FINALIZED mới được tính; điểm số vẫn thuộc sổ điểm.</p>
+                </div>
                 <div className="md:col-span-2">
                   <Textarea
                     label="Mô tả"
@@ -1514,6 +1576,11 @@ export function ExamWizardPage({
                     }))
                   }
                 />
+                <Input label="Điểm đạt (không bắt buộc)" type="number" min="0" max="10" step="0.01"
+                  value={settings.passingScore ?? ""}
+                  onChange={(event) => setSettings((current) => ({ ...current,
+                    passingScore: event.target.value === "" ? undefined : Number(event.target.value),
+                  }))} />
                 <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 md:col-span-2">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -1601,7 +1668,7 @@ export function ExamWizardPage({
                         "showScoreImmediately",
                         "Hiển thị điểm ngay sau khi nộp",
                       ],
-                      ["showCorrectAnswers", "Cho xem đáp án đúng"],
+                      ["showCorrectAnswers", "Cho phép phát hành đáp án đúng"],
                     ] as const
                   ).map(([key, label]) => {
                     const forcedByExamVersions =
@@ -1627,6 +1694,9 @@ export function ExamWizardPage({
                             setSettings((current) => ({
                               ...current,
                               [key]: checked,
+                              ...(key === "showCorrectAnswers" ? {
+                                answerReleasePolicy: checked ? "AFTER_EXAM_END" : "NEVER",
+                              } : {}),
                             }))
                           }
                           aria-label={label}
@@ -1635,6 +1705,20 @@ export function ExamWizardPage({
                     );
                   })}
                 </div>
+                <label className="mt-4 block text-sm font-semibold text-slate-700">
+                  Thời điểm phát hành đáp án đúng
+                  <select className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3"
+                    value={settings.answerReleasePolicy ?? (settings.showCorrectAnswers ? "AFTER_EXAM_END" : "NEVER")}
+                    onChange={(event) => setSettings((current) => ({ ...current,
+                      answerReleasePolicy: event.target.value as NonNullable<ExamSettings["answerReleasePolicy"]>,
+                      showCorrectAnswers: event.target.value !== "NEVER",
+                    }))}>
+                    <option value="NEVER">Không phát hành</option>
+                    <option value="AFTER_SUBMIT">Ngay sau khi học sinh nộp (có thể lộ đáp án khi Exam còn mở)</option>
+                    <option value="AFTER_EXAM_END">Sau khi Exam đóng (khuyến nghị)</option>
+                    <option value="AFTER_RESULT_PUBLISHED">Sau khi giáo viên công bố điểm</option>
+                  </select>
+                </label>
               </div>
             </div>
           ) : null}
@@ -2067,6 +2151,8 @@ export function ExamDetailPage() {
   const router = useRouter();
   const [exam, setExam] = useState<Exam | null>(null);
   const [error, setError] = useState("");
+  const [makeup, setMakeup] = useState<{ source: Exam; studentIds: string[]; reason: string } | null>(null);
+  const [resultRevision, setResultRevision] = useState(0);
   useEffect(() => {
     let active = true;
     setExam(null);
@@ -2099,6 +2185,16 @@ export function ExamDetailPage() {
         description={`${toVietnameseSubjectName(exam.subjectName)} · ${exam.className}`}
       />
       <ExamDetailTabs examId={exam.id} active="overview" />
+      {exam.makeupOfExamId ? <p className="my-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">Đề thi bù riêng · Chỉ dành cho học sinh được chọn. Điểm cao nhất đã chấm được tính vào <Link className="underline" href={`/teacher/exams/${exam.makeupOfExamId}`}>bài kiểm tra gốc</Link>.</p> : null}
+      <ExamRecoveryPanel exam={exam} onMakeup={(studentIds, reason) => setMakeup({ source: exam, studentIds, reason })} onChanged={async () => {
+        setExam(await examService.getExamById(exam.id)); setResultRevision((v) => v + 1);
+      }} />
+      <Modal open={Boolean(makeup)} onClose={() => setMakeup(null)} title="Soạn đề thi bù riêng" width="max-w-[1500px]" bodyClassName="max-h-[calc(100dvh-9rem)] overflow-y-auto !p-4">
+        {makeup ? <ExamWizardPage embedded makeup={makeup} onClose={() => setMakeup(null)} onSaved={(saved) => {
+          setMakeup(null); router.push(`/teacher/exams/${saved.id}`);
+        }} /> : null}
+      </Modal>
+      {exam.published && !exam.archivedAt ? <LearningExceptionForm key={exam.id} mode="exam" sourceId={exam.id} classId={exam.classId} /> : null}
       <div className="grid w-full items-start gap-3 xl:grid-cols-[320px_minmax(0,1fr)]">
         <section className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white text-[13px] shadow-card">
           <div className="border-b border-slate-100 px-4 py-3">
@@ -2168,12 +2264,12 @@ export function ExamDetailPage() {
           </div>
         </section>
 
-        <ExamResultsOverview key={exam.id} examId={exam.id} totalPoints={exam.totalPoints} />
+        <ExamResultsOverview key={`${exam.id}:${resultRevision}`} examId={exam.id} totalPoints={exam.totalPoints} />
 
       </div>
       <div className="mt-4">
         <h2 className="mb-2 text-sm font-bold text-slate-900">Danh sách học sinh nộp bài</h2>
-        <ExamSubmissionsPanel key={exam.id} examId={exam.id} totalPoints={exam.totalPoints} />
+        <ExamSubmissionsPanel key={`${exam.id}:${resultRevision}`} examId={exam.id} totalPoints={exam.totalPoints} />
       </div>
     </AssessmentShell>
   );

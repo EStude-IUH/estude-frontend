@@ -40,6 +40,10 @@ import { Modal } from "@/components/ui/modal";
 import { academicDataService, examService } from "@/lib/assessment-api";
 import { normalizeSearchKeyword } from "@/lib/search-keyword";
 import { rememberStudentCourseAccess } from "@/lib/student-recent-courses";
+import { LearningContentView } from './learning-content-view';
+import { CourseProgressSummary } from './course-progress-summary';
+import { progressService } from '@/lib/progress-api';
+import type { StudentCourseProgress } from '@/types/progress';
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
 import type {
   Exam,
@@ -221,6 +225,8 @@ export function StudentCourseDetailPage() {
   const [activeSection, setActiveSection] = useState<CourseSection>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<StudentCourseProgress | null>(null);
+  const [progressError, setProgressError] = useState("");
   const [previewMaterial, setPreviewMaterial] = useState<StudentCourseMaterial | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -242,7 +248,16 @@ export function StudentCourseDetailPage() {
     void examService.getExams()
       .then((items) => setExams(items.filter((exam) => exam.classId === params.classId && exam.subjectId === params.subjectId)))
       .catch(() => setExams([]));
+    void progressService.studentCourse(params.classId, params.subjectId)
+      .then((value) => { setProgress(value); setProgressError(''); })
+      .catch((cause) => setProgressError(cause instanceof Error ? cause.message : 'Không thể tải tiến độ'));
   }, [params.classId, params.subjectId]);
+
+  function refreshProgress() {
+    void progressService.studentCourse(params.classId, params.subjectId)
+      .then((value) => { setProgress(value); setProgressError(''); })
+      .catch((cause) => setProgressError(cause instanceof Error ? cause.message : 'Không thể tải tiến độ'));
+  }
 
   const materials = useMemo(
     () => course?.topics.flatMap((topic) => topic.materials.map((material) => ({ material, topicName: topic.name }))) ?? [],
@@ -264,7 +279,7 @@ export function StudentCourseDetailPage() {
       .catch((cause) => setMaterialError(cause instanceof Error ? cause.message : "Không thể mở tài liệu"))
       .finally(() => setPreviewLoading(false));
   }, [course, materials, searchParams]);
-  const completedExams = exams.filter((exam) => exam.currentAttempt?.status === "SUBMITTED").length;
+  const completedExams = exams.filter((exam) => exam.hasFinalizedAttempt === true).length;
   const availableExams = exams.filter((exam) => exam.studentStatus === "AVAILABLE" || exam.studentStatus === "IN_PROGRESS").length;
   const canReadClassChat = can("class_chat.read");
   const visibleSection = activeSection === "chat" && !canReadClassChat ? "overview" : activeSection;
@@ -346,7 +361,7 @@ export function StudentCourseDetailPage() {
 
           <div className="mt-4">
             {visibleSection === "overview" ? (
-              <CourseOverview course={course} examCount={exams.length} completedExamCount={completedExams} availableExamCount={availableExams} materialCount={materials.length} onOpenMaterials={() => setActiveSection("materials")} />
+              <CourseOverview course={course} examCount={exams.length} completedExamCount={completedExams} availableExamCount={availableExams} materialCount={materials.length} onOpenMaterials={() => setActiveSection("materials")} progress={progress} progressError={progressError} onRefreshProgress={refreshProgress} />
             ) : visibleSection === "materials" ? (
               <CourseMaterials items={materials} error={materialError} onPreview={openPreview} onDownload={downloadMaterial} />
             ) : visibleSection === "exams" ? (
@@ -378,7 +393,10 @@ function CourseTab({ active, icon: Icon, label, count, onClick }: { active: bool
   );
 }
 
-function CourseOverview({ course, examCount, completedExamCount, availableExamCount, materialCount, onOpenMaterials }: { course: StudentCourseDetail; examCount: number; completedExamCount: number; availableExamCount: number; materialCount: number; onOpenMaterials: () => void }) {
+function CourseOverview({ course, examCount, completedExamCount, availableExamCount, materialCount, onOpenMaterials,
+  progress, progressError, onRefreshProgress }: { course: StudentCourseDetail; examCount: number;
+  completedExamCount: number; availableExamCount: number; materialCount: number; onOpenMaterials: () => void;
+  progress: StudentCourseProgress | null; progressError: string; onRefreshProgress: () => void }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -387,6 +405,7 @@ function CourseOverview({ course, examCount, completedExamCount, availableExamCo
         <StatCard icon={ClipboardCheck} label="Bài kiểm tra" value={examCount} tone="amber" detail={availableExamCount ? `${availableExamCount} bài đang mở` : undefined} />
         <StatCard icon={CheckCircle2} label="Đã hoàn thành" value={completedExamCount} tone="emerald" />
       </div>
+      <CourseProgressSummary progress={progress} error={progressError} onRefresh={onRefreshProgress} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
           <h2 className="text-base font-black text-slate-950">Thông tin môn học</h2>
@@ -427,13 +446,7 @@ function CourseOverview({ course, examCount, completedExamCount, availableExamCo
           <div><h2 className="text-base font-black text-slate-950">Nội dung môn học</h2><p className="mt-0.5 text-xs text-slate-500">Các chủ đề được sắp xếp theo thứ tự học.</p></div>
           {materialCount > 0 ? <Button variant="outline" size="sm" onClick={onOpenMaterials}>Xem tất cả tài liệu</Button> : null}
         </header>
-        {course.topics.length ? <div className="divide-y divide-slate-100">{course.topics.map((topic, index) => (
-          <div key={topic.id} className="flex items-start gap-4 px-5 py-4">
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-blue-50 text-xs font-black text-brand-700">{index + 1}</span>
-            <div className="min-w-0 flex-1"><p className="font-bold text-slate-900">{topic.name}</p>{topic.description ? <p className="mt-1 text-sm text-slate-500">{topic.description}</p> : null}</div>
-            <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">{topic.materials.length} tài liệu</span>
-          </div>
-        ))}</div> : <div className="p-8 text-center text-sm text-slate-500">Giảng viên chưa cập nhật nội dung môn học.</div>}
+        <div className="p-4"><LearningContentView topics={course.topics} progress={progress} onProgressChange={onRefreshProgress} /></div>
       </section>
     </div>
   );
@@ -474,12 +487,9 @@ function CourseMaterials({ items, error, onPreview, onDownload }: { items: Array
 }
 
 function MaterialPreview({ material, url }: { material: StudentCourseMaterial; url: string }) {
-  const extension = material.originalName.split(".").pop()?.toLowerCase() ?? "";
-  const native = material.mimeType === "application/pdf" || material.mimeType.startsWith("image/") || material.mimeType.startsWith("text/") || ["pdf", "txt", "csv", "jpg", "jpeg", "png", "gif", "webp", "svg"].includes(extension);
-  const office = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension);
-  if (!native && !office) return <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center"><div><FileText className="mx-auto size-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">Định dạng này chưa hỗ trợ xem trực tiếp</p><p className="mt-1 text-sm text-slate-500">Bạn có thể tải tài liệu xuống để mở.</p></div></div>;
-  const source = office ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}` : url;
-  return <iframe src={source} title={`Xem trước ${material.originalName}`} className="h-[calc(100dvh-7rem)] min-h-[520px] w-full rounded-lg border border-slate-200 bg-slate-50" allowFullScreen />;
+  const native = ["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(material.mimeType.toLowerCase());
+  if (!native) return <div className="grid min-h-[420px] place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center"><div><FileText className="mx-auto size-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">Định dạng này chưa hỗ trợ xem trực tiếp</p><p className="mt-1 text-sm text-slate-500">Bạn có thể tải tài liệu xuống để mở; URL riêng tư không được gửi tới Office viewer bên thứ ba.</p></div></div>;
+  return <iframe src={url} title={`Xem trước ${material.originalName}`} className="h-[calc(100dvh-7rem)] min-h-[520px] w-full rounded-lg border border-slate-200 bg-slate-50" allowFullScreen />;
 }
 
 function StudentReviewList({ classId, subjectId }: { classId: string; subjectId: string }) {

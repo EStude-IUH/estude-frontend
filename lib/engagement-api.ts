@@ -1,15 +1,52 @@
 import { authenticatedRequest } from "@/lib/auth-api";
 import type {
   AttendanceRecord,
+  AttendanceHistoryRecord,
   AttendanceRoster,
   AttendanceStatus,
   PortalNotification,
   ParentOverview,
+  AttendanceSession,
+  AttendanceSessionDetail,
+  AttendanceAudit,
+  AttendanceVersion,
 } from "@/types/engagement";
 
 export const NOTIFICATIONS_CHANGED_EVENT = "estude:notifications-changed";
 
 export const attendanceService = {
+  listSessions(classId: string, subjectId: string, date: string): Promise<AttendanceSession[]> {
+    const query = new URLSearchParams({ subjectId, date });
+    return authenticatedRequest(`/attendance/classes/${encodeURIComponent(classId)}/sessions?${query}`);
+  },
+  createSession(classId: string, payload: { subjectId: string; date: string;
+    startTime?: string; endTime?: string; period?: string; label?: string; status?: 'DRAFT' | 'OPEN' }): Promise<AttendanceSession> {
+    return authenticatedRequest(`/attendance/classes/${encodeURIComponent(classId)}/sessions`, {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+  },
+  getSession(id: string): Promise<AttendanceSessionDetail> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}`);
+  },
+  openSession(id: string, version: AttendanceVersion): Promise<AttendanceSession> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}/open`, { method: 'POST', body: JSON.stringify(version) });
+  },
+  saveSession(id: string, records: Array<{ studentId: string; status: AttendanceStatus; note?: string }>, version: AttendanceVersion, reason?: string): Promise<{ sessionId: string; changed: number; unchanged: number; updatedAt: string; reopenedCount: number }> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}/records`, {
+      method: 'PUT', body: JSON.stringify({ records, reason, ...version }),
+    });
+  },
+  finalizeSession(id: string, version: AttendanceVersion): Promise<AttendanceSession> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}/finalize`, { method: 'POST', body: JSON.stringify(version) });
+  },
+  reopenSession(id: string, reason: string, version: AttendanceVersion): Promise<AttendanceSession> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}/reopen`, {
+      method: 'POST', body: JSON.stringify({ reason, ...version }),
+    });
+  },
+  getAudit(id: string): Promise<AttendanceAudit[]> {
+    return authenticatedRequest(`/attendance/sessions/${encodeURIComponent(id)}/audit`);
+  },
   getClassRoster(
     classId: string,
     subjectId: string,
@@ -34,12 +71,14 @@ export const attendanceService = {
       },
     );
   },
-  getMine(): Promise<AttendanceRecord[]> {
-    return authenticatedRequest<AttendanceRecord[]>("/attendance/me");
+  getMine(filters: { termId?: string; subjectId?: string; limit?: number } = {}): Promise<AttendanceHistoryRecord[]> {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]));
+    return authenticatedRequest<AttendanceHistoryRecord[]>(`/attendance/me?${query}`);
   },
-  getChild(studentId: string): Promise<AttendanceRecord[]> {
-    return authenticatedRequest<AttendanceRecord[]>(
-      `/attendance/children/${encodeURIComponent(studentId)}`,
+  getChild(studentId: string, filters: { termId?: string; subjectId?: string; limit?: number } = {}): Promise<AttendanceHistoryRecord[]> {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)]));
+    return authenticatedRequest<AttendanceHistoryRecord[]>(
+      `/attendance/children/${encodeURIComponent(studentId)}?${query}`,
     );
   },
 };

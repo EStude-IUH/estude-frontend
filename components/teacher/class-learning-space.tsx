@@ -7,39 +7,29 @@ import {
   BrainCircuit,
   CalendarClock,
   ClipboardList,
-  Download,
-  Edit3,
   FileCheck2,
-  FileText,
-  FolderInput,
   LoaderCircle,
-  Plus,
   Search,
-  School,
   Sparkles,
   TrendingDown,
   TrendingUp,
   Minus,
-  Trash2,
-  Upload,
   UsersRound,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { CourseContentPanel } from "@/components/teacher/course-content-panel";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { ClassChatPanel } from "@/components/class-chat/class-chat-panel";
-import { ClassTopicLibraryPicker } from "@/components/teacher/class-topic-library-picker";
 import { GradebookPanel } from "@/components/teacher/gradebook-panel";
 import { usePermissions } from "@/context/permissions-context";
 import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader, TableLoadingBarRow } from "@/components/ui/data-table";
 import { academicDataService, examService } from "@/lib/assessment-api";
 import { matchesSearchKeyword } from "@/lib/search-keyword";
 import { getVietnameseSubjectName } from "@/lib/subject-localization";
-import type { ClassRoster, ClassTopic, ClassTopicInput, Exam, ExamListAiAnalysis, LearningMaterial, TeacherAssignedClass } from "@/types/assessment";
+import type { ClassRoster, Exam, ExamListAiAnalysis, TeacherAssignedClass } from "@/types/assessment";
 
-const emptyForm: ClassTopicInput = { subjectId: "", name: "", description: "", sortOrder: 0 };
 type ClassTab = "topics" | "students" | "exams" | "grades" | "chat";
 
 const classTabs: Array<{ id: ClassTab; label: string }> = [
@@ -49,12 +39,6 @@ const classTabs: Array<{ id: ClassTab; label: string }> = [
   { id: "grades", label: "Điểm số" },
   { id: "chat", label: "Trao đổi lớp" },
 ];
-
-function formatFileSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
@@ -81,22 +65,13 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
   const canReadExams = can("exams.read");
   const [activeTab, setActiveTab] = useState<ClassTab>("topics");
   const [schoolClass, setSchoolClass] = useState<TeacherAssignedClass | null>(null);
-  const [topics, setTopics] = useState<ClassTopic[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [roster, setRoster] = useState<ClassRoster | null>(null);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploadingTopicId, setUploadingTopicId] = useState("");
-  const [deletingMaterialId, setDeletingMaterialId] = useState("");
   const [error, setError] = useState("");
-  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [editingTopic, setEditingTopic] = useState<ClassTopic | null>(null);
-  const [deletingTopic, setDeletingTopic] = useState<ClassTopic | null>(null);
-  const [assigningTopic, setAssigningTopic] = useState<ClassTopic | null>(null);
-  const [form, setForm] = useState<ClassTopicInput>(emptyForm);
   const [analyzingExams, setAnalyzingExams] = useState(false);
   const [examAnalysisOpen, setExamAnalysisOpen] = useState(false);
   const [examAnalysisError, setExamAnalysisError] = useState("");
@@ -108,14 +83,10 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
     try {
       const loadedClass = await academicDataService.getTeacherAssignedClass(classId);
       const hasSubject = loadedClass.subjects.length > 0;
-      const [loadedTopics, loadedExams] = await Promise.all([
-        hasSubject ? academicDataService.getClassTopics(classId) : Promise.resolve([]),
-        hasSubject && canReadExams ? examService.getExams() : Promise.resolve([]),
-      ]);
+      const loadedExams = hasSubject && canReadExams ? await examService.getExams() : [];
       setSchoolClass(loadedClass);
       onClassNameChange({ id: loadedClass.id, name: loadedClass.name });
       if (loadedClass.isHomeroomTeacher && loadedClass.subjects.length === 0) setActiveTab("students");
-      setTopics(loadedTopics);
       setExams(loadedExams.filter((exam) => exam.classId === classId));
     } catch (cause) {
       setError(errorMessage(cause, "Không thể tải không gian lớp học"));
@@ -157,105 +128,6 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
     matchesSearchKeyword(student.keyword, studentSearch),
   );
 
-  function openCreateTopic() {
-    setEditingTopic(null);
-    setForm({ ...emptyForm, subjectId: schoolClass?.subjects[0]?.id ?? "", sortOrder: topics.length + 1 });
-    setIsTopicModalOpen(true);
-  }
-
-  function openEditTopic(topic: ClassTopic) {
-    setEditingTopic(topic);
-    setForm({ subjectId: topic.subjectId, name: topic.name, description: topic.description, sortOrder: topic.sortOrder });
-    setIsTopicModalOpen(true);
-  }
-
-  async function saveTopic(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      if (editingTopic) {
-        await academicDataService.updateClassTopic(editingTopic.id, {
-          name: form.name,
-          description: form.description,
-          sortOrder: form.sortOrder,
-        });
-      } else {
-        await academicDataService.createClassTopic(classId, form);
-      }
-      setIsTopicModalOpen(false);
-      await load();
-      notify(editingTopic ? "Đã cập nhật chủ đề" : "Đã tạo chủ đề", { key: "class-topic-saved" });
-    } catch (cause) {
-      setError(errorMessage(cause, "Không thể lưu chủ đề"));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function deleteTopic() {
-    if (!deletingTopic) return;
-    setSaving(true);
-    setError("");
-    try {
-      await academicDataService.deleteClassTopic(deletingTopic.id);
-      setDeletingTopic(null);
-      await load();
-      notify("Đã xóa chủ đề và tài liệu liên quan", { key: "class-topic-deleted" });
-    } catch (cause) {
-      setError(errorMessage(cause, "Không thể xóa chủ đề"));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function uploadMaterials(topic: ClassTopic, files: FileList | null) {
-    if (!files?.length) return;
-    const selectedFiles = Array.from(files);
-    const oversized = selectedFiles.find((file) => file.size > 50 * 1024 * 1024);
-    if (oversized) {
-      setError(`Tệp ${oversized.name} vượt quá giới hạn 50MB`);
-      return;
-    }
-    setUploadingTopicId(topic.id);
-    setError("");
-    try {
-      for (const file of selectedFiles) {
-        await academicDataService.uploadClassMaterial(topic.id, file);
-      }
-      await load();
-      notify(`Đã tải lên ${selectedFiles.length} tài liệu`, { key: "class-material-uploaded" });
-    } catch (cause) {
-      setError(errorMessage(cause, "Không thể tải tài liệu lên S3"));
-    } finally {
-      setUploadingTopicId("");
-    }
-  }
-
-  async function downloadMaterial(material: LearningMaterial) {
-    setError("");
-    try {
-      const { url } = await academicDataService.getMaterialDownloadUrl(material.id);
-      window.location.assign(url);
-    } catch (cause) {
-      setError(errorMessage(cause, "Không thể tải tài liệu"));
-    }
-  }
-
-  async function deleteMaterial(topicId: string, material: LearningMaterial) {
-    setDeletingMaterialId(material.id);
-    setError("");
-    try {
-      await academicDataService.removeMaterialFromTopic(topicId, material.id);
-      await load();
-      notify("Đã gỡ tài liệu khỏi chủ đề", { key: "class-material-removed" });
-    } catch (cause) {
-      setError(errorMessage(cause, "Không thể gỡ tài liệu khỏi chủ đề"));
-    } finally {
-      setDeletingMaterialId("");
-    }
-  }
-
   async function analyzeClassExams() {
     if (!exams.length || exams.length > 30) return;
     setAnalyzingExams(true);
@@ -291,23 +163,12 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
     <div className="space-y-3">
       {error ? <p className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm font-semibold text-rose-700"><XCircle className="size-4" />{error}</p> : null}
 
-      <div className="grid items-start gap-3 xl:grid-cols-[310px_minmax(0,1fr)]">
-        <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-card xl:sticky xl:top-3 xl:h-[calc(100dvh-112px)] xl:overflow-y-auto">
-          <div className="text-center">
-            <div className="mx-auto grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 text-2xl font-extrabold text-brand-700">{schoolClass?.code.charAt(0).toUpperCase() || "L"}</div>
-            <h2 className="mt-3 break-words text-lg font-extrabold text-slate-950">{schoolClass?.name ?? "Lớp học"}</h2>
-            <p className="mt-1 font-mono text-xs font-bold text-brand-700">{schoolClass?.code ?? "--"}</p>
-            <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{schoolClass?.isHomeroomTeacher ? "Giáo viên chủ nhiệm" : "Đang phụ trách"}</span>
-          </div>
-          <div className="mt-5 border-t border-slate-100 pt-4">
-            <h3 className="text-sm font-extrabold text-slate-900">Thông tin chung</h3>
-            <dl className="mt-3 space-y-3 text-[13px]">
-              <div className="flex items-start gap-2.5"><School className="mt-0.5 size-4 shrink-0 text-slate-400" /><div><dt className="text-xs text-slate-400">Mã lớp</dt><dd className="mt-0.5 font-semibold text-slate-700">{schoolClass?.code ?? "--"}</dd></div></div>
-              <div className="flex items-start gap-2.5"><UsersRound className="mt-0.5 size-4 shrink-0 text-slate-400" /><div><dt className="text-xs text-slate-400">Sĩ số</dt><dd className="mt-0.5 font-semibold text-slate-700">{schoolClass?.studentCount ?? 0} học sinh</dd></div></div>
-              <div className="flex items-start gap-2.5"><BookOpenCheck className="mt-0.5 size-4 shrink-0 text-slate-400" /><div className="min-w-0"><dt className="text-xs text-slate-400">Môn học phụ trách</dt><dd className="mt-0.5 font-semibold leading-5 text-slate-700">{schoolClass?.subjects.length ? schoolClass.subjects.map(getVietnameseSubjectName).join(", ") : "Chưa có môn học"}</dd></div></div>
-            </dl>
-          </div>
-        </aside>
+      <div className="space-y-3">
+        <section className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-card" aria-label="Thông tin lớp học">
+          <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-blue-50 text-xl font-extrabold text-brand-700">{schoolClass?.code.charAt(0).toUpperCase() || "L"}</div>
+          <div className="min-w-0 flex-1"><h2 className="text-lg font-extrabold text-slate-950">{schoolClass?.name ?? "Lớp học"}</h2><p className="mt-1 text-xs text-slate-500">{schoolClass?.code ?? "--"} · {schoolClass?.isHomeroomTeacher ? "Giáo viên chủ nhiệm" : "Đang phụ trách"}</p></div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600"><span className="inline-flex items-center gap-1.5"><UsersRound className="size-4 text-brand-600" />{schoolClass?.studentCount ?? 0} học sinh</span><span className="inline-flex items-center gap-1.5"><BookOpenCheck className="size-4 text-brand-600" />{schoolClass?.subjects.length ? schoolClass.subjects.map(getVietnameseSubjectName).join(", ") : "Chưa có môn học"}</span></div>
+        </section>
 
       <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
         <nav className="overflow-x-auto border-b border-slate-100 px-3" aria-label="Nội dung lớp học">
@@ -413,62 +274,10 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
             </section>
           ) : null}
 
-      {visibleTab === "topics" ? <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-900">Chủ đề môn học</h3><p className="mt-1 text-sm text-slate-500">Tài liệu và nội dung học tập theo từng môn.</p></div><Button permission="teaching.create" onClick={openCreateTopic} disabled={!schoolClass?.subjects.length}><Plus className="size-4" />Tạo chủ đề</Button></div>
-      {topics.length === 0 ? (
-        <section className="grid min-h-[320px] place-items-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-          <div><BookOpenCheck className="mx-auto size-10 text-slate-300" /><h3 className="mt-4 font-black text-slate-800">Chưa có chủ đề học tập</h3><p className="mt-2 text-sm text-slate-500">Tạo chủ đề đầu tiên để tải tài liệu cho lớp.</p></div>
-        </section>
-      ) : (
-        <div className="space-y-3">
-          {topics.map((topic) => (
-            <section key={topic.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-              <header className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-black text-brand-700">{topic.subject.code}</span><h3 className="truncate font-black text-slate-900">{topic.name}</h3></div>{topic.description ? <p className="mt-2 text-sm text-slate-500">{topic.description}</p> : null}</div>
-                <div className="flex flex-wrap items-center gap-1">
-                  {can("materials.read") && can("materials.assign") ? (
-                    <Button permission="materials.assign" variant="outline" size="sm" onClick={() => setAssigningTopic(topic)}>
-                      <FolderInput className="size-4" />Chọn từ thư viện
-                    </Button>
-                  ) : null}
-                  <label className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 text-xs font-bold text-white transition hover:bg-brand-700 ${uploadingTopicId ? "pointer-events-none opacity-60" : ""}`}>
-                    {uploadingTopicId === topic.id ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}Tải tài liệu
-                    <input type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(topic, event.target.files); event.currentTarget.value = ""; }} />
-                  </label>
-                  <Button permission="teaching.update" variant="ghost" size="sm" aria-label={`Sửa ${topic.name}`} onClick={() => openEditTopic(topic)}><Edit3 className="size-4" /></Button>
-                  <Button permission="teaching.delete" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Xóa ${topic.name}`} onClick={() => setDeletingTopic(topic)}><Trash2 className="size-4" /></Button>
-                </div>
-              </header>
-              <div className="divide-y divide-slate-100">
-                {topic.materials.length === 0 ? <div className="flex items-center gap-3 px-5 py-4 text-sm text-slate-400"><FileText className="size-5" />Chưa có tài liệu trong chủ đề này.</div> : topic.materials.map((material) => (
-                  <article key={material.id} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-slate-50/70">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-brand-600"><FileText className="size-5" /></span>
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-900">{material.originalName}</p><p className="mt-1 text-xs text-slate-400">{formatFileSize(material.size)} · {new Date(material.createdAt).toLocaleString("vi-VN")}</p></div>
-                    <Button permission="materials.download" variant="ghost" size="sm" aria-label={`Tải ${material.originalName}`} onClick={() => void downloadMaterial(material)}><Download className="size-4" /></Button>
-                    <Button permission="materials.assign" variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50" aria-label={`Gỡ ${material.originalName} khỏi chủ đề`} disabled={deletingMaterialId === material.id} onClick={() => void deleteMaterial(topic.id, material)}>{deletingMaterialId === material.id ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}</Button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-      </div> : null}
+      {visibleTab === "topics" && schoolClass ? <CourseContentPanel schoolClass={schoolClass} /> : null}
         </div>
       </div>
       </div>
-
-      {assigningTopic ? (
-        <ClassTopicLibraryPicker
-          key={assigningTopic.id}
-          topic={assigningTopic}
-          onClose={() => setAssigningTopic(null)}
-          onAssigned={async () => {
-            await load();
-            setAssigningTopic(null);
-          }}
-        />
-      ) : null}
 
       <Modal
         open={examAnalysisOpen}
@@ -490,16 +299,7 @@ export function TeacherClassLearningSpace({ classId, onClassNameChange }: { clas
         ) : null}
       </Modal>
 
-      <Modal open={isTopicModalOpen} title={editingTopic ? "Chỉnh sửa chủ đề" : "Tạo chủ đề"} description="Chủ đề được quản lý riêng theo lớp và môn học được phân công." onClose={() => setIsTopicModalOpen(false)} footer={<Button permission={editingTopic ? "teaching.update" : "teaching.create"} type="submit" form="class-topic-form" disabled={saving || !form.subjectId || !form.name.trim()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : null}{editingTopic ? "Lưu thay đổi" : "Tạo chủ đề"}</Button>}>
-        <form id="class-topic-form" onSubmit={(event) => void saveTopic(event)} className="grid gap-4">
-          <label className="grid gap-2 text-sm font-bold text-slate-700">Môn học<select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} disabled={Boolean(editingTopic)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 font-normal outline-none focus:border-brand-500 disabled:bg-slate-50">{schoolClass?.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {getVietnameseSubjectName(subject)}</option>)}</select></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">Tên chủ đề<input required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ví dụ: React Hooks" className="h-11 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" /></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">Mô tả<textarea rows={4} maxLength={1000} value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Mô tả nội dung và mục tiêu của chủ đề" className="rounded-xl border border-slate-200 p-3 font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" /></label>
-          <label className="grid gap-2 text-sm font-bold text-slate-700">Thứ tự hiển thị<input type="number" min={0} value={form.sortOrder ?? 0} onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })} className="h-11 rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-brand-500" /></label>
-        </form>
-      </Modal>
 
-      <ConfirmationDialog open={Boolean(deletingTopic)} title="Xóa chủ đề" confirmLabel="Xóa chủ đề" confirmVariant="danger" loading={saving} onClose={() => setDeletingTopic(null)} onConfirm={() => void deleteTopic()}><p>Chủ đề <b>{deletingTopic?.name}</b> sẽ bị xóa. Các tệp gốc vẫn được giữ trong thư viện tài liệu.</p></ConfirmationDialog>
     </div>
   );
 }

@@ -43,9 +43,13 @@ export function ExamSubmissionsPanel({ examId, totalPoints }: { examId: string; 
     return () => { active = false; };
   }, [examId, canView, permissionsLoading, reload]);
 
-  // One row per student, using their latest submitted attempt even if a newer attempt is in progress.
+  // Use the highest finalized attempt; incomplete grading is never an official zero.
+  const ratio = (attempt: ExamAttempt) => attempt.gradingStatus === "FINALIZED" && attempt.score !== null &&
+    Number.isFinite(attempt.score) && attempt.score >= 0 && typeof attempt.maxScore === "number" &&
+    Number.isFinite(attempt.maxScore) && attempt.maxScore > 0 && attempt.score <= attempt.maxScore
+    ? attempt.score / attempt.maxScore : -1;
   const submitted = attempts.filter((attempt) => attempt.status === "SUBMITTED").sort(
-    (left, right) => new Date(right.submittedAt ?? right.startedAt).getTime() - new Date(left.submittedAt ?? left.startedAt).getTime(),
+    (left, right) => ratio(right) - ratio(left) || new Date(right.submittedAt ?? right.startedAt).getTime() - new Date(left.submittedAt ?? left.startedAt).getTime() || right.id.localeCompare(left.id),
   );
   const students = new Map<string, { attempt: ExamAttempt; count: number }>();
   for (const attempt of submitted) {
@@ -64,6 +68,7 @@ export function ExamSubmissionsPanel({ examId, totalPoints }: { examId: string; 
   return (
     <section className="flex min-h-0 min-w-0 flex-col xl:max-h-[calc(100dvh-106px)]">
       <h2 className="sr-only">Danh sách học sinh nộp bài</h2>
+      <p className="mb-2 text-xs text-slate-500">Lấy điểm cao nhất trong các lượt đã chấm xong. Bài chưa chấm xong chỉ để theo dõi, không phải điểm chính thức.</p>
       {!permissionsLoading && !canView ? (
         <p className="rounded-lg border border-slate-200 bg-white p-4 text-[13px] text-slate-500 shadow-card">Bạn chưa có quyền xem bài nộp.</p>
       ) : error ? (
@@ -88,7 +93,7 @@ export function ExamSubmissionsPanel({ examId, totalPoints }: { examId: string; 
                     <TableCell className="text-center text-slate-400">{(currentPage - 1) * pageSize + index + 1}</TableCell>
                     <TableCell><p className="min-w-36 font-bold text-slate-900">{attempt.studentName}</p><p className="mt-1 text-xs text-slate-500">{attempt.studentCode || "Chưa có mã học sinh"}</p></TableCell>
                     <TableCell><p className="whitespace-nowrap">{attempt.submittedAt ? dateFormat.format(new Date(attempt.submittedAt)) : "—"}</p><p className="mt-1 text-xs text-slate-500">{count} lượt đã nộp</p></TableCell>
-                    <TableCell className="whitespace-nowrap text-center"><span className={`font-bold ${attempt.score !== null && totalPoints > 0 && attempt.score / totalPoints < 0.5 ? "text-rose-600" : "text-brand-700"}`}>{attempt.score === null ? "Chưa có điểm" : `${numberFormat.format(attempt.score)}/${numberFormat.format(totalPoints)}`}</span></TableCell>
+                    <TableCell className="whitespace-nowrap text-center"><span className={`font-bold ${ratio(attempt) >= 0 && ratio(attempt) < 0.5 ? "text-rose-600" : "text-brand-700"}`}>{ratio(attempt) < 0 ? "Chưa có điểm" : `${numberFormat.format(attempt.score!)}/${numberFormat.format(attempt.maxScore ?? totalPoints)}`}</span></TableCell>
                     <TableCell className="text-right"><Button permission="exams.submissions" variant="ghost" size="sm" className="text-brand-700" title="Xem bài làm" aria-label={`Xem bài làm của ${attempt.studentName}`} onClick={() => router.push(`/teacher/exams/${examId}/submissions/${attempt.id}`)}><Eye size={18} strokeWidth={2.5} /></Button></TableCell>
                   </tr>
                 ))}
@@ -97,7 +102,7 @@ export function ExamSubmissionsPanel({ examId, totalPoints }: { examId: string; 
           </div>
           {!busy ? <DataTableFooter className="shrink-0 bg-white text-[13px] [&_*]:!text-[13px]" rowCount={rows.length} totalItems={filtered.length} itemLabel="học sinh" page={currentPage} totalPages={totalPages} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(value) => { setPageSize(value); setPage(1); }} /> : null}
           </div>
-          <p className="mt-2 shrink-0 px-1 text-[13px] leading-5 text-slate-500">Hiển thị lượt đã nộp gần nhất của mỗi học sinh, theo thời gian mới nhất.</p>
+          <p className="mt-2 shrink-0 px-1 text-[13px] leading-5 text-slate-500">Mỗi học sinh hiển thị lượt có điểm cao nhất đã chấm xong; nếu chưa có, hiển thị bài nộp để theo dõi.</p>
         </>
       )}
     </section>

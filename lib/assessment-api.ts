@@ -15,6 +15,7 @@ import {
   authenticatedUploadRequest,
   type UploadProgressPhase,
 } from "@/lib/auth-api";
+import { courseResourceContentType } from "@/lib/course-resource-file";
 import type {
   Exam,
   ExamAttempt,
@@ -455,11 +456,8 @@ export const academicDataService = {
       { method: "DELETE" },
     );
   },
-  async uploadClassMaterial(
-    topicId: string,
-    file: File,
-  ): Promise<LearningMaterial> {
-    const contentType = file.type || "application/octet-stream";
+  async uploadClassMaterial(topicId: string, file: File): Promise<LearningMaterial> {
+    const contentType = courseResourceContentType(file);
     const session = await authenticatedRequest<{
       material: LearningMaterial;
       uploadUrl: string;
@@ -493,7 +491,7 @@ export const academicDataService = {
     );
   },
   async uploadLibraryMaterial(file: File): Promise<LearningMaterial> {
-    const contentType = file.type || "application/octet-stream";
+    const contentType = courseResourceContentType(file);
     const session = await authenticatedRequest<{
       material: LearningMaterial;
       uploadUrl: string;
@@ -922,11 +920,29 @@ export const examService = {
       { method: "POST" },
     );
   },
+  publishExamResults(id: string): Promise<{ publishedStudents: number; resultStatus: "PUBLISHED" }> {
+    return authenticatedRequest(`/exams/${encodeURIComponent(id)}/results/publish`, { method: "POST" });
+  },
+  regradeAnswerKey(id: string, payload: { questionId: string; correctOptionIds: string[]; reason: string }): Promise<{ regradedAttempts: number; changedGrades: number }> {
+    return authenticatedRequest(`/exams/${encodeURIComponent(id)}/regrade-answer-key`, {
+      method: "POST", body: JSON.stringify(payload),
+    });
+  },
+  createMakeup(id: string, payload: ExamInput & { studentIds: string[]; reason: string; requestKey: string }): Promise<Exam> {
+    return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}/makeup`, { method: 'POST', body: JSON.stringify(payload) });
+  },
+  resolveQuestion(id: string, payload: { questionId: string; mode: 'CORRECT_KEY' | 'FULL_CREDIT' | 'EXCLUDE';
+    correctOptionIds?: string[]; expectedUpdatedAt: string; reason: string }): Promise<{ regradedAttempts: number; changedGrades: number }> {
+    return authenticatedRequest(`/exams/${encodeURIComponent(id)}/question-resolution`, { method: 'POST', body: JSON.stringify(payload) });
+  },
   deleteExam(id: string): Promise<Record<string, never>> {
     return authenticatedRequest<Record<string, never>>(
       `/exams/${encodeURIComponent(id)}`,
       { method: "DELETE" },
     );
+  },
+  archiveExam(id: string): Promise<Exam> {
+    return authenticatedRequest<Exam>(`/exams/${encodeURIComponent(id)}/archive`, { method: "POST" });
   },
   getSubmissions(id: string): Promise<ExamAttempt[]> {
     return authenticatedRequest<ExamAttempt[]>(
@@ -1174,6 +1190,16 @@ export const examAttemptService = {
         body: JSON.stringify({ answers }),
       },
     );
+  },
+  gradeEssay(id: string, questionId: string, payload: { score: number; feedback?: string; reason: string }): Promise<ExamAttempt & { exam: Exam }> {
+    return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}/essay-grades/${encodeURIComponent(questionId)}`, {
+      method: "PATCH", body: JSON.stringify(payload),
+    });
+  },
+  finalizeManual(id: string, reason: string): Promise<ExamAttempt & { exam: Exam }> {
+    return authenticatedRequest<ExamAttempt & { exam: Exam }>(`/exam-attempts/${encodeURIComponent(id)}/finalize`, {
+      method: "POST", body: JSON.stringify({ reason }),
+    });
   },
   createStudyAnalysis(id: string): Promise<StudyAnalysis> {
     return authenticatedRequest<StudyAnalysis>(

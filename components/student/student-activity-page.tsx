@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BellRing, CalendarCheck2, Check, CircleAlert, LoaderCircle } from "lucide-react";
 import { AssessmentShell, ErrorPanel, PageHeading } from "@/components/assessment/assessment-shell";
 import { attendanceService, NOTIFICATIONS_CHANGED_EVENT, notificationService } from "@/lib/engagement-api";
-import type { AttendanceRecord, PortalNotification } from "@/types/engagement";
+import type { AttendanceHistoryRecord as AttendanceRecord, PortalNotification } from "@/types/engagement";
+
+const attendanceLabels: Record<AttendanceRecord['status'], string> = {
+  NOT_MARKED: 'Chưa điểm danh', UNDER_REVIEW: 'Đang rà soát', PRESENT: 'Có mặt', ABSENT: 'Vắng',
+  LATE: 'Đi trễ', EXCUSED: 'Được miễn', LEAVE: 'Nghỉ có phép',
+};
 
 export function StudentActivityPage() {
   const router = useRouter();
@@ -13,9 +18,11 @@ export function StudentActivityPage() {
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [termFilter, setTermFilter] = useState('ALL');
+  const [subjectFilter, setSubjectFilter] = useState('ALL');
 
   useEffect(() => {
-    void Promise.all([attendanceService.getMine(), notificationService.getMine()])
+    void Promise.all([attendanceService.getMine({ limit: 100 }), notificationService.getMine()])
       .then(([attendanceItems, notificationItems]) => {
         setAttendance(attendanceItems);
         setNotifications(notificationItems);
@@ -23,6 +30,14 @@ export function StudentActivityPage() {
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể tải hoạt động của bạn"))
       .finally(() => setLoading(false));
   }, []);
+
+  const terms = useMemo(() => [...new Map(attendance.map((item) => [item.termId ?? 'LEGACY',
+    item.term?.name ?? 'Lịch sử cũ']))], [attendance]);
+  const subjects = useMemo(() => [...new Map(attendance.map((item) => [item.subjectId,
+    item.subject?.name ?? 'Môn học']))], [attendance]);
+  const filteredAttendance = attendance.filter((item) =>
+    (termFilter === 'ALL' || (item.termId ?? 'LEGACY') === termFilter) &&
+    (subjectFilter === 'ALL' || item.subjectId === subjectFilter));
 
   async function markRead(item: PortalNotification) {
     if (item.readAt) return;
@@ -46,9 +61,10 @@ export function StudentActivityPage() {
     {loading ? <div className="grid min-h-64 place-items-center"><LoaderCircle className="size-8 animate-spin text-brand-600" /></div> : null}
     {error ? <ErrorPanel message={error} /> : null}
     {!loading && !error ? <div className="grid gap-6 xl:grid-cols-2">
-      <TimelineSection icon={CalendarCheck2} title="Lịch sử điểm danh" empty="Chưa có dữ liệu điểm danh.">
-        {attendance.map((item) => <TimelineItem key={item.id} tone={item.status === "PRESENT" ? "emerald" : "rose"} icon={item.status === "PRESENT" ? Check : CircleAlert} title={item.status === "PRESENT" ? "Có mặt" : "Vắng"} time={new Date(item.sessionDate).toLocaleDateString("vi-VN")}><p>{item.subject?.name ?? "Môn học"} · {item.class?.name ?? "Lớp học"}</p><p className="mt-1 text-xs">Cập nhật lúc {new Date(item.markedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</p></TimelineItem>)}
-      </TimelineSection>
+      <div><div className="mb-3 flex flex-wrap gap-2 text-sm"><select aria-label="Lọc học kỳ" className="rounded-lg border border-slate-200 p-2" value={termFilter} onChange={(event) => setTermFilter(event.target.value)}><option value="ALL">Mọi học kỳ</option>{terms.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><select aria-label="Lọc môn học" className="rounded-lg border border-slate-200 p-2" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}><option value="ALL">Mọi môn</option>{subjects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
+        <TimelineSection icon={CalendarCheck2} title="Lịch sử điểm danh" empty="Chưa có buổi điểm danh đã chốt phù hợp.">
+          {filteredAttendance.map((item) => <TimelineItem key={item.id} tone={item.status === 'PRESENT' || item.status === 'LATE' ? 'emerald' : item.status === 'NOT_MARKED' ? 'slate' : 'rose'} icon={item.status === 'PRESENT' || item.status === 'LATE' ? Check : CircleAlert} title={attendanceLabels[item.status]} time={new Date(item.sessionDate).toLocaleDateString('vi-VN', { timeZone: 'UTC' })}><p>{item.subject?.name ?? 'Môn học'} · {item.class?.name ?? 'Lớp học'}{item.startTime ? ` · ${item.startTime}${item.endTime ? `–${item.endTime}` : ''}` : item.period ? ` · ${item.period}` : ''}</p>{item.note ? <p className="mt-1 text-xs">Ghi chú: {item.note}</p> : null}{item.legacy ? <p className="mt-1 text-xs">Dữ liệu điểm danh cũ (không rõ giờ)</p> : null}</TimelineItem>)}
+        </TimelineSection></div>
       <TimelineSection icon={BellRing} title="Thông báo" empty="Bạn chưa có thông báo mới.">
         {notifications.map((item) => {
           const href = notificationHref(item);

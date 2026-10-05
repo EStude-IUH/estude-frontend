@@ -1,16 +1,56 @@
-export type AttendanceStatus = "PRESENT" | "ABSENT";
+export type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT" | "LATE" | "EXCUSED" | "LEAVE";
+export type AttendanceSessionStatus = "DRAFT" | "OPEN" | "FINALIZED";
+
+export interface AttendanceVersion {
+  expectedUpdatedAt: string;
+  expectedReopenedCount: number;
+}
 
 export interface AttendanceRecord {
   id: string;
+  sessionId?: string | null;
   classId: string;
   subjectId: string;
-  teacherId: string;
+  teacherId?: string;
   studentId: string;
+  termId?: string | null;
   sessionDate: string;
   status: AttendanceStatus;
-  markedAt: string;
+  note?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  period?: string | null;
+  label?: string | null;
+  legacy?: boolean;
+  markedAt: string | null;
   class?: { id: string; code: string; name: string } | null;
   subject?: { id: string; name: string } | null;
+  term?: { id: string; name: string } | null;
+}
+
+export interface AttendanceSession {
+  id: string; classId: string; subjectId: string; termId: string;
+  sessionDate: string; slotKey: string; startTime: string | null; endTime: string | null;
+  period: string | null; label: string | null; status: AttendanceSessionStatus;
+  createdBy: string; createdAt: string; updatedAt: string; finalizedAt: string | null;
+  reopenedCount: number; _count?: { recipients: number; records: number };
+}
+export type AttendanceHistoryRecord = Omit<AttendanceRecord, 'status'> & { status: AttendanceStatus | 'UNDER_REVIEW' };
+
+export interface AttendanceSessionDetail {
+  session: AttendanceSession;
+  students: Array<{ id: string; fullName: string; accountName: string;
+    assignedAt: string; status: AttendanceStatus;
+    attendance: (AttendanceRecord & { note: string }) | null }>;
+  summary: Record<AttendanceStatus, number>;
+}
+
+export interface AttendanceAudit {
+  id: string; sessionId: string; studentId: string | null;
+  action: 'MARK_CREATED' | 'MARK_UPDATED' | 'SESSION_OPENED' | 'SESSION_FINALIZED' | 'SESSION_REOPENED';
+  oldStatus: AttendanceStatus | null; newStatus: AttendanceStatus | null;
+  oldNote: string | null; newNote: string | null; actorId: string; reason: string;
+  createdAt: string;
 }
 
 export interface AttendanceRoster {

@@ -60,6 +60,7 @@ function formatScore(value: number): string {
 
 function getStudentStatus(exam: Exam): StudentExamStatus {
   if (exam.studentStatus) return exam.studentStatus;
+  if (exam.status === "ARCHIVED") return "ENDED";
   if (exam.status === "SCHEDULED") return "UPCOMING";
   if (exam.status === "ONGOING") return "AVAILABLE";
   return "ENDED";
@@ -241,18 +242,7 @@ function StudentExamCard({
   const router = useRouter();
   const status = getStudentStatus(exam);
   const meta = studentStatusMeta[status];
-  const primaryLabel =
-    status === "IN_PROGRESS"
-      ? "Tiếp tục làm bài"
-      : status === "SUBMITTED"
-        ? "Xem kết quả"
-        : status === "AVAILABLE"
-          ? exam.requiresAccessCode
-            ? "Nhập mã & bắt đầu"
-            : "Bắt đầu làm bài"
-          : status === "UPCOMING"
-            ? "Chưa đến giờ mở"
-            : "Đã hết thời gian";
+  const primaryLabel = status === "IN_PROGRESS" && exam.canResume ? "Tiếp tục làm bài" : status === "SUBMITTED" ? "Xem kết quả" : exam.historyOnly ? "Xem lịch sử" : !exam.canStart ? "Xem chi tiết" : (exam.requiresAccessCode ? "Nhập mã & bắt đầu" : "Bắt đầu làm bài");
   return (
     <article
       aria-labelledby={`exam-${exam.id}-title`}
@@ -260,11 +250,8 @@ function StudentExamCard({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <span
-            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${meta.tone}`}
-          >
-            {meta.label}
-          </span>
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${meta.tone}`}>{exam.historyOnly && !exam.canResume ? 'Chỉ xem lịch sử' : meta.label}</span>
+          {exam.makeupOfExamId ? <span className="ml-2 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Thi bù · đề riêng</span> : null}
           <h3 id={`exam-${exam.id}-title`} className="mt-3 text-lg font-black">
             {exam.title}
           </h3>
@@ -305,10 +292,7 @@ function StudentExamCard({
         >
           <Eye className="size-4" /> Xem chi tiết
         </Button>
-        <Button
-          disabled={starting || status === "UPCOMING" || status === "ENDED"}
-          onClick={() => onPrimary(exam)}
-        >
+        <Button disabled={starting} onClick={() => onPrimary(exam)}>
           {starting ? (
             <>
               <LoaderCircle className="size-4 animate-spin" /> Đang mở bài...
@@ -373,7 +357,7 @@ function useStudentExamNavigation() {
   const openPrimary = useCallback(
     async (exam: Exam) => {
       const status = getStudentStatus(exam);
-      if (status === "IN_PROGRESS" && exam.currentAttempt) {
+      if (status === "IN_PROGRESS" && exam.currentAttempt && exam.canResume) {
         router.push(`/student/attempts/${exam.currentAttempt.id}`);
         return;
       }
@@ -381,7 +365,7 @@ function useStudentExamNavigation() {
         router.push(`/student/attempts/${exam.currentAttempt.id}/result`);
         return;
       }
-      if (status !== "AVAILABLE") return;
+      if (!exam.canStart) { router.push(`/student/exams/${exam.id}`); return; }
       if (exam.requiresAccessCode) {
         router.push(`/student/exams/${exam.id}`);
         return;
@@ -430,7 +414,7 @@ export function StudentExamDetailPage() {
   }, [params.id]);
 
   async function start(code?: string) {
-    if (!exam) return;
+    if (!exam?.canStart) return;
     if (exam.requiresAccessCode && code === undefined) {
       setAccessPromptOpen(true);
       return;
@@ -478,11 +462,8 @@ export function StudentExamDetailPage() {
           <ArrowLeft className="size-4" /> Danh sách bài thi
         </Button>
       </div>
-      <PageHeading
-        eyebrow="Exam overview"
-        title={exam.title}
-        description={`${exam.subjectName} · ${exam.className}`}
-      />
+      <PageHeading eyebrow="Exam overview" title={exam.title} description={`${exam.subjectName} · ${exam.className}`} />
+      {exam.makeupOfExamId ? <p className="my-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">Đây là đề thi bù riêng dành cho bạn. Điểm cao nhất đã chấm xong giữa bài gốc và thi bù sẽ được quy đổi vào cùng một cột điểm.</p> : null}
       {error ? (
         <div className="mb-5">
           <ErrorPanel message={error} />
@@ -490,16 +471,9 @@ export function StudentExamDetailPage() {
       ) : null}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card sm:p-8">
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${meta.tone}`}
-          >
-            {meta.label}
-          </span>
-          <h2 className="mt-5 text-xl font-black">Thông tin bài kiểm tra</h2>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">
-            {exam.description ||
-              "Giáo viên không cung cấp mô tả cho bài kiểm tra này."}
-          </p>
+          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${meta.tone}`}>{meta.label}</span>
+          <h2 className="mt-5 break-words text-xl font-black">{exam.title}</h2>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">{exam.description || "Giáo viên không cung cấp mô tả cho bài kiểm tra này."}</p>
           <div className="mt-7 grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs text-slate-400">Môn học</p>
@@ -553,13 +527,9 @@ export function StudentExamDetailPage() {
               </dd>
             </div>
           </dl>
-          {status === "IN_PROGRESS" && currentAttempt ? (
-            <Button
-              className="mt-6 w-full"
-              onClick={() =>
-                router.push(`/student/attempts/${currentAttempt.id}`)
-              }
-            >
+          {exam.historyOnly ? <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Bạn chỉ có quyền xem lịch sử cá nhân. Lượt đang làm chỉ được tiếp tục trong thời hạn đã cấp; không mở lượt mới.</p> : null}
+          {status === "IN_PROGRESS" && currentAttempt && exam.canResume ? (
+            <Button className="mt-6 w-full" onClick={() => router.push(`/student/attempts/${currentAttempt.id}`)}>
               <RotateCcw className="size-4" /> Tiếp tục làm bài
             </Button>
           ) : null}
@@ -574,12 +544,8 @@ export function StudentExamDetailPage() {
               <Eye className="size-4" /> Xem kết quả
             </Button>
           ) : null}
-          {status === "AVAILABLE" || exam.canStart ? (
-            <Button
-              className="mt-2 w-full"
-              disabled={starting}
-              onClick={() => void start()}
-            >
+          {exam.canStart ? (
+            <Button className="mt-2 w-full" disabled={starting} onClick={() => void start()}>
               <Play className="size-4" />
               {starting
                 ? "Đang bắt đầu..."
@@ -669,7 +635,11 @@ export function StudentAttemptPage() {
   const [confirming, setConfirming] = useState(false);
   const answersRef = useRef<Record<string, ExamAnswer>>({});
   const saveTimersRef = useRef<Map<string, number>>(new Map());
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const clientSequenceRef = useRef(0);
   const autoSubmitStartedRef = useRef(false);
+  const submissionInFlightRef = useRef(false);
+  const sealedRef = useRef(false);
   useEffect(() => {
     void examAttemptService
       .getAttempt(params.id)
@@ -701,20 +671,11 @@ export function StudentAttemptPage() {
           }
         }
         answersRef.current = mapped;
+        clientSequenceRef.current = Math.max(0, ...Object.values(mapped).map((answer) => answer.clientSequence ?? 0));
         setAnswers(mapped);
-        if (
-          loaded.status === "IN_PROGRESS" &&
-          Object.keys(mapped).length &&
-          navigator.onLine
-        ) {
+        if (loaded.status === "IN_PROGRESS" && loaded.canResume !== false && expiresAt > Date.now() && Object.keys(mapped).length && navigator.onLine) {
           setSyncStatus("saving");
-          void Promise.all(
-            Object.values(mapped).map((answer) =>
-              examAttemptService.saveAnswer(params.id, answer),
-            ),
-          )
-            .then(() => setSyncStatus("saved"))
-            .catch(() => setSyncStatus(navigator.onLine ? "error" : "offline"));
+          void syncAllAnswers();
         }
         if (loaded.status === "SUBMITTED")
           router.replace(`/student/attempts/${params.id}/result`);
@@ -725,6 +686,8 @@ export function StudentAttemptPage() {
         ),
       )
       .finally(() => setLoading(false));
+    // syncAllAnswers reads the latest answers through answersRef after the attempt loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answerStorageKey, params.id, router]);
   const orderedQuestions = useMemo(
     () =>
@@ -751,13 +714,7 @@ export function StudentAttemptPage() {
     };
   }, [attempt]);
   useEffect(() => {
-    if (
-      attempt &&
-      !loading &&
-      secondsLeft === 0 &&
-      attempt.status === "IN_PROGRESS" &&
-      !autoSubmitStartedRef.current
-    ) {
+    if (attempt && attempt.canResume !== false && !loading && secondsLeft === 0 && attempt.status === "IN_PROGRESS" && !autoSubmitStartedRef.current) {
       autoSubmitStartedRef.current = true;
       void submit(true);
     }
@@ -797,8 +754,9 @@ export function StudentAttemptPage() {
     );
   }
   function saveLocally(answer: ExamAnswer) {
+    const sequenced = { ...answer, clientSequence: ++clientSequenceRef.current };
     setAnswers((current) => {
-      const updated = { ...current, [answer.questionId]: answer };
+      const updated = { ...current, [answer.questionId]: sequenced };
       answersRef.current = updated;
       window.localStorage.setItem(
         answerStorageKey,
@@ -806,7 +764,17 @@ export function StudentAttemptPage() {
       );
       return updated;
     });
-    queueServerSave(answer);
+    queueServerSave(sequenced);
+  }
+  function persistAnswer(answer: ExamAnswer): Promise<void> {
+    if (attempt?.canResume === false || sealedRef.current || submissionInFlightRef.current) return Promise.resolve();
+    const next = saveQueueRef.current.catch(() => undefined).then(async () => {
+      if (sealedRef.current) return;
+      if (answersRef.current[answer.questionId]?.clientSequence !== answer.clientSequence) return;
+      await examAttemptService.saveAnswer(params.id, answer);
+    });
+    saveQueueRef.current = next;
+    return next;
   }
   function queueServerSave(answer: ExamAnswer) {
     const currentTimer = saveTimersRef.current.get(answer.questionId);
@@ -818,8 +786,7 @@ export function StudentAttemptPage() {
     setSyncStatus("saving");
     const timer = window.setTimeout(() => {
       saveTimersRef.current.delete(answer.questionId);
-      void examAttemptService
-        .saveAnswer(params.id, answer)
+      void persistAnswer(answer)
         .then(() => {
           if (saveTimersRef.current.size === 0) setSyncStatus("saved");
         })
@@ -834,11 +801,7 @@ export function StudentAttemptPage() {
       return;
     }
     try {
-      await Promise.all(
-        pendingAnswers.map((answer) =>
-          examAttemptService.saveAnswer(params.id, answer),
-        ),
-      );
+      for (const answer of pendingAnswers) await persistAnswer(answer);
       setSyncStatus("saved");
     } catch {
       setSyncStatus(navigator.onLine ? "error" : "offline");
@@ -856,21 +819,23 @@ export function StudentAttemptPage() {
     saveLocally({ ...questionAnswer, selectedOptionIds: selected });
   }
   async function submit(auto = false) {
-    if (!attempt || attempt.status === "SUBMITTED") return;
+    if (!attempt || attempt.status === "SUBMITTED" || attempt.canResume === false || submissionInFlightRef.current || sealedRef.current) return;
     if (!auto && !confirming) {
       setConfirming(true);
       return;
     }
     setConfirming(false);
+    submissionInFlightRef.current = true;
     saveTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     saveTimersRef.current.clear();
     setSubmitting(true);
     setError("");
     try {
-      await examAttemptService.submitExam(
-        params.id,
-        Object.values(answersRef.current),
-      );
+      // Drain saves already sent/queued so submit does not race our own autosave.
+      // The server still enforces expiry and discards late unsaved payloads.
+      await saveQueueRef.current.catch(() => undefined);
+      await examAttemptService.submitExam(params.id, Object.values(answersRef.current));
+      sealedRef.current = true;
       window.localStorage.removeItem(answerStorageKey);
       router.push(`/student/attempts/${params.id}/result`);
     } catch (cause) {
@@ -881,6 +846,7 @@ export function StudentAttemptPage() {
           : "Không thể nộp bài. Kiểm tra kết nối mạng và thử lại.",
       );
     } finally {
+      submissionInFlightRef.current = false;
       setSubmitting(false);
     }
   }
@@ -906,7 +872,7 @@ export function StudentAttemptPage() {
   if (!currentQuestion)
     return (
       <AssessmentShell student>
-        <ErrorPanel message="Bài kiểm tra chưa có câu hỏi hợp lệ." />
+        {attempt.reviewRequired ? <p className="rounded-xl bg-amber-50 p-4 text-amber-800">Lượt làm đang chờ giáo viên rà soát. Câu trả lời đã lưu được giữ nguyên; bạn không thể tiếp tục hoặc nộp lượt mới từ lịch sử.</p> : <ErrorPanel message="Bài kiểm tra chưa có câu hỏi hợp lệ." />}
       </AssessmentShell>
     );
   const answer = currentAnswer(currentQuestion.questionId);
@@ -917,7 +883,7 @@ export function StudentAttemptPage() {
     .toString()
     .padStart(2, "0");
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
-  const locked = secondsLeft <= 0 || submitting;
+  const locked = secondsLeft <= 0 || submitting || sealedRef.current || attempt.canResume === false;
   const syncLabel = {
     saved: "Đã lưu tự động",
     saving: "Đang lưu tự động...",
@@ -926,6 +892,7 @@ export function StudentAttemptPage() {
   }[syncStatus];
   return (
     <AssessmentShell student>
+      {attempt.reviewRequired ? <p className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Lượt làm đang chờ rà soát; hiện chỉ xem lại câu trả lời đã lưu. Không thể sửa hoặc nộp trong phạm vi đã đóng.</p> : null}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-600">
@@ -954,11 +921,7 @@ export function StudentAttemptPage() {
         <div className="mb-4 space-y-2">
           <ErrorPanel message={error} />
           {secondsLeft === 0 ? (
-            <Button
-              variant="danger"
-              disabled={submitting}
-              onClick={() => void submit(true)}
-            >
+            <Button variant="danger" disabled={submitting || attempt.canResume === false} onClick={() => void submit(true)}>
               <Send className="size-4" /> Thử nộp lại
             </Button>
           ) : null}
@@ -1138,13 +1101,8 @@ export function StudentAttemptPage() {
             })}
           </div>
           <div className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-500">
-            <p>Hết giờ sẽ tự động nộp bài.</p>
-            <Button
-              className="mt-4 w-full"
-              variant="danger"
-              disabled={locked}
-              onClick={() => void submit()}
-            >
+            <p>Hết giờ, hệ thống chốt các câu trả lời đã lưu. Câu trả lời chưa đồng bộ sau hạn không được tính.</p>
+            <Button className="mt-4 w-full" variant="danger" disabled={locked} onClick={() => void submit()}>
               Nộp bài ngay
             </Button>
           </div>
@@ -1275,18 +1233,15 @@ export function StudentResultPage() {
     ? `${Math.floor(attempt.durationSeconds / 60)} phút ${attempt.durationSeconds % 60} giây`
     : "—";
   const total = attempt.exam.questions.length;
-  const autoScoredPointsPossible = attempt.exam.questions.reduce(
-    (sum, item) => sum + (item.question?.type === "ESSAY" ? 0 : item.points),
-    0,
-  );
   const autoScoredQuestionCount = attempt.exam.questions.filter(
-    (item) => item.question?.type !== "ESSAY",
+    (item) => item.question?.type !== "ESSAY" && !item.faultPolicy,
   ).length;
-  const hasUngradedEssay = attempt.exam.questions.some(
+  const hasEssay = attempt.exam.questions.some(
     (item) => item.question?.type === "ESSAY",
   );
+  const waitingForGrading = hasEssay && attempt.gradingStatus !== "FINALIZED";
   const scorePercentage =
-    !hasUngradedEssay && attempt.score !== null && attempt.exam.totalPoints > 0
+    !waitingForGrading && attempt.score !== null && attempt.exam.totalPoints > 0
       ? Math.round((attempt.score / attempt.exam.totalPoints) * 100)
       : null;
   const needsWarning =
@@ -1335,11 +1290,8 @@ export function StudentResultPage() {
           <CheckCircle2 className="size-9" />
         </div>
         <h2 className="mt-5 text-xl font-black">{attempt.exam.title}</h2>
-        {attempt.examCode ? (
-          <span className="mt-2 inline-flex rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-black text-brand-700">
-            Mã đề {attempt.examCode}
-          </span>
-        ) : null}
+        {attempt.questionRecoveryApplied ? <p className="mt-3 rounded-lg bg-amber-50 p-3 text-left text-sm text-amber-900">Giáo viên đã xử lý câu hỏi lỗi và chấm lại. Điểm điều chỉnh chỉ trở thành điểm chính thức sau khi giáo viên trả điểm; câu được cho điểm hoặc loại khỏi đề không tính vào số câu trả lời đúng.</p> : null}
+        {attempt.examCode ? <span className="mt-2 inline-flex rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-black text-brand-700">Mã đề {attempt.examCode}</span> : null}
         <div className="mt-7 grid gap-3 text-left sm:grid-cols-3">
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="text-xs text-slate-400">Thời gian làm</p>
@@ -1366,39 +1318,35 @@ export function StudentResultPage() {
             </p>
           </div>
         </div>
-        {attempt.exam.settings.showScoreImmediately ? (
+        {waitingForGrading ? (
+          <div className="mt-7 rounded-2xl bg-amber-50 p-5 text-sm font-semibold text-amber-900">Đã nộp bài · đang chờ giáo viên chấm phần tự luận. Điểm tạm tính không phải điểm cuối cùng và chưa được công bố vào sổ.</div>
+        ) : attempt.score !== null ? (
           <div className="mt-7 rounded-2xl bg-brand-50 p-5">
-            <p className="text-sm font-bold text-brand-700">
-              {hasUngradedEssay
-                ? "Kết quả trắc nghiệm tạm thời"
-                : "Kết quả tạm thời"}
-            </p>
+            <p className="text-sm font-bold text-brand-700">{attempt.officialResultPublished ? "Kết quả đã công bố" : "Kết quả làm bài · chưa phải điểm chính thức trong sổ"}</p>
             <p className="mt-1 text-4xl font-black text-brand-700">
-              {formatScore(attempt.score ?? 0)}
-              <span className="text-lg">
-                /
-                {formatScore(
-                  hasUngradedEssay
-                    ? autoScoredPointsPossible
-                    : attempt.exam.totalPoints,
-                )}
-              </span>
+              {formatScore(attempt.score)}
+              <span className="text-lg">/{formatScore(attempt.exam.totalPoints)}</span>
             </p>
             <p className="mt-1 text-sm text-slate-600">
               {attempt.correctCount ?? 0}/{autoScoredQuestionCount} câu trắc
               nghiệm đúng
             </p>
-            {hasUngradedEssay ? (
-              <p className="mt-2 text-sm font-semibold text-amber-700">
-                Bài còn câu tự luận chưa chấm; đây chưa phải điểm cuối cùng.
-              </p>
-            ) : null}
           </div>
         ) : (
           <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm font-semibold text-slate-600">
             Bài làm đã được ghi nhận. Kết quả sẽ hiển thị khi giáo viên công bố.
           </div>
         )}
+
+        {attempt.passed !== null && attempt.passed !== undefined ? (
+          <p className={`mt-3 text-sm font-bold ${attempt.passed ? "text-emerald-700" : "text-rose-700"}`}>
+            {attempt.passed ? "Đạt" : "Chưa đạt"} theo ngưỡng {attempt.exam.settings.passingScore} điểm.
+          </p>
+        ) : null}
+        {attempt.essayFeedback?.length ? <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-left">
+          <p className="text-sm font-black text-brand-800">Nhận xét phần tự luận</p>
+          {attempt.essayFeedback.map((item, index) => <p key={item.questionId} className="mt-2 whitespace-pre-wrap text-sm text-slate-700">Câu {index + 1}: {item.feedback}</p>)}
+        </section> : null}
 
         {attempt.teacherReview?.status === "PUBLISHED" ? (
           <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-left">

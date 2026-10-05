@@ -340,6 +340,9 @@ export interface StudentCourseTopic {
   createdAt: string;
   updatedAt: string;
   materials: StudentCourseMaterial[];
+  status?: ContentStatus;
+  createdBy?: string;
+  lessons?: Lesson[];
 }
 
 export interface StudentCourseDetail extends StudentCourse {
@@ -390,6 +393,7 @@ export interface MaterialClassAssignment {
 }
 
 export interface MaterialAssignmentTarget {
+  lessonId?: string;
   classId: string;
   subjectId: string;
   topicId?: string;
@@ -416,9 +420,33 @@ export interface ClassTopic {
   updatedAt: string;
   subject: Pick<Subject, "id" | "code" | "name" | "vietnameseName">;
   materials: LearningMaterial[];
+  status?: ContentStatus;
+  publishedAt?: string | null;
+  availableFrom?: string | null;
+  availableUntil?: string | null;
+  createdBy?: string;
+  lessons?: Lesson[];
 }
 
-export interface ClassTopicInput {
+export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export interface ContentWindow { availableFrom?: string | null; availableUntil?: string | null }
+export interface Lesson extends ContentWindow {
+  id: string; topicId: string; title: string; description: string; content: string;
+  sortOrder: number; status: ContentStatus; publishedAt: string | null; createdBy: string;
+  createdAt: string; updatedAt: string; legacy?: boolean; resources: LessonResource[];
+  requiredForCompletion?: boolean; requirementRevision?: number;
+}
+export interface LessonResource extends ContentWindow {
+  id: string; lessonId: string; materialId: string | null; title: string; description?: string;
+  type: 'FILE' | 'PDF' | 'DOCUMENT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'LINK';
+  linkUrl: string | null; sortOrder: number; status: ContentStatus; publishedAt: string | null;
+  createdBy: string; createdAt: string; updatedAt: string; legacy?: boolean;
+  material: StudentCourseMaterial | null;
+  requiredForCompletion?: boolean;
+}
+export interface LessonInput extends ContentWindow { title: string; description?: string; content?: string; sortOrder?: number; requiredForCompletion?: boolean }
+
+export interface ClassTopicInput extends ContentWindow {
   subjectId: string;
   name: string;
   description?: string;
@@ -434,9 +462,8 @@ export interface Topic {
   isActive: boolean;
 }
 
-export type ExamStatus = "DRAFT" | "SCHEDULED" | "ONGOING" | "ENDED";
-export type StudentExamStatus =
-  "UPCOMING" | "AVAILABLE" | "IN_PROGRESS" | "SUBMITTED" | "ENDED";
+export type ExamStatus = "DRAFT" | "SCHEDULED" | "ONGOING" | "ENDED" | "ARCHIVED";
+export type StudentExamStatus = "UPCOMING" | "AVAILABLE" | "IN_PROGRESS" | "SUBMITTED" | "ENDED";
 
 export interface StudentExamAttemptSummary {
   id: string;
@@ -447,6 +474,11 @@ export interface StudentExamAttemptSummary {
 }
 
 export interface ExamQuestion {
+  faultPolicy?: 'FULL_CREDIT' | 'EXCLUDE';
+  type?: QuestionType;
+  content?: string;
+  options?: QuestionOption[];
+  correctOptionIds?: string[];
   questionId: string;
   points: number;
   order: number;
@@ -480,6 +512,8 @@ export interface ExamSettings {
   shuffleAnswers: boolean;
   showScoreImmediately: boolean;
   showCorrectAnswers: boolean;
+  answerReleasePolicy?: "NEVER" | "AFTER_SUBMIT" | "AFTER_EXAM_END" | "AFTER_RESULT_PUBLISHED";
+  passingScore?: number;
 }
 
 export interface TeacherExamDefaults {
@@ -500,6 +534,14 @@ export interface TeacherExamDefaultSettings {
 
 export interface Exam {
   id: string;
+  makeupOfExamId?: string | null;
+  makeupContext?: { studentIds: string[]; reason: string } | null;
+  termId?: string | null;
+  lessonId?: string | null;
+  requiredForCompletion?: boolean;
+  completionRule?: 'FINALIZED' | 'PASSED';
+  resultStatus?: "UNPUBLISHED" | "PUBLISHED" | null;
+  audienceProvenance?: "SNAPSHOT" | "LEGACY_UNKNOWN" | null;
   title: string;
   keyword?: string | null;
   subjectId: string;
@@ -514,8 +556,11 @@ export interface Exam {
   studentStatus?: StudentExamStatus;
   currentAttempt?: StudentExamAttemptSummary | null;
   attemptsUsed?: number;
+  hasFinalizedAttempt?: boolean;
   attemptsRemaining?: number;
   canStart?: boolean;
+  canResume?: boolean;
+  historyOnly?: boolean;
   status: ExamStatus;
   published: boolean;
   requiresAccessCode: boolean;
@@ -523,11 +568,16 @@ export interface Exam {
   totalPoints: number;
   settings: ExamSettings;
   createdAt: string;
+  archivedAt?: string | null;
   updatedAt: string;
 }
 
 export interface ExamInput {
   title: string;
+  lessonId?: string;
+  requiredForCompletion?: boolean;
+  completionRule?: 'FINALIZED' | 'PASSED';
+  termId?: string;
   subjectId: string;
   subjectName: string;
   classId: string;
@@ -547,9 +597,22 @@ export interface ExamAnswer {
   selectedOptionIds: string[];
   essayText: string;
   flagged: boolean;
+  clientSequence?: number;
+}
+
+export interface ExamManualGrade {
+  questionId: string;
+  score: number;
+  feedback: string;
+  gradedBy: string;
+  gradedAt: string;
 }
 
 export interface ExamAttempt {
+  reviewRequired?: boolean;
+  canResume?: boolean;
+  historyOnly?: boolean;
+  maxScore?: number | null;
   id: string;
   examId: string;
   studentId: string;
@@ -560,7 +623,16 @@ export interface ExamAttempt {
   expiresAt: string | null;
   submittedAt: string | null;
   answers: ExamAnswer[];
+  manualGrades?: ExamManualGrade[];
+  gradingStatus?: "PARTIAL" | "FINALIZED" | null;
+  finalizedAt?: string | null;
+  finalizedBy?: string | null;
+  officialResultPublished?: boolean;
+  questionRecoveryApplied?: boolean;
+  passed?: boolean | null;
+  essayFeedback?: Array<{ questionId: string; feedback: string }>;
   score: number | null;
+  autoScoredSubtotal?: number | null;
   correctCount: number | null;
   durationSeconds: number | null;
   examCode: string | null;
@@ -577,10 +649,12 @@ export interface ExamClassReportAttempt {
   startedAt: string;
   submittedAt: string | null;
   score: number | null;
+  autoScoredSubtotal?: number | null;
   maxScore: number;
   percentage: number | null;
   durationSeconds: number | null;
   gradingStatus: "COMPLETE" | "PARTIAL";
+  published?: boolean;
   scoredPointsPossible: number | null;
   ungradedPointsPossible: number | null;
 }
@@ -700,8 +774,9 @@ export interface ExamClassTopicPerformance {
 export interface ExamClassReport {
   generatedAt: string;
   policy: {
-    enrollmentScope: "CURRENT_ACTIVE_ENROLLMENTS";
-    selectedAttemptRule: "LATEST_SUBMITTED";
+    enrollmentScope: "CURRENT_ACTIVE_ENROLLMENTS" | "PUBLISHED_AUDIENCE_SNAPSHOT";
+    audienceProvenance?: "SNAPSHOT" | "LEGACY_UNKNOWN";
+    selectedAttemptRule: "HIGHEST_FINALIZED" | "LATEST_SUBMITTED";
     activeAttemptFallback: "LATEST_IN_PROGRESS_FOR_DISPLAY_ONLY";
     supportThresholdPercent: number;
     note: string;
@@ -713,6 +788,8 @@ export interface ExamClassReport {
     notStartedCount: number;
     inProgressStudentCount: number;
     submittedStudentCount: number;
+    finalizedStudentCount: number;
+    publishedStudentCount: number;
     selectedSubmittedAttemptCount: number;
     ungradedSubmittedAttemptCount: number;
     averageScore: number | null;
@@ -1629,4 +1706,5 @@ export const EXAM_STATUS_LABELS: Record<ExamStatus, string> = {
   SCHEDULED: "Sắp diễn ra",
   ONGOING: "Đang diễn ra",
   ENDED: "Đã kết thúc",
+  ARCHIVED: "Đã lưu trữ",
 };

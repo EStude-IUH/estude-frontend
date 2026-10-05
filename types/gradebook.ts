@@ -28,8 +28,35 @@ export interface GradeRecord {
   comment: string;
   updatedAt: string;
 }
+export interface GradeItem {
+  id: string;
+  title: string;
+  sourceType: "ASSIGNMENT" | "EXAM" | "MANUAL" | "LEGACY";
+  sourceId: string | null;
+  maxScore: number;
+  status: "PENDING_GRADEBOOK_CONFIGURATION" | "ACTIVE" | "ARCHIVED";
+  officialSlot: string | null;
+}
+export interface StudentGrade {
+  id: string;
+  derived?: boolean;
+  gradeItemId: string;
+  studentId: string;
+  evaluationStatus: "NOT_GRADED" | "GRADED" | "MISSING" | "EXCUSED";
+  publicationStatus: "DRAFT" | "PUBLISHED";
+  rawScore: number | null;
+  assessmentValue: "PASS" | "FAIL" | null;
+  publishedRawScore: number | null;
+  publishedAssessmentValue: "PASS" | "FAIL" | null;
+  publishedEvaluationStatus: "NOT_GRADED" | "GRADED" | "MISSING" | "EXCUSED" | null;
+  publishedAt: string | null;
+  sourceAttemptId: string | null;
+  publishedSourceAttemptId: string | null;
+}
 export interface GradebookView {
   book: Gradebook | null;
+  pendingGradeItemCount: number;
+  items: GradeItem[];
   requiredRegular: number | null;
   term: { status: string };
   year?: { status: string };
@@ -39,6 +66,7 @@ export interface GradebookView {
     fullName: string;
     accountName: string;
     record: GradeRecord | null;
+    itemGrades: StudentGrade[];
     outcome: GradeOutcome | null;
   }>;
 }
@@ -93,6 +121,14 @@ export interface GradeReport {
         comment: string;
         updatedAt: string | null;
         outcome: GradeOutcome;
+        items: Array<GradeItem & {
+          evaluationStatus: "NOT_GRADED" | "GRADED" | "MISSING" | "EXCUSED";
+          publicationStatus: "DRAFT" | "PUBLISHED";
+          score: number | null;
+          assessment: "PASS" | "FAIL" | null;
+          sourceAttemptId: string | null;
+          publishedAt: string | null;
+        }>;
       }>;
     }>;
   }>;

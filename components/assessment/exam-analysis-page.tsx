@@ -414,13 +414,8 @@ function InsightActionPanel({
             <UsersRound className="size-5" />
           </span>
           <div>
-            <h2 className="font-bold text-slate-900">
-              Biến insight thành hành động
-            </h2>
-            <p className="mt-1 text-slate-500">
-              Nhóm được tạo từ bài nộp mới nhất và bằng chứng theo chủ đề. Giáo
-              viên kiểm tra nội dung trước khi gửi.
-            </p>
+            <h2 className="font-bold text-slate-900">Biến insight thành hành động</h2>
+            <p className="mt-1 text-slate-500">Nhóm được tạo từ lượt có điểm cao nhất đã chấm xong và bằng chứng theo chủ đề. Giáo viên kiểm tra nội dung trước khi gửi.</p>
           </div>
         </div>
         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-brand-700">

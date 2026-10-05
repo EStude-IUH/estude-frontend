@@ -57,4 +57,26 @@ export const gradebookService = {
       `/gradebooks/students/${encodeURIComponent(studentId)}`,
     );
   },
+  createManualItem(id: string, input: { title: string; maxScore: number }) {
+    return authenticatedRequest(`/gradebooks/${encodeURIComponent(id)}/items/manual`, {
+      method: "POST", body: JSON.stringify(input),
+    });
+  },
+  saveManualGrade(id: string, itemId: string, input: {
+    studentId: string;
+    evaluationStatus: "NOT_GRADED" | "GRADED" | "MISSING" | "EXCUSED";
+    score: number | null;
+    assessment?: "PASS" | "FAIL" | null;
+    publish: boolean;
+    reason: string;
+  }) {
+    return authenticatedRequest(`/gradebooks/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/grades`, {
+      method: "POST", body: JSON.stringify(input),
+    });
+  },
+  mapSlot(id: string, itemId: string, slotKey: string | null, reason: string) {
+    return authenticatedRequest(`/gradebooks/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/slot`, {
+      method: "POST", body: JSON.stringify({ slotKey, reason }),
+    });
+  },
 };
