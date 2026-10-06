@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run dev:student",
+    "dev:home": "cross-env NEXT_PUBLIC_AUTH_PORTAL=home NEXT_DIST_DIR=.next-home next dev -p 3004",
     "dev:admin": "cross-env NEXT_PUBLIC_AUTH_PORTAL=admin NEXT_DIST_DIR=.next-admin next dev",
     "dev:teacher": "cross-env NEXT_PUBLIC_AUTH_PORTAL=teacher NEXT_DIST_DIR=.next-teacher next dev",
     "dev:student": "cross-env NEXT_PUBLIC_AUTH_PORTAL=student NEXT_DIST_DIR=.next-student next dev",

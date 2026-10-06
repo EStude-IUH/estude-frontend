@@ -1,9 +1,12 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { getPortalFromHost } from '@/lib/portal';
+import { getPortalFromHost, isDevelopmentHome } from '@/lib/portal';
 import { LandingPage } from '@/components/marketing/landing-page';
+import { AboutPage } from '@/components/marketing/about-page';
 
 export default async function HomePage() {
+  if (isDevelopmentHome()) return <AboutPage />;
+
   const roleHome = {
     ADMIN: '/admin/login',
     TEACHER: '/teacher/login',
