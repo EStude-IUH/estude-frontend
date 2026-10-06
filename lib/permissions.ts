@@ -1,3 +1,5 @@
+import type { UserRole } from "@/types/auth";
+
 export const MODULE_LINKS = [
   {
     href: "/admin/dashboard",
@@ -30,7 +32,8 @@ export const MODULE_LINKS = [
     label: "Dữ liệu học vụ",
     permission: "academic.read",
   },
-  { href: "/admin/subjects", label: "Môn học", permission: "subjects.read" },
+  { href: "/admin/subjects", label: "Danh mục môn học", permission: "subjects.read" },
+  { href: "/admin/course-offerings", label: "Lớp môn học", permission: "course_offerings.read" },
   { href: "/admin/classes", label: "Lớp học", permission: "classes.read" },
   {
     href: "/admin/subject-assignments",
@@ -56,6 +59,11 @@ export const MODULE_LINKS = [
     href: "/admin/settings/ai-question",
     label: "Cấu hình AI",
     permission: "ai_settings.read",
+  },
+  {
+    href: "/teacher/courses",
+    label: "Môn học được phân công",
+    permission: "teaching.read",
   },
   {
     href: "/teacher/classes",
@@ -112,6 +120,7 @@ export const MODULE_LINKS = [
     label: "Điểm số của tôi",
     permission: "learning.read",
   },
+  { href: "/student/assignments", label: "Bài tập của tôi", permission: "learning.read" },
   { href: "/student/review", label: "Ôn tập", permission: "study.read" },
   {
     href: "/student/activity",
@@ -179,4 +188,12 @@ export function routePermission(path: string): string | null {
   if (link) return link.permission;
   if (path.startsWith("/admin/settings")) return "system_settings.read";
   return "__unmapped__";
+}
+
+/** Route prefixes are role workspaces, even when RBAC grants overlap. */
+export function canVisitRoute(path: string, role: UserRole, permissions: readonly string[]): boolean {
+  const workspace = path.match(/^\/(admin|teacher|student|parent)(?:\/|$)/)?.[1];
+  if (workspace && workspace.toUpperCase() !== role) return false;
+  const permission = routePermission(path);
+  return permission === null || permissions.includes(permission);
 }

@@ -425,7 +425,7 @@ export function ParentOverviewPanels({
                       {item.studentName}
                     </p>
                     <p className="mt-1 truncate text-[11px] text-slate-400">
-                      {date(item.sessionDate)}
+                      {new Date(item.sessionDate).toLocaleDateString("vi-VN", { timeZone: "UTC" })}
                       {item.subject?.name
                         ? ` · ${toVietnameseSubjectName(item.subject.name)}`
                         : ""}
@@ -433,14 +433,14 @@ export function ParentOverviewPanels({
                     </p>
                   </div>
                   <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold ${item.status === "PRESENT" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold ${item.status === "PRESENT" ? "bg-emerald-50 text-emerald-700" : item.status === "ABSENT" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}
                   >
                     {item.status === "PRESENT" ? (
                       <Check className="size-3" />
                     ) : (
                       <CircleAlert className="size-3" />
                     )}
-                    {item.status === "PRESENT" ? "Có mặt" : "Vắng"}
+                    {({ PRESENT: "Có mặt", ABSENT: "Vắng", LATE: "Đi muộn", EXCUSED: "Vắng có phép", LEAVE: "Nghỉ phép", NOT_MARKED: "Chưa điểm danh", UNDER_REVIEW: "Đang rà soát" } as Record<string, string>)[item.status] ?? item.status}
                   </span>
                 </article>
               ))}

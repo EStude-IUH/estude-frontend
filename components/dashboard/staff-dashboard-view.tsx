@@ -47,8 +47,10 @@ import {
   type SystemSettingsSection,
 } from "@/components/admin/system-settings-panel";
 import { SubjectTeacherAssignmentPanel } from "@/components/admin/subject-teacher-assignment-panel";
+import { CourseOfferingPanel } from "@/components/admin/course-offering-panel";
 import { ParentStudentLinksPanel } from "@/components/admin/parent-student-links-panel";
 import { TeacherAssignedClassesPanel } from "@/components/teacher/assigned-classes-panel";
+import { TeacherAssignedCoursesPanel } from "@/components/teacher/assigned-courses-panel";
 import { TeacherClassLearningSpace } from "@/components/teacher/class-learning-space";
 import { TeacherMaterialLibraryPanel } from "@/components/teacher/material-library-panel";
 import { TeacherStudentsPanel } from "@/components/teacher/students-panel";
@@ -60,6 +62,7 @@ import { useAuth } from "@/context/auth-context";
 import { getRoleLogin, getRoleSessionSettings } from "@/lib/role-routes";
 
 const staffNavItems = [
+  { icon: BookOpenCheck, label: "Môn học được phân công", href: "/teacher/courses" },
   { icon: School, label: "Lớp học được phân công", href: "/teacher/classes" },
   { icon: UsersRound, label: "Học sinh", href: "/teacher/students" },
   { icon: Library, label: "Thư viện tài liệu", href: "/teacher/materials" },
@@ -305,8 +308,13 @@ export function StaffDashboardView() {
           },
           {
             icon: Library,
-            label: "Môn học",
+            label: "Danh mục môn học",
             href: "/admin/subjects",
+          },
+          {
+            icon: BookOpenCheck,
+            label: "Lớp môn học",
+            href: "/admin/course-offerings",
           },
           {
             icon: UsersRound,
@@ -340,12 +348,14 @@ export function StaffDashboardView() {
       : "TEACHER";
   const isAcademicDataPage = pathname === "/admin/academic-data";
   const isSubjectsPage = pathname === "/admin/subjects";
+  const isCourseOfferingsPage = pathname === "/admin/course-offerings";
   const isClassesPage = pathname === "/admin/classes";
   const isSubjectAssignmentsPage = pathname === "/admin/subject-assignments";
   const isParentStudentLinksPage = pathname === "/admin/parent-student-links";
   const isTeacherDashboard =
     user.role === "TEACHER" && pathname === "/teacher/dashboard";
   const isTeacherClassesPage = pathname === "/teacher/classes";
+  const isTeacherCoursesPage = pathname === "/teacher/courses";
   const isTeacherStudentsPage = pathname === "/teacher/students";
   const isTeacherMaterialsPage = pathname === "/teacher/materials";
   const teacherClassId =
@@ -742,11 +752,13 @@ export function StaffDashboardView() {
               isAccountsPage ||
               isUsersPage ||
               isSubjectsPage ||
+              isCourseOfferingsPage ||
               isClassesPage ||
               isSubjectAssignmentsPage ||
               isParentStudentLinksPage ||
               isSettingsPage ||
               isTeacherDashboard ||
+              isTeacherCoursesPage ||
               isTeacherClassesPage ||
               isTeacherStudentsPage ||
               isTeacherMaterialsPage ||
@@ -769,6 +781,8 @@ export function StaffDashboardView() {
               <TeacherClassLearningSpace classId={teacherClassId} onClassNameChange={setTeacherClassDetail} />
             ) : isTeacherClassesPage ? (
               <TeacherAssignedClassesPanel />
+            ) : isTeacherCoursesPage ? (
+              <TeacherAssignedCoursesPanel />
             ) : isTeacherMaterialsPage ? (
               <TeacherMaterialLibraryPanel />
             ) : isSubjectAssignmentsPage ? (
@@ -785,6 +799,8 @@ export function StaffDashboardView() {
               <SystemSettingsPanel section={settingsSection as SystemSettingsSection} />
             ) : isSubjectsPage ? (
               <SubjectManagementPanel />
+            ) : isCourseOfferingsPage ? (
+              <CourseOfferingPanel />
             ) : isClassesPage ? (
               <ClassManagementPanel />
             ) : isAcademicDataPage ? (

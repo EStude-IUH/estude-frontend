@@ -29,10 +29,10 @@ const report = {
   generatedAt: new Date().toISOString(),
   policy: {
     enrollmentScope: "CURRENT_ACTIVE_ENROLLMENTS",
-    selectedAttemptRule: "LATEST_SUBMITTED",
+    selectedAttemptRule: "HIGHEST_FINALIZED",
     activeAttemptFallback: "LATEST_IN_PROGRESS_FOR_DISPLAY_ONLY",
     supportThresholdPercent: 60,
-    note: "Mỗi học sinh chỉ đóng góp một lượt đã nộp gần nhất vào thống kê.",
+    note: "Mỗi học sinh đóng góp lượt có điểm cao nhất đã chấm xong vào thống kê.",
   },
   summary: {
     enrolledStudentCount: 3,
@@ -298,7 +298,7 @@ test("teacher class report separates students from attempts and supports reviewe
   assert.match(text(), /"children":\["4"\]/);
   assert.match(text(), /Chưa bắt đầu/);
   assert.match(text(), /1 em đã nộp/);
-  assert.match(text(), /lượt đã nộp gần nhất/);
+  assert.match(text(), /điểm cao nhất/);
   assert.match(text(), /Dashboard báo cáo/);
   assert.match(text(), /Mức độ tham gia/);
   assert.match(text(), /Phân bố kết quả/);

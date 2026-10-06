@@ -13,7 +13,7 @@ const flush = () => new Promise(setImmediate);
 const attempt = (id, studentId, overrides = {}) => ({
   id, studentId, studentName: studentId === "a" ? "Nguyễn Văn An" : "Trần Bình",
   studentCode: studentId === "a" ? "HS001" : "HS002", status: "SUBMITTED",
-  startedAt: "2026-09-20T10:00:00Z", submittedAt: "2026-09-20T10:30:00Z", score: 0,
+  startedAt: "2026-09-20T10:00:00Z", submittedAt: "2026-09-20T10:30:00Z", score: 0, maxScore: 10, gradingStatus: "FINALIZED",
   ...overrides,
 });
 
@@ -58,7 +58,7 @@ async function renderPanel(t, { submissions = [], allowed = true, getSubmissions
   return { renderer, routes, calls: () => calls, text: () => JSON.stringify(renderer.toJSON()) };
 }
 
-test("lists each submitted student once, selects latest submission and opens that attempt", async (t) => {
+test("lists each submitted student once, selects highest finalized score and opens that attempt", async (t) => {
   const { renderer, routes, text } = await renderPanel(t, { submissions: [
     attempt("older", "a", { score: 8 }),
     attempt("active", "a", { status: "IN_PROGRESS", submittedAt: null }),
@@ -67,12 +67,12 @@ test("lists each submitted student once, selects latest submission and opens tha
     attempt("not-submitted", "c", { studentName: "Chưa nộp", status: "IN_PROGRESS", submittedAt: null }),
   ] });
   assert.doesNotMatch(text(), /Chưa nộp/);
-  assert.match(text(), /0\/10/);
+  assert.match(text(), /8\/10/);
   assert.match(text(), /Chưa có điểm/);
   assert.equal(renderer.root.findByType("tbody").findAllByType("tr").length, 2);
   const open = renderer.root.findAllByType("button").find((button) => button.props["aria-label"] === "Xem bài làm của Nguyễn Văn An");
   await act(async () => open.props.onClick());
-  assert.deepEqual(routes, ["/teacher/exams/exam/submissions/latest"]);
+  assert.deepEqual(routes, ["/teacher/exams/exam/submissions/older"]);
   const input = renderer.root.findByType("input");
   await act(async () => input.props.onChange({ target: { value: "nguyen van an" } }));
   assert.match(text(), /Nguyễn Văn An/);

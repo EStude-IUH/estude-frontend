@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { COURSE_RESOURCE_ACCEPT, courseResourceContentType } from "@/lib/course-resource-file";
 import { usePermissions } from "@/context/permissions-context";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
@@ -42,6 +43,7 @@ type TargetDraft = {
   subjectId: string;
   topicMode: "existing" | "new";
   topicId: string;
+  lessonId: string;
   topicName: string;
 };
 
@@ -55,21 +57,12 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-type MaterialPreviewKind = "native" | "office" | "unsupported";
+type MaterialPreviewKind = "native" | "unsupported";
 
 function getMaterialPreviewKind(material: LearningMaterial): MaterialPreviewKind {
   const mimeType = material.mimeType.toLowerCase();
-  const extension = material.originalName.split(".").pop()?.toLowerCase() ?? "";
-  if (
-    mimeType === "application/pdf"
-    || mimeType.startsWith("image/")
-    || mimeType.startsWith("text/")
-    || ["pdf", "txt", "csv", "jpg", "jpeg", "png", "gif", "webp", "svg"].includes(extension)
-  ) {
+  if (["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
     return "native";
-  }
-  if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension)) {
-    return "office";
   }
   return "unsupported";
 }
@@ -100,12 +93,9 @@ function MaterialPreview({
     );
   }
 
-  const source = previewKind === "office"
-    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
-    : url;
   return (
     <iframe
-      src={source}
+      src={url}
       title={`Xem trước ${material.originalName}`}
       className="h-[calc(100dvh-7rem)] min-h-[520px] w-full rounded-lg border border-slate-200 bg-slate-50"
       allowFullScreen
@@ -194,11 +184,8 @@ export function TeacherMaterialLibraryPanel() {
   async function uploadMaterials(files: FileList | null) {
     if (!files?.length) return;
     const selectedFiles = Array.from(files);
-    const oversized = selectedFiles.find((file) => file.size > 50 * 1024 * 1024);
-    if (oversized) {
-      setError(`Tệp ${oversized.name} vượt quá giới hạn 50MB`);
-      return;
-    }
+    try { for (const file of selectedFiles) courseResourceContentType(file); }
+    catch (cause) { setError(errorMessage(cause, "Loại file không hợp lệ")); return; }
     setIsUploading(true);
     setError("");
     try {
@@ -222,6 +209,7 @@ export function TeacherMaterialLibraryPanel() {
         subjectId,
         topicMode: availableTopics.length ? "existing" : "new",
         topicId: availableTopics[0]?.id ?? "",
+        lessonId: availableTopics[0]?.lessons?.[0]?.id ?? "",
         topicName: "",
       };
     }
@@ -239,6 +227,7 @@ export function TeacherMaterialLibraryPanel() {
       subjectId,
       topicMode: availableTopics.length ? "existing" : "new",
       topicId: availableTopics[0]?.id ?? "",
+      lessonId: availableTopics[0]?.lessons?.[0]?.id ?? "",
       topicName: "",
     });
   }
@@ -251,6 +240,7 @@ export function TeacherMaterialLibraryPanel() {
         classId: schoolClass.id,
         subjectId: target.subjectId,
         ...(target.topicMode === "existing" ? { topicId: target.topicId } : { topicName: target.topicName.trim() }),
+        ...(target.topicMode === "existing" && target.lessonId ? { lessonId: target.lessonId } : {}),
       }];
     });
     if (!payload.length) {
@@ -315,7 +305,7 @@ export function TeacherMaterialLibraryPanel() {
       await academicDataService.deleteLearningMaterial(deletingMaterial.id);
       setDeletingMaterial(null);
       await load();
-      notify("Đã xóa tài liệu khỏi thư viện và các lớp", { key: "library-material-deleted" });
+      notify("Đã ẩn tài liệu chưa sử dụng khỏi thư viện", { key: "library-material-deleted" });
     } catch (cause) {
       setError(errorMessage(cause, "Không thể xóa tài liệu"));
     } finally {
@@ -352,7 +342,7 @@ export function TeacherMaterialLibraryPanel() {
             <label className={`inline-flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 ${isUploading || !can('materials.create') ? "pointer-events-none opacity-60" : ""}`}>
               {isUploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
               {isUploading ? "Đang tải lên..." : "Tải tài liệu"}
-              <input type="file" disabled={!can('materials.create')} multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.jpg,.jpeg,.png,.webp" onChange={(event) => { void uploadMaterials(event.target.files); event.currentTarget.value = ""; }} />
+              <input type="file" disabled={!can('materials.create')} multiple className="hidden" accept={COURSE_RESOURCE_ACCEPT} onChange={(event) => { void uploadMaterials(event.target.files); event.currentTarget.value = ""; }} />
             </label>
           </div>
         </div>
@@ -520,7 +510,9 @@ export function TeacherMaterialLibraryPanel() {
               {target.selected ? <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 md:grid-cols-3">
                 <label className="grid gap-1.5 text-xs font-bold text-slate-600">Môn học<select value={target.subjectId} onChange={(event) => changeSubject(schoolClass, event.target.value)} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400">{schoolClass.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {getVietnameseSubjectName(subject)}</option>)}</select></label>
                 <label className="grid gap-1.5 text-xs font-bold text-slate-600">Cách gán<select value={target.topicMode} onChange={(event) => updateTarget(schoolClass.id, { topicMode: event.target.value as "existing" | "new" })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400"><option value="existing" disabled={!availableTopics.length}>Chủ đề có sẵn</option><option value="new">Tạo chủ đề mới</option></select></label>
-                {target.topicMode === "existing" ? <label className="grid gap-1.5 text-xs font-bold text-slate-600">Chủ đề<select value={target.topicId} onChange={(event) => updateTarget(schoolClass.id, { topicId: event.target.value })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400">{availableTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select></label> : <label className="grid gap-1.5 text-xs font-bold text-slate-600">Tên chủ đề mới<input required maxLength={120} value={target.topicName} onChange={(event) => updateTarget(schoolClass.id, { topicName: event.target.value })} placeholder="Ví dụ: Tài liệu tuần 1" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400" /></label>}
+                {target.topicMode === "existing" ? <label className="grid gap-1.5 text-xs font-bold text-slate-600">Chủ đề<select value={target.topicId} onChange={(event) => updateTarget(schoolClass.id, { topicId: event.target.value, lessonId: availableTopics.find((t) => t.id === event.target.value)?.lessons?.[0]?.id ?? "" })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400">{availableTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select></label> : <label className="grid gap-1.5 text-xs font-bold text-slate-600">Tên chủ đề mới<input required maxLength={120} value={target.topicName} onChange={(event) => updateTarget(schoolClass.id, { topicName: event.target.value })} placeholder="Ví dụ: Tài liệu tuần 1" className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-brand-400" /></label>}
+                {target.topicMode === "existing" ? <label className="grid gap-1.5 text-xs font-bold text-slate-600">Bài học<select value={target.lessonId} onChange={(event) => updateTarget(schoolClass.id, { lessonId: event.target.value })} className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal"><option value="">Nội dung mặc định (bản nháp)</option>{availableTopics.find((t) => t.id === target.topicId)?.lessons?.filter((l) => l.status !== 'ARCHIVED').map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</select></label> : null}
+                <p className="text-xs text-slate-500 md:col-span-3">Tài nguyên được gắn vào bài học ở trạng thái bản nháp. Công bố trong không gian lớp để học sinh xem.</p>
               </div> : null}
             </section>;
           })}
@@ -528,7 +520,7 @@ export function TeacherMaterialLibraryPanel() {
       </Modal>
 
       <ConfirmationDialog open={Boolean(deletingMaterial)} title="Xóa tài liệu khỏi thư viện" confirmLabel="Xóa tài liệu" confirmVariant="danger" loading={isAssigning} onClose={() => setDeletingMaterial(null)} onConfirm={() => void deleteMaterial()}>
-        <p>Tệp <b>{deletingMaterial?.originalName}</b> sẽ bị xóa khỏi S3 và tất cả chủ đề đang sử dụng tệp này. Thao tác này không thể hoàn tác.</p>
+        <p>Tài liệu <b>{deletingMaterial?.originalName}</b> sẽ được ẩn khỏi thư viện; file gốc vẫn được giữ. File có lịch sử sử dụng không thể xóa: hãy lưu trữ tài nguyên trong bài học tương ứng.</p>
       </ConfirmationDialog>
     </div>
   );

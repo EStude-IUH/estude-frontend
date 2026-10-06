@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import {
-  BookOpenCheck,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   MapPin,
   Video,
 } from "lucide-react";
+import { TeacherAssignedCoursesPanel } from "@/components/teacher/assigned-courses-panel";
 
 const dayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
@@ -81,12 +81,6 @@ function formatWeekRange(start: Date, end: Date): string {
 
   return `${start.getDate()} tháng ${start.getMonth() + 1}, ${start.getFullYear()} – ${end.getDate()} tháng ${end.getMonth() + 1}, ${end.getFullYear()}`;
 }
-
-const assignedCourses = [
-  { name: "Lập trình hướng đối tượng", code: "DHHTTT18C · OOP", students: 0, tone: "bg-blue-600" },
-  { name: "Cơ sở dữ liệu", code: "DHTH19B · CSDL", students: 42, tone: "bg-violet-500" },
-  { name: "Phát triển ứng dụng Web", code: "DHKTPM18A · WEB", students: 46, tone: "bg-emerald-500" },
-];
 
 export function WeeklyTimetable({ sessions = [] }: WeeklyTimetableProps) {
   const [selectedDate, setSelectedDate] = useState(() => normalizeDate(new Date()));
@@ -206,32 +200,7 @@ export function WeeklyTimetable({ sessions = [] }: WeeklyTimetableProps) {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-extrabold">Môn học được phân công</h2>
-            <p className="mt-1 text-xs text-slate-500">Các lớp và môn học đang phụ trách trong học kỳ</p>
-          </div>
-          <span className="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700">
-            {assignedCourses.length} môn học
-          </span>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          {assignedCourses.map((course) => (
-            <article key={course.code} className="rounded-2xl border border-slate-100 p-4 transition hover:border-brand-200 hover:shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <span className={`grid size-10 shrink-0 place-items-center rounded-xl text-white ${course.tone}`}>
-                  <BookOpenCheck className="size-5" />
-                </span>
-                <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang phụ trách</span>
-              </div>
-              <h3 className="mt-3 truncate text-sm font-extrabold text-slate-900">{course.name}</h3>
-              <p className="mt-1 truncate text-xs font-semibold text-brand-600">{course.code}</p>
-              <p className="mt-3 text-xs text-slate-500">{course.students} học viên</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      <TeacherAssignedCoursesPanel />
     </div>
   );
 }

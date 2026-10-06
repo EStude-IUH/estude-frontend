@@ -1,6 +1,6 @@
 import { RoleGate } from "@/components/auth/role-gate";
-import { TeacherEngagementCenter } from "@/components/teacher/engagement-center";
+import { TeacherAttendancePanel } from "@/components/teacher/teacher-attendance-panel";
 
 export default function TeacherAttendancePage() {
-  return <RoleGate allowedRole="TEACHER"><TeacherEngagementCenter mode="attendance" /></RoleGate>;
+  return <RoleGate allowedRole="TEACHER"><TeacherAttendancePanel /></RoleGate>;
 }

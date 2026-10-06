@@ -33,30 +33,13 @@ import {
 } from "@/components/assessment/assessment-shell";
 import { useActionNotification } from "@/components/ui/action-notification";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableEmptyRow,
-  TableHead,
-  TableHeader,
-} from "@/components/ui/data-table";
-import { Textarea } from "@/components/ui/form-control";
+import { Table, TableBody, TableCell, TableEmptyRow, TableHead, TableHeader } from "@/components/ui/data-table";
+import { Input, Textarea } from "@/components/ui/form-control";
 import { Modal } from "@/components/ui/modal";
-import { examService } from "@/lib/assessment-api";
+import { examAttemptService, examService } from "@/lib/assessment-api";
 import { StudentInterventionPanel } from "@/components/assessment/student-intervention-panel";
-import {
-  matchesSearchKeyword,
-  normalizeSearchKeyword,
-} from "@/lib/search-keyword";
-import type {
-  Exam,
-  ExamAttempt,
-  ExamClassAiAnalysis,
-  ExamClassReport,
-  ExamClassReportStudent,
-  TeacherReviewStatus,
-} from "@/types/assessment";
+import { matchesSearchKeyword, normalizeSearchKeyword } from "@/lib/search-keyword";
+import type { Exam, ExamAttempt, ExamClassAiAnalysis, ExamClassReport, ExamClassReportStudent, TeacherReviewStatus } from "@/types/assessment";
 
 export function SubmissionsPage() {
   const params = useParams<{ id: string }>();
@@ -73,15 +56,12 @@ export function SubmissionsPage() {
     useState<ExamClassReportStudent | null>(null);
   const [comment, setComment] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [publishingResults, setPublishingResults] = useState(false);
   const [reload, setReload] = useState(0);
   const [studentSearch, setStudentSearch] = useState("");
   const [supportOnly, setSupportOnly] = useState(false);
-  const [participationFilter, setParticipationFilter] = useState<
-    "ALL" | ExamClassReportStudent["participationStatus"]
-  >("ALL");
-  const [gradingFilter, setGradingFilter] = useState<
-    "ALL" | "COMPLETE" | "PARTIAL"
-  >("ALL");
+  const [participationFilter, setParticipationFilter] = useState<"ALL" | ExamClassReportStudent["participationStatus"]>("ALL");
+  const [gradingFilter, setGradingFilter] = useState<"ALL" | "COMPLETE" | "PARTIAL" | "PUBLISHED">("ALL");
   const [topicFilter, setTopicFilter] = useState("ALL");
   const [itemFlagFilter, setItemFlagFilter] = useState("ALL");
 
@@ -113,16 +93,12 @@ export function SubmissionsPage() {
       report?.students.filter(
         (student) =>
           (!supportOnly || student.needsSupport) &&
-          (participationFilter === "ALL" ||
-            student.participationStatus === participationFilter) &&
-          (gradingFilter === "ALL" ||
-            student.selectedAttempt?.gradingStatus === gradingFilter) &&
-          (topicFilter === "ALL" ||
-            student.supportTopicNames.includes(topicFilter)) &&
-          matchesSearchKeyword(
-            normalizeSearchKeyword(student.fullName, student.studentCode),
-            studentSearch,
-          ),
+          (participationFilter === "ALL" || student.participationStatus === participationFilter) &&
+          (gradingFilter === "ALL" || (gradingFilter === "PUBLISHED"
+            ? student.selectedAttempt?.published === true
+            : student.selectedAttempt?.gradingStatus === gradingFilter)) &&
+          (topicFilter === "ALL" || student.supportTopicNames.includes(topicFilter)) &&
+          matchesSearchKeyword(normalizeSearchKeyword(student.fullName, student.studentCode), studentSearch),
       ) ?? [],
     [
       gradingFilter,
@@ -308,6 +284,20 @@ export function SubmissionsPage() {
     }
   }
 
+  async function publishResults() {
+    if (!exam || publishingResults) return;
+    setPublishingResults(true);
+    try {
+      const result = await examService.publishExamResults(exam.id);
+      notify(`Đã công bố điểm cho ${result.publishedStudents} học sinh.`, { key: "exam-results-published" });
+      setReload((value) => value + 1);
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : "Không công bố được điểm", {
+        key: "exam-results-error", variant: "error",
+      });
+    } finally { setPublishingResults(false); }
+  }
+
   if (loading)
     return (
       <AssessmentShell>
@@ -345,19 +335,13 @@ export function SubmissionsPage() {
               <Download className="size-4" />
               Xuất CSV
             </Button>
-            <Button
-              permission="exams.submissions"
-              variant="outline"
-              onClick={() =>
-                router.push(`/teacher/exams/${exam.id}/improvement`)
-              }
-            >
+            {exam.termId && exam.status === "ENDED" ? <Button permission="exams.publish" disabled={publishingResults} onClick={() => void publishResults()}>
+              {publishingResults ? "Đang công bố..." : exam.resultStatus === "PUBLISHED" ? "Cập nhật điểm đã công bố" : "Công bố điểm vào sổ"}
+            </Button> : null}
+            <Button permission="exams.submissions" variant="outline" onClick={() => router.push(`/teacher/exams/${exam.id}/improvement`)}>
               Theo dõi cải thiện
             </Button>
-            <Button
-              permission="exams.submissions"
-              onClick={() => router.push(`/teacher/exams/${exam.id}/analysis`)}
-            >
+            <Button permission="exams.submissions" onClick={() => router.push(`/teacher/exams/${exam.id}/analysis`)}>
               <Sparkles className="size-4" />
               Phân tích AI
             </Button>
@@ -371,13 +355,9 @@ export function SubmissionsPage() {
       >
         <CircleAlert className="mt-0.5 size-5 shrink-0 text-brand-600" />
         <div>
-          <p className="font-black">
-            Quy tắc thống kê: lượt đã nộp gần nhất của mỗi học sinh
-          </p>
+          <p className="font-black">Quy tắc thống kê: điểm cao nhất trong các lượt đã chấm xong</p>
           <p className="mt-0.5 leading-6 text-blue-800">
-            {report.policy.note} Danh sách gồm toàn bộ học sinh đang ghi danh
-            trong lớp; ngưỡng cần hỗ trợ là dưới{" "}
-            {report.policy.supportThresholdPercent}%.
+            {report.policy.note} {exam.audienceProvenance === "SNAPSHOT" ? "Danh sách lấy từ đối tượng được giao khi công bố bài kiểm tra." : "Bài kiểm tra cũ chưa có audience snapshot; danh sách hiện dựa trên ghi danh hiện tại."} Ngưỡng cần hỗ trợ là dưới {report.policy.supportThresholdPercent}%.
           </p>
         </div>
       </section>
@@ -420,22 +400,12 @@ export function SubmissionsPage() {
         />
       </div>
 
-      <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white text-center shadow-card">
-        <StatusCount
-          label="Chưa bắt đầu"
-          value={summary.notStartedCount}
-          className="text-slate-600"
-        />
-        <StatusCount
-          label="Đang làm"
-          value={summary.inProgressStudentCount}
-          className="border-x border-slate-200 text-amber-700"
-        />
-        <StatusCount
-          label="Đã nộp"
-          value={summary.submittedStudentCount}
-          className="text-emerald-700"
-        />
+      <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white text-center shadow-card sm:grid-cols-5">
+        <StatusCount label="Chưa bắt đầu" value={summary.notStartedCount} className="text-slate-600" />
+        <StatusCount label="Đang làm" value={summary.inProgressStudentCount} className="border-x border-slate-200 text-amber-700" />
+        <StatusCount label="Đã nộp" value={summary.submittedStudentCount} className="text-emerald-700" />
+        <StatusCount label="Đã chấm xong" value={summary.finalizedStudentCount} className="text-blue-700" />
+        <StatusCount label="Đã công bố" value={summary.publishedStudentCount} className="text-brand-700" />
       </div>
 
       {summary.ungradedSubmittedAttemptCount > 0 ? (
@@ -485,6 +455,7 @@ export function SubmissionsPage() {
           <option value="ALL">Mọi trạng thái chấm</option>
           <option value="COMPLETE">Đã đủ điểm</option>
           <option value="PARTIAL">Còn tự luận</option>
+          <option value="PUBLISHED">Đã công bố điểm</option>
         </select>
         <select
           aria-label="Lọc chủ đề cần hỗ trợ"
@@ -1121,9 +1092,7 @@ export function ReportOverviewDashboard({
               </span>
               <div>
                 <h3 className="font-black text-slate-900">Phân bố kết quả</h3>
-                <p className="text-xs text-slate-500">
-                  Theo lượt đã nộp gần nhất có điểm
-                </p>
+                <p className="text-xs text-slate-500">Theo lượt có điểm cao nhất đã chấm xong</p>
               </div>
             </div>
             <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">
@@ -1443,23 +1412,9 @@ function StudentReportTable({
                   {student.selectedAttempt?.status === "SUBMITTED" ? (
                     student.selectedAttempt.gradingStatus === "PARTIAL" ? (
                       <>
-                        <b className="text-amber-700">
-                          {student.selectedAttempt.score === null
-                            ? "—"
-                            : `${formatNumber(student.selectedAttempt.score)}/${formatNumber(student.selectedAttempt.scoredPointsPossible ?? 0)}`}
-                        </b>
-                        <p className="text-[11px] text-amber-700">
-                          Chưa chấm{" "}
-                          {formatNumber(
-                            student.selectedAttempt.ungradedPointsPossible ?? 0,
-                          )}{" "}
-                          điểm tự luận
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {formatDuration(
-                            student.selectedAttempt.durationSeconds,
-                          )}
-                        </p>
+                        <b className="text-amber-700">{student.selectedAttempt.autoScoredSubtotal == null ? "—" : `${formatNumber(student.selectedAttempt.autoScoredSubtotal)}/${formatNumber(student.selectedAttempt.scoredPointsPossible ?? 0)}`}</b>
+                        <p className="text-[11px] text-amber-700">Chưa chấm {formatNumber(student.selectedAttempt.ungradedPointsPossible ?? 0)} điểm tự luận</p>
+                        <p className="text-[11px] text-slate-400">{formatDuration(student.selectedAttempt.durationSeconds)}</p>
                       </>
                     ) : (
                       <>
@@ -1565,11 +1520,7 @@ function StudentReportTable({
           </TableBody>
         </Table>
       </div>
-      <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
-        Điểm và thời gian chỉ lấy từ lượt đã nộp gần nhất. Bài còn câu tự luận
-        chưa chấm không tham gia thống kê điểm; lượt đang làm không tham gia
-        tính trung bình.
-      </p>
+      <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500">Điểm và thời gian lấy từ lượt có điểm cao nhất đã chấm xong. Bài chưa chấm xong và lượt đang làm không tham gia thống kê điểm.</p>
     </section>
   );
 }
@@ -1905,12 +1856,24 @@ function formatDuration(value: number | null): string {
 
 export function SubmissionDetailPage() {
   const params = useParams<{ id: string; attemptId: string }>();
+  const { notify } = useActionNotification();
   const [data, setData] = useState<(ExamAttempt & { exam: Exam }) | null>(null);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"submission" | "analysis">(
-    "submission",
-  );
+  const [activeTab, setActiveTab] = useState<"submission" | "analysis">("submission");
   const [hasOpenedAnalysis, setHasOpenedAnalysis] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeReason, setFinalizeReason] = useState("");
+  async function finalize() {
+    if (!finalizeReason.trim()) return;
+    setFinalizing(true);
+    try {
+      setData(await examAttemptService.finalizeManual(params.attemptId, finalizeReason.trim()));
+      setFinalizeReason("");
+      notify("Đã hoàn tất chấm bài; điểm vẫn là bản nháp cho tới khi công bố kết quả.", { key: "exam-manual-finalized" });
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : "Không thể hoàn tất chấm bài", { key: "exam-manual-finalize-error" });
+    } finally { setFinalizing(false); }
+  }
   useEffect(() => {
     void fetchAttempt(params.attemptId)
       .then(setData)
@@ -2029,7 +1992,7 @@ export function SubmissionDetailPage() {
               />
               <SubmissionMetric
                 label={
-                  data.exam.questions.some(
+                  data.gradingStatus === "PARTIAL" && data.exam.questions.some(
                     (question) => question.question?.type === "ESSAY",
                   )
                     ? "Điểm phần đã chấm"
@@ -2049,6 +2012,9 @@ export function SubmissionDetailPage() {
                 Mã đề: {data.examCode}
               </p>
             ) : null}
+            <p className="mt-3 text-sm font-semibold text-amber-700">
+              {data.gradingStatus === "PARTIAL" ? "Đang chờ chấm tự luận" : data.gradingStatus === "FINALIZED" ? "Đã chấm xong; chờ công bố vào sổ" : "Chưa hoàn tất chấm"}
+            </p>
           </section>
 
           <div className="space-y-4">
@@ -2161,6 +2127,31 @@ export function SubmissionDetailPage() {
                       </p>
                     </div>
                   )}
+                  {isObjective && data.status === "SUBMITTED" && data.exam.status === "ENDED" && question ? (
+                    <AnswerKeyRegradeEditor
+                      key={`${examQuestion.questionId}:${correctOptionIds.join(",")}`}
+                      questionId={examQuestion.questionId}
+                      options={question.options}
+                      type={question.type}
+                      previous={correctOptionIds}
+                      onSave={async (correctOptionIds, reason) => {
+                        const result = await examService.regradeAnswerKey(data.exam.id, { questionId: examQuestion.questionId, correctOptionIds, reason });
+                        setData(await examAttemptService.getAttempt(params.attemptId));
+                        notify(`Đã chấm lại ${result.regradedAttempts} bài; điểm mới vẫn là bản nháp đến khi công bố lại.`, { key: "exam-key-regrade" });
+                      }}
+                    />
+                  ) : null}
+                  {question?.type === "ESSAY" && data.status === "SUBMITTED" ? (
+                    <EssayGradeEditor
+                      key={`${examQuestion.questionId}:${data.manualGrades?.find((grade) => grade.questionId === examQuestion.questionId)?.gradedAt ?? "new"}`}
+                      maxScore={examQuestion.points}
+                      previous={data.manualGrades?.find((grade) => grade.questionId === examQuestion.questionId)}
+                      onSave={async (score, feedback, reason) => {
+                        setData(await examAttemptService.gradeEssay(params.attemptId, examQuestion.questionId, { score, feedback, reason }));
+                        notify("Đã lưu điểm tự luận; cần hoàn tất chấm trước khi công bố.", { key: "exam-essay-grade" });
+                      }}
+                    />
+                  ) : null}
                   {question?.explanation ? (
                     <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
                       <b>Giải thích:</b> {question.explanation}
@@ -2171,32 +2162,84 @@ export function SubmissionDetailPage() {
             })}
           </div>
         </div>
+        {activeTab === "submission" && data.status === "SUBMITTED" && data.gradingStatus === "PARTIAL" && data.exam.questions.some((item) => item.question?.type === "ESSAY") ? (
+          <section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="font-bold text-amber-900">Hoàn tất chấm tự luận</p>
+            <p className="mt-1 text-sm text-amber-800">Chỉ sau khi mọi câu tự luận có điểm, bài làm mới chuyển sang FINALIZED và tạo điểm nháp trong Gradebook.</p>
+            <Input className="mt-3" aria-label="Lý do hoàn tất chấm" value={finalizeReason} onChange={(event) => setFinalizeReason(event.target.value)} placeholder="Lý do hoàn tất chấm" maxLength={1000} />
+            <Button className="mt-3" disabled={finalizing || !finalizeReason.trim()} onClick={() => void finalize()}>{finalizing ? "Đang hoàn tất..." : "Hoàn tất chấm bài"}</Button>
+          </section>
+        ) : null}
       </div>
     </AssessmentShell>
   );
 }
 
-function SubmissionMetric({
-  label,
-  value,
-  tone = "default",
-}: {
+function SubmissionMetric({ label, value, tone = "default" }: {
   label: string;
   value: string;
   tone?: "default" | "success";
 }) {
-  return (
-    <div className="rounded-xl bg-slate-50 px-4 py-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-      <p
-        className={`mt-1 font-black ${tone === "success" ? "text-emerald-700" : "text-slate-900"}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
+  return <div className="rounded-xl bg-slate-50 px-4 py-3">
+    <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p>
+    <p className={`mt-1 font-black ${tone === "success" ? "text-emerald-700" : "text-slate-900"}`}>{value}</p>
+  </div>;
+}
+
+function EssayGradeEditor({ maxScore, previous, onSave }: {
+  maxScore: number;
+  previous?: { score: number; feedback: string };
+  onSave: (score: number, feedback: string, reason: string) => Promise<void>;
+}) {
+  const [score, setScore] = useState(previous?.score?.toString() ?? "");
+  const [feedback, setFeedback] = useState(previous?.feedback ?? "");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const validScore = score.trim() !== "" && Number.isFinite(Number(score)) && Number(score) >= 0 && Number(score) <= maxScore;
+  return <div className="mt-4 grid gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4">
+    <p className="text-sm font-bold text-brand-900">Chấm tự luận · tối đa {maxScore} điểm{previous ? " · đã chấm, có thể chấm lại" : ""}</p>
+    <Input type="number" min={0} max={maxScore} step="0.01" aria-label="Điểm tự luận" value={score} onChange={(event) => setScore(event.target.value)} />
+    <Textarea aria-label="Nhận xét câu tự luận" rows={2} maxLength={4000} value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Nhận xét cho học sinh (nếu có)" />
+    <Input aria-label="Lý do chấm hoặc chấm lại" maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Lý do chấm hoặc chấm lại" />
+    {error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}
+    <Button disabled={!validScore || !reason.trim() || saving} onClick={() => {
+      setSaving(true); setError("");
+      void onSave(Number(score), feedback, reason.trim()).then(() => setReason(""))
+        .catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể lưu điểm"))
+        .finally(() => setSaving(false));
+    }}>{saving ? "Đang lưu..." : previous ? "Lưu điểm chấm lại" : "Lưu điểm tự luận"}</Button>
+  </div>;
+}
+
+function AnswerKeyRegradeEditor({ questionId, options, type, previous, onSave }: {
+  questionId: string;
+  options: Array<{ id: string; text: string }>;
+  type: string;
+  previous: string[];
+  onSave: (correctOptionIds: string[], reason: string) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState(previous);
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const changed = [...selected].sort().join("|") !== [...previous].sort().join("|");
+  return <details className="mt-4 rounded-xl border border-amber-200 p-4 text-sm">
+    <summary className="cursor-pointer font-bold text-amber-800">Sửa đáp án đúng và chấm lại toàn bộ Exam</summary>
+    <p className="mt-2 text-amber-800">Thao tác này cập nhật điểm nháp của mọi bài đã hoàn tất; điểm đã công bố vẫn giữ nguyên đến lần công bố lại.</p>
+    <div className="mt-3 grid gap-2">{options.map((option) => <label key={`${questionId}:${option.id}`} className="flex items-center gap-2">
+      <input type={type === "MULTIPLE_CHOICE" ? "checkbox" : "radio"} name={`regrade:${questionId}`} checked={selected.includes(option.id)} onChange={() => setSelected(type === "MULTIPLE_CHOICE" ? selected.includes(option.id) ? selected.filter((id) => id !== option.id) : [...selected, option.id] : [option.id])} />
+      {option.text}
+    </label>)}</div>
+    <Input className="mt-3" aria-label="Lý do sửa đáp án đúng" maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Lý do sửa đáp án đúng" />
+    {error ? <p role="alert" className="mt-2 text-rose-700">{error}</p> : null}
+    <Button className="mt-3" variant="outline" disabled={saving || !changed || !selected.length || !reason.trim()} onClick={() => {
+      setSaving(true); setError("");
+      void onSave(selected, reason.trim()).then(() => setReason(""))
+        .catch((cause) => setError(cause instanceof Error ? cause.message : "Không thể chấm lại"))
+        .finally(() => setSaving(false));
+    }}>{saving ? "Đang chấm lại..." : "Xác nhận sửa đáp án và chấm lại"}</Button>
+  </details>;
 }
 
 async function fetchAttempt(id: string): Promise<ExamAttempt & { exam: Exam }> {

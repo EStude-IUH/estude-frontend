@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useAuth } from "./auth-context";
 import { authenticatedRequest } from "@/lib/auth-api";
-import { routePermission } from "@/lib/permissions";
+import { canVisitRoute } from "@/lib/permissions";
 
 const PermissionsContext = createContext<{
   loading: boolean;
@@ -68,8 +68,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const loading = isInitializing || Boolean(user && state?.userId !== user.id);
   const can = (key: string) => permissions.includes(key);
   const canVisit = (path: string) => {
-    const key = routePermission(path);
-    return Boolean(user) && (key === null || can(key));
+    return Boolean(user && canVisitRoute(path, user.role, permissions));
   };
   return (
     <PermissionsContext.Provider

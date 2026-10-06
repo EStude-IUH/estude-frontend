@@ -28,6 +28,15 @@ const levels = {
 const selectClass =
   "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm";
 
+function activityGradeText(item: GradeReport["results"][number]["subjects"][number]["semesters"][number]["items"][number]) {
+  if (item.publicationStatus !== "PUBLISHED") return "Chưa công bố";
+  if (item.evaluationStatus === "MISSING") return "Chưa nộp";
+  if (item.evaluationStatus === "EXCUSED") return "Được miễn";
+  if (item.evaluationStatus !== "GRADED") return "Chưa chấm";
+  if (item.score !== null) return `${item.score} / ${item.maxScore}`;
+  return item.assessment === "PASS" ? "Đạt" : item.assessment === "FAIL" ? "Chưa đạt" : "Chưa chấm";
+}
+
 export function OfficialGradeReport({
   studentId = "me",
 }: {
@@ -231,6 +240,17 @@ export function OfficialGradeReport({
           </tbody>
         </table>
       </div>
+      {termId !== "all" ? <div className="mt-5 space-y-3">
+        <h3 className="font-bold text-slate-900">Điểm theo hoạt động</h3>
+        {result?.subjects.flatMap((subject) => {
+          const semester = subject.semesters.find((item) => item.termId === termId);
+          return (semester?.items ?? []).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+            <div><p className="font-semibold">{subject.subjectName} · {item.title}</p><p className="text-xs text-slate-500">{item.sourceType === "ASSIGNMENT" ? "Bài tập" : item.sourceType === "EXAM" ? "Bài kiểm tra" : "Điểm thủ công"}{item.officialSlot ? ` · ${item.officialSlot}` : " · Chưa tính vào TX/GK/CK"}</p></div>
+            <span className="font-semibold">{activityGradeText(item)}</span>
+          </div>);
+        })}
+        {!result?.subjects.some((subject) => (subject.semesters.find((item) => item.termId === termId)?.items ?? []).length > 0) ? <p className="text-sm text-slate-500">Chưa có hoạt động chấm điểm trong học kỳ này.</p> : null}
+      </div> : null}
       {!result?.subjects.length ? (
         <p className="p-4 text-slate-500">
           Chưa có môn học hoặc sổ điểm trong lớp đã chọn.
