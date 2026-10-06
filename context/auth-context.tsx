@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { FirstLoginSetupForm } from '@/components/auth/first-login-setup-form';
 import { ApiError, authApi } from '@/lib/auth-api';
 import { getCurrentPortalRole } from '@/lib/portal';
 import type { LoginPayload, RegisterPayload, User } from '@/types/auth';
@@ -106,7 +107,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, isInitializing, signIn, signUp, signOut, signOutAll, updateUser],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {user?.role === 'STUDENT' && user.requiresFirstLoginSetup ? (
+        <FirstLoginSetupForm modal />
+      ) : children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

@@ -1,4 +1,6 @@
 import type {
+  OtpChallenge,
+  ResetPasswordPayload,
   AccessTokenResponse,
   ApiEnvelope,
   ApiErrorEnvelope,
@@ -24,9 +26,13 @@ function setAccessToken(token: string | null): void {
   for (const listener of accessTokenListeners) listener(token);
 }
 
-export function subscribeAccessToken(listener: (token: string | null) => void): () => void {
+export function subscribeAccessToken(
+  listener: (token: string | null) => void,
+): () => void {
   accessTokenListeners.add(listener);
-  return () => { accessTokenListeners.delete(listener); };
+  return () => {
+    accessTokenListeners.delete(listener);
+  };
 }
 let refreshPromise: Promise<AccessTokenResponse> | null = null;
 let unauthorizedHandler: (() => void) | null = null;
@@ -95,14 +101,19 @@ async function request<T>(
   });
 
   if (response.status === 401 && authenticated && retryOnUnauthorized) {
-    if (!accessToken || accessToken === requestToken) await refreshAccessToken();
+    if (!accessToken || accessToken === requestToken)
+      await refreshAccessToken();
     return request<T>(path, init, {
       authenticated: true,
       retryOnUnauthorized: false,
     });
   }
 
-  if (response.status === 401 && authenticated && accessToken === requestToken) {
+  if (
+    response.status === 401 &&
+    authenticated &&
+    accessToken === requestToken
+  ) {
     setAccessToken(null);
     unauthorizedHandler?.();
   }
@@ -141,7 +152,9 @@ export function authenticatedRequest<T>(
   return request<T>(path, init, { authenticated: true });
 }
 
-export async function getRealtimeAccessToken(forceRefresh = false): Promise<string> {
+export async function getRealtimeAccessToken(
+  forceRefresh = false,
+): Promise<string> {
   if (refreshPromise) {
     await refreshPromise;
     forceRefresh = false;
@@ -149,12 +162,17 @@ export async function getRealtimeAccessToken(forceRefresh = false): Promise<stri
   let expiresSoon = true;
   if (accessToken) {
     try {
-      const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { exp?: number };
+      const payload = JSON.parse(
+        atob(accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
+      ) as { exp?: number };
       expiresSoon = !payload.exp || payload.exp * 1000 <= Date.now() + 30_000;
-    } catch { /* Refresh malformed or expired credentials before connecting. */ }
+    } catch {
+      /* Refresh malformed or expired credentials before connecting. */
+    }
   }
   if (forceRefresh || !accessToken || expiresSoon) await refreshAccessToken();
-  if (!accessToken) throw new ApiError("Phiên đăng nhập không hợp lệ hoặc đã hết hạn", 401);
+  if (!accessToken)
+    throw new ApiError("Phiên đăng nhập không hợp lệ hoặc đã hết hạn", 401);
   return accessToken;
 }
 
@@ -191,7 +209,8 @@ export function authenticatedUploadRequest<T>(
         void (async () => {
           if (xhr.status === 401 && retryOnUnauthorized) {
             try {
-              if (!accessToken || accessToken === requestToken) await refreshAccessToken();
+              if (!accessToken || accessToken === requestToken)
+                await refreshAccessToken();
               resolve(await send(false));
             } catch (error) {
               reject(error);
@@ -257,7 +276,8 @@ async function requestBlob(
   });
 
   if (response.status === 401 && retryOnUnauthorized) {
-    if (!accessToken || accessToken === requestToken) await refreshAccessToken();
+    if (!accessToken || accessToken === requestToken)
+      await refreshAccessToken();
     return requestBlob(path, init, false);
   }
   if (response.status === 401 && accessToken === requestToken) {
@@ -278,6 +298,32 @@ export function authenticatedBlobRequest(
 }
 
 export const authApi = {
+  requestPasswordReset(accountName: string): Promise<OtpChallenge> {
+    return request<OtpChallenge>(portalAuthPath("password-reset/request"), {
+      method: "POST",
+      body: JSON.stringify({ accountName }),
+    });
+  },
+  resetPassword(payload: ResetPasswordPayload): Promise<Record<string, never>> {
+    return request<Record<string, never>>(
+      portalAuthPath("password-reset/confirm"),
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+  requestFirstLoginOtp(email: string): Promise<OtpChallenge> {
+    return authenticatedRequest<OtpChallenge>(
+      "/auth/student/first-login/request-otp",
+      { method: "POST", body: JSON.stringify({ email }) },
+    );
+  },
+  completeFirstLogin(
+    payload: ResetPasswordPayload & { email: string },
+  ): Promise<Record<string, never>> {
+    return authenticatedRequest<Record<string, never>>(
+      "/auth/student/first-login/complete",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
   async login(payload: LoginPayload): Promise<AuthSession> {
     const session = await request<AuthSession>(portalAuthPath("login"), {
       method: "POST",

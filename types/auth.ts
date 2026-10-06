@@ -36,6 +36,8 @@ export interface User {
   updatedByAt?: string | null;
   updatedByFullName?: string | null;
   updatedByAvatarUrl?: string | null;
+  requiresFirstLoginSetup?: boolean;
+  emailVerifiedAt?: string | null;
   lastLoginAt: string | null;
 }
 
@@ -86,4 +88,16 @@ export interface ApiErrorEnvelope {
   errors?: string[];
   path: string;
   timestamp: string;
+}
+
+export interface OtpChallenge {
+  challengeId: string;
+  expiresIn: number;
+  retryAfter: number;
+}
+export interface ResetPasswordPayload {
+  challengeId: string;
+  code: string;
+  newPassword: string;
+  confirmNewPassword: string;
 }

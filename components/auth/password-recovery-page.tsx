@@ -1,113 +1,217 @@
 "use client";
-
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import {
-  CheckCircle2,
-  LoaderCircle,
-  Mail,
-  UserRound,
-} from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { authApi } from "@/lib/auth-api";
+import { newPasswordError } from "@/lib/account-security";
 import { BrandLogo } from "@/components/brand-logo";
+import { AuthNotice } from "./auth-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-control";
-import type { UserRole } from "@/types/auth";
-
-const roleLabels: Record<Extract<UserRole, "TEACHER" | "STUDENT" | "PARENT">, string> = {
-  TEACHER: "giảng viên",
-  STUDENT: "học sinh",
-  PARENT: "phụ huynh",
-};
+import type { OtpChallenge, UserRole } from "@/types/auth";
 
 export function PasswordRecoveryPage({
   role,
 }: {
   role: Extract<UserRole, "TEACHER" | "STUDENT" | "PARENT">;
 }) {
-  const router = useRouter();
   const [accountName, setAccountName] = useState("");
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedAccountName = accountName.trim().toLowerCase();
-    if (!/^[a-z0-9._-]{3,50}$/.test(normalizedAccountName)) {
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [completed, setCompleted] = useState(false);
+  const lock = useRef(false);
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setTimeout(
+      () => setCooldown((current) => Math.max(0, current - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+  async function sendCode() {
+    if (lock.current || cooldown) return;
+    if (!/^[a-z0-9._-]{3,50}$/.test(accountName.trim().toLowerCase())) {
       setError("Tên tài khoản không hợp lệ.");
       return;
     }
-
+    lock.current = true;
+    setBusy(true);
     setError("");
-    setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitted(true);
-    }, 400);
+    try {
+      const result = await authApi.requestPasswordReset(
+        accountName.trim().toLowerCase(),
+      );
+      setChallenge(result);
+      setCode("");
+      setCooldown(result.retryAfter);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể gửi mã.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-
+  async function reset(event: FormEvent) {
+    event.preventDefault();
+    if (lock.current) return;
+    const invalid = newPasswordError(password, confirmation);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    if (!challenge || !/^\d{6}$/.test(code)) {
+      setError("Mã xác thực phải gồm 6 chữ số.");
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await authApi.resetPassword({
+        challengeId: challenge.challengeId,
+        code,
+        newPassword: password,
+        confirmNewPassword: confirmation,
+      });
+      setCompleted(true);
+      setPassword("");
+      setConfirmation("");
+      setCode("");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Không thể đặt lại mật khẩu.",
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-4 py-10">
-      <div className="w-full max-w-[420px]">
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.08]">
-          <div className="px-6 pt-6 sm:px-8 sm:pt-8">
-            <BrandLogo withShadow={false} />
-            <div className="mt-6 text-center">
-              <h1 className="text-2xl font-extrabold tracking-tight text-brand-600">Quên mật khẩu</h1>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Khôi phục quyền truy cập tài khoản {roleLabels[role]} bằng email đã xác thực.
-              </p>
-            </div>
+    <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
+      <section className="w-full max-w-[440px] rounded-3xl bg-white p-6 shadow-xl sm:p-8">
+        <BrandLogo withShadow={false} />
+        <h1 className="mt-6 text-center text-2xl font-extrabold text-brand-600">
+          Quên mật khẩu
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Nhận mã xác thực qua email khôi phục đã lưu trong tài khoản.
+        </p>
+        {completed ? (
+          <div className="mt-6">
+            <AuthNotice
+              type="success"
+              message="Đã đặt lại mật khẩu. Đăng nhập bằng mật khẩu mới; các phiên cũ đã được đăng xuất."
+            />
           </div>
-
-          <div className="px-6 pb-6 pt-6 sm:px-8 sm:pb-8">
-            {submitted ? (
-              <div className="text-center">
-                <span className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 className="size-8" />
-                </span>
-                <h2 className="mt-5 text-xl font-extrabold text-slate-950">Kiểm tra email của bạn</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Nếu tài khoản có email đã xác thực, hướng dẫn đặt lại mật khẩu sẽ được gửi đến email đó.
-                </p>
-                <div className="mt-5 rounded-xl bg-blue-50 p-4 text-left text-sm leading-6 text-brand-700">
-                  <Mail className="mr-2 inline size-4" /> Liên kết khôi phục có thời hạn nhằm bảo vệ tài khoản của bạn.
+        ) : (
+          <form
+            className="mt-6 space-y-4"
+            onSubmit={(event) => {
+              if (!challenge) {
+                event.preventDefault();
+                void sendCode();
+              } else void reset(event);
+            }}
+          >
+            {error ? <AuthNotice message={error} /> : null}
+            <Input
+              label="Tên tài khoản"
+              autoComplete="username"
+              value={accountName}
+              disabled={busy || Boolean(challenge)}
+              onChange={(event) => setAccountName(event.target.value)}
+              required
+            />
+            {challenge ? (
+              <>
+                <div
+                  role="status"
+                  className="rounded-xl bg-blue-50 p-4 text-sm leading-6 text-brand-700"
+                >
+                  Nếu tài khoản có email khôi phục, mã xác thực sẽ được gửi đến
+                  email đó. Mã có hiệu lực 10 phút. Nếu chưa có email, hãy liên
+                  hệ nhà trường.
                 </div>
-                <Button className="mt-6 h-11 w-full" onClick={() => router.push("/login")}>
-                  Đăng nhập
-                </Button>
-              </div>
-            ) : (
-              <form className="space-y-5" onSubmit={handleSubmit} noValidate>
                 <Input
-                  icon={UserRound}
-                  label="Tên tài khoản"
-                  value={accountName}
-                  onChange={(event) => {
-                    setAccountName(event.target.value);
+                  label="Mã xác thực"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) =>
+                    setCode(event.target.value.replace(/\D/g, ""))
+                  }
+                  disabled={busy}
+                  required
+                />
+                <Input
+                  label="Mật khẩu mới"
+                  type="password"
+                  showPasswordToggle
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={busy}
+                  required
+                  hint="8–128 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt."
+                />
+                <Input
+                  label="Nhập lại mật khẩu mới"
+                  type="password"
+                  showPasswordToggle
+                  autoComplete="new-password"
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  disabled={busy}
+                  required
+                />
+              </>
+            ) : null}
+            <Button className="h-12 w-full" type="submit" disabled={busy}>
+              {busy
+                ? "Đang xử lý..."
+                : challenge
+                  ? "Đặt lại mật khẩu"
+                  : "Gửi mã xác thực"}
+            </Button>
+            {challenge ? (
+              <div className="flex justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy || cooldown > 0}
+                  onClick={() => void sendCode()}
+                >
+                  {cooldown ? `Gửi lại sau ${cooldown}s` : "Gửi lại mã"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setChallenge(null);
+                    setCode("");
+                    setPassword("");
+                    setConfirmation("");
                     setError("");
                   }}
-                  error={error}
-                  placeholder="Nhập tên tài khoản"
-                  autoComplete="username"
-                  autoFocus
-                />
-                <Button type="submit" className="h-12 w-full whitespace-nowrap" disabled={isSubmitting}>
-                  {isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                  {isSubmitting ? "Đang gửi..." : "Gửi mã xác thực"}
-                </Button>
-                <button
-                  type="button"
-                  className="mx-auto block text-sm font-bold text-brand-600 transition hover:text-brand-800"
-                  onClick={() => router.push("/login")}
                 >
-                  Quay lại đăng nhập
-                </button>
-              </form>
-            )}
-          </div>
-        </section>
-      </div>
+                  Đổi tài khoản
+                </Button>
+              </div>
+            ) : null}
+          </form>
+        )}
+        <a
+          className="mt-6 block text-center text-sm font-bold text-brand-600"
+          href={`/${role.toLowerCase()}/login`}
+        >
+          ← Đăng nhập
+        </a>
+      </section>
     </main>
   );
 }

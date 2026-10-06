@@ -1,192 +1,216 @@
 "use client";
-
-import { useState, type FormEvent } from "react";
-import {
-  CheckCircle2,
-  KeyRound,
-  LoaderCircle,
-  Mail,
-  ShieldCheck,
-} from "lucide-react";
-import { AuthNotice } from "@/components/auth/auth-notice";
-import { FormField } from "@/components/auth/form-field";
-import { BrandLogo } from "@/components/brand-logo";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
+import { authApi } from "@/lib/auth-api";
+import { newPasswordError } from "@/lib/account-security";
+import { AuthNotice } from "./auth-notice";
+import { Input } from "@/components/ui/form-control";
 import { Button } from "@/components/ui/button";
+import type { OtpChallenge } from "@/types/auth";
 
-interface SetupErrors {
-  email?: string;
-  verificationCode?: string;
-  newPassword?: string;
-  confirmPassword?: string;
-}
-
-export function FirstLoginSetupForm() {
-  const [email, setEmail] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [errors, setErrors] = useState<SetupErrors>({});
-  const [codeSent, setCodeSent] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [completed, setCompleted] = useState(false);
-
-  function handleSendCode() {
+export function FirstLoginSetupForm({ modal = false }: { modal?: boolean }) {
+  const { user, isInitializing, signOut } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const lock = useRef(false);
+  const needed = user?.role === "STUDENT" && user.requiresFirstLoginSetup;
+  useEffect(() => {
+    if (!modal && !isInitializing && !user) router.replace("/student/login");
+  }, [modal, isInitializing, user, router]);
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setTimeout(
+      () => setCooldown((current) => Math.max(0, current - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+  async function sendCode() {
+    if (lock.current || cooldown) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setErrors((current) => ({ ...current, email: "Email không hợp lệ." }));
+      setError("Email không hợp lệ.");
       return;
     }
-    setErrors((current) => ({ ...current, email: undefined }));
-    setCodeSent(true);
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await authApi.requestFirstLoginOtp(
+        email.trim().toLowerCase(),
+      );
+      setChallenge(result);
+      setCode("");
+      setCooldown(result.retryAfter);
+      setNotice(
+        "Đã gửi mã xác thực đến email của bạn. Mã có hiệu lực trong 10 phút.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Không thể gửi mã.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors: SetupErrors = {};
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      nextErrors.email = "Email không hợp lệ.";
+    if (lock.current) return;
+    const invalid = newPasswordError(password, confirmation);
+    if (invalid) {
+      setError(invalid);
+      return;
     }
-    if (!codeSent || !/^\d{6}$/.test(verificationCode)) {
-      nextErrors.verificationCode = "Vui lòng nhập mã xác thực gồm 6 chữ số.";
+    if (!challenge || !/^\d{6}$/.test(code)) {
+      setError("Vui lòng gửi và nhập mã xác thực gồm 6 chữ số.");
+      return;
     }
-    if (
-      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d])[^\s]{8,128}$/.test(
-        newPassword,
-      )
-    ) {
-      nextErrors.newPassword =
-        "Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt.";
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await authApi.completeFirstLogin({
+        challengeId: challenge.challengeId,
+        email: email.trim().toLowerCase(),
+        code,
+        newPassword: password,
+        confirmNewPassword: confirmation,
+      });
+      await signOut().catch(() => undefined);
+      router.replace("/student/login?setup=complete");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Không thể hoàn tất thiết lập.",
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
     }
-    if (confirmPassword !== newPassword) {
-      nextErrors.confirmPassword = "Mật khẩu xác nhận không trùng khớp.";
-    }
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
-    setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
-      setCompleted(true);
-    }, 500);
   }
-
+  if (!needed)
+    return (
+      <main className="grid min-h-screen place-items-center">
+        <p>
+          {isInitializing || !user
+            ? "Đang tải..."
+            : "Tài khoản đã được thiết lập."}
+        </p>
+      </main>
+    );
   return (
-    <main className="grid min-h-screen place-items-center bg-white px-4 py-10">
-      <section className="w-full max-w-[480px] rounded-2xl border border-slate-200 bg-white p-6 shadow-lg shadow-slate-900/[0.06] sm:p-8">
-        <BrandLogo />
-        <div className="mt-7 text-center">
-          <h1 className="text-2xl font-extrabold tracking-tight text-brand-600">
-            Thiết lập tài khoản lần đầu
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Đổi mật khẩu mặc định và xác thực email khôi phục của bạn.
-          </p>
-        </div>
-
-        {completed ? (
-          <div className="mt-7">
-            <AuthNotice
-              type="success"
-              message="Thiết lập tài khoản thành công. Bạn có thể tiếp tục sử dụng EStude."
-            />
-            <span className="mx-auto mt-6 grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="size-8" />
-            </span>
-          </div>
-        ) : (
-          <form className="mt-7 space-y-5" onSubmit={handleSubmit} noValidate>
-            <div>
-              <FormField
-                id="recoveryEmail"
-                name="email"
-                type="email"
-                label="Email khôi phục"
-                icon={Mail}
-                placeholder="name@example.com"
-                value={email}
-                error={errors.email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setErrors((current) => ({ ...current, email: undefined }));
-                }}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="mt-2"
-                onClick={handleSendCode}
-              >
-                <ShieldCheck className="size-4" />{" "}
-                {codeSent ? "Gửi lại mã" : "Gửi mã xác thực"}
-              </Button>
-            </div>
-            <FormField
-              id="verificationCode"
-              name="verificationCode"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              label="Mã xác thực"
-              icon={ShieldCheck}
-              placeholder="Nhập mã gồm 6 chữ số"
-              value={verificationCode}
-              error={errors.verificationCode}
-              onChange={(event) => {
-                setVerificationCode(event.target.value.replace(/\D/g, ""));
-                setErrors((current) => ({
-                  ...current,
-                  verificationCode: undefined,
-                }));
-              }}
-            />
-            <FormField
-              id="firstNewPassword"
-              name="newPassword"
-              type="password"
-              label="Mật khẩu mới"
-              icon={KeyRound}
-              placeholder="Nhập mật khẩu mới"
-              value={newPassword}
-              error={errors.newPassword}
-              onChange={(event) => {
-                setNewPassword(event.target.value);
-                setErrors((current) => ({
-                  ...current,
-                  newPassword: undefined,
-                }));
-              }}
-            />
-            <FormField
-              id="firstConfirmPassword"
-              name="confirmPassword"
-              type="password"
-              label="Xác nhận mật khẩu mới"
-              icon={KeyRound}
-              placeholder="Nhập lại mật khẩu mới"
-              value={confirmPassword}
-              error={errors.confirmPassword}
-              onChange={(event) => {
-                setConfirmPassword(event.target.value);
-                setErrors((current) => ({
-                  ...current,
-                  confirmPassword: undefined,
-                }));
-              }}
-            />
-            <Button
-              type="submit"
-              className="h-[52px] w-full"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <LoaderCircle className="size-5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-5" />
-              )}
-              {isSubmitting ? "Đang hoàn tất..." : "Hoàn tất thiết lập"}
-            </Button>
-          </form>
-        )}
+    <main
+      className={
+        modal
+          ? "fixed inset-0 z-[100] grid overflow-y-auto bg-slate-900/40 p-4 py-8"
+          : "grid min-h-screen place-items-center bg-slate-50 px-4 py-8"
+      }
+    >
+      <section
+        role={modal ? "dialog" : undefined}
+        aria-modal={modal || undefined}
+        aria-labelledby="setup-title"
+        className="m-auto w-full max-w-[480px] rounded-3xl bg-white p-6 shadow-xl sm:p-8"
+      >
+        <h1
+          id="setup-title"
+          className="text-center text-2xl font-extrabold text-brand-600"
+        >
+          Thiết lập tài khoản lần đầu
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Đổi mật khẩu mặc định và xác thực email khôi phục trước khi bắt đầu
+          học.
+        </p>
+        <form className="mt-6 space-y-4" onSubmit={submit}>
+          {error ? <AuthNotice message={error} /> : null}
+          {notice ? <AuthNotice type="success" message={notice} /> : null}
+          <Input
+            label="Email khôi phục"
+            type="email"
+            autoComplete="email"
+            value={email}
+            disabled={busy}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setChallenge(null);
+              setCode("");
+              setNotice("");
+            }}
+            required
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={busy || cooldown > 0}
+            onClick={() => void sendCode()}
+          >
+            {cooldown
+              ? `Gửi lại mã sau ${cooldown}s`
+              : challenge
+                ? "Gửi lại mã"
+                : "Gửi mã xác thực"}
+          </Button>
+          <Input
+            label="Mã xác thực"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+            disabled={busy || !challenge}
+            required
+          />
+          <Input
+            label="Mật khẩu mới"
+            type="password"
+            showPasswordToggle
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={busy}
+            required
+            hint="8–128 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt."
+          />
+          <Input
+            label="Nhập lại mật khẩu mới"
+            type="password"
+            showPasswordToggle
+            autoComplete="new-password"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            disabled={busy}
+            required
+          />
+          <Button
+            type="submit"
+            className="h-12 w-full"
+            disabled={busy || !challenge}
+          >
+            {busy ? "Đang xử lý..." : "Hoàn tất & đăng nhập lại"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            disabled={busy}
+            onClick={() => {
+              void signOut().catch(() => undefined);
+            }}
+          >
+            Đăng xuất
+          </Button>
+        </form>
       </section>
     </main>
   );
