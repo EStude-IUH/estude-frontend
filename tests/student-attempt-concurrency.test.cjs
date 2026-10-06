@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 const ts = require('typescript');
+const { loadTypeScript } = require('./helpers/load-typescript.cjs');
 const React = require('react');
 const { create, act } = require('react-test-renderer');
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -31,6 +32,8 @@ async function render(t, expired = false) {
   const original = loaded.require.bind(loaded); const Box = (props) => React.createElement('div', {}, props.children);
   const router = { push: (route) => calls.push(['route', route]), replace: () => {} };
   loaded.require = (id) => {
+    if (id === '@/lib/study-analysis-loader') return loadTypeScript('lib/study-analysis-loader.ts', loaded.require);
+    if (id === '@/lib/auth-api') return { ApiError: class ApiError extends Error {} };
     if (id === 'next/navigation') return { useParams: () => ({ id: 'attempt' }), useRouter: () => router };
     if (id === '@/lib/assessment-api') return { examAttemptService: {
       getAttempt: async () => attempt,

@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
+const { loadTypeScript } = require('./helpers/load-typescript.cjs');
 
 test("AI question workspace uses the available draft and generation endpoints", async () => {
   const calls = [];
@@ -13,6 +14,7 @@ test("AI question workspace uses the available draft and generation endpoints", 
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   const originalRequire = loaded.require.bind(loaded);
   loaded.require = (id) => {
+    if (id === '@/lib/course-resource-file') return loadTypeScript('lib/course-resource-file.ts');
     if (id === "@/lib/auth-api") return {
       authenticatedRequest: async (url, options) => {
         calls.push({ url, options });

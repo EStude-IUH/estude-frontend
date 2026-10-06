@@ -504,7 +504,7 @@ export function SystemSettingsPanel({
                   placeholder={
                     passwordSettings?.teacherConfigured
                       ? "Nhập để thay đổi"
-                      : "Ví dụ: Teacher@123"
+                      : "Nhập mật khẩu mặc định"
                   }
                   hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
                   autoComplete="new-password"
@@ -547,7 +547,7 @@ export function SystemSettingsPanel({
                   placeholder={
                     passwordSettings?.studentConfigured
                       ? "Nhập để thay đổi"
-                      : "Ví dụ: Student@123"
+                      : "Nhập mật khẩu mặc định"
                   }
                   hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
                   autoComplete="new-password"
@@ -590,7 +590,7 @@ export function SystemSettingsPanel({
                   placeholder={
                     passwordSettings?.parentConfigured
                       ? "Nhập để thay đổi"
-                      : "Ví dụ: Parent@123"
+                      : "Nhập mật khẩu mặc định"
                   }
                   hint="Không yêu cầu độ mạnh, chỉ cần không để trống."
                   autoComplete="new-password"

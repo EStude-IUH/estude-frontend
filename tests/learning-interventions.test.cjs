@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
+const { loadTypeScript } = require('./helpers/load-typescript.cjs');
 
 function loadApi() {
   const calls = [];
@@ -13,6 +14,7 @@ function loadApi() {
   loaded.filename = filename;
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   loaded.require = (name) => {
+    if (name === '@/lib/course-resource-file') return loadTypeScript('lib/course-resource-file.ts');
     if (name !== "@/lib/auth-api")
       throw new Error(`Unexpected import: ${name}`);
     return {

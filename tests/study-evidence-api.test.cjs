@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
+const { loadTypeScript } = require('./helpers/load-typescript.cjs');
 
 function loadApi() {
   const calls = [];
@@ -13,6 +14,7 @@ function loadApi() {
   loaded.filename = filename;
   loaded.paths = Module._nodeModulePaths(path.dirname(filename));
   loaded.require = (id) => {
+    if (id === '@/lib/course-resource-file') return loadTypeScript('lib/course-resource-file.ts');
     if (id === "@/lib/auth-api") return {
       authenticatedRequest: async (url, options) => {
         calls.push({ url, method: options?.method ?? "GET", body: options?.body ? JSON.parse(options.body) : null });

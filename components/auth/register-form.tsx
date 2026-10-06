@@ -116,7 +116,7 @@ export function RegisterForm() {
           type="text"
           label="Họ và tên"
           icon={UserRound}
-          placeholder="Nguyễn Văn An"
+          placeholder="Nhập họ và tên"
           autoComplete="name"
           value={fullName}
           error={errors.fullName}
@@ -131,7 +131,7 @@ export function RegisterForm() {
           type="text"
           label="Tên tài khoản"
           icon={AtSign}
-          placeholder="Ví dụ: student01"
+          placeholder="Nhập tên tài khoản"
           autoComplete="username"
           value={accountName}
           error={errors.accountName}

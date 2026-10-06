@@ -188,7 +188,7 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Input label="Họ và tên" icon={IdCard} value={user.fullName} disabled />
             <Input label="Mã tài khoản" icon={AtSign} value={user.accountName} disabled />
-            <Input label="Email" icon={Mail} type="email" value={email} maxLength={254} placeholder="tenban@example.com" autoComplete="email" onChange={(event) => setEmail(event.target.value)} />
+            <Input label="Email" icon={Mail} type="email" value={email} maxLength={254} placeholder="Nhập email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} />
             <Input label="Số điện thoại" icon={Phone} type="tel" value={phoneNumber} maxLength={20} placeholder="Ví dụ: 0901 234 567" autoComplete="tel" onChange={(event) => setPhoneNumber(event.target.value)} />
           </div>
 
