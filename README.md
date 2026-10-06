@@ -15,6 +15,19 @@ Frontend Next.js cho luồng đăng ký, đăng nhập và trang tổng quan ESt
 
 Backend mặc định được gọi tại `http://localhost:5000/api/v1`. Khi production, đặt `NEXT_PUBLIC_API_URL=https://api.estude.io.vn/api/v1`.
 
+## Chạy riêng trang giới thiệu
+
+Chạy `npm run dev:home` rồi mở `http://localhost:3004` để xem trang giới thiệu
+tổng quan EStude. Chế độ Home hiển thị trang giới thiệu ngay tại `/`, đồng thời
+giữ các đường dẫn `/about` và `/help`.
+
+Home dùng cache `.next-home` riêng và cổng `3004`, có thể chạy cùng các portal
+Admin, Teacher, Student và Parent. Cấu hình `NEXT_PUBLIC_AUTH_PORTAL=home`
+chỉ áp dụng khi phát triển, bỏ qua việc nhận diện vai trò từ hostname hoặc cổng
+để không tự chuyển trang chủ sang đăng nhập.
+
+Để dùng cổng khác: `npm run dev:home -- --port 3010`.
+
 ## Khu vực theo vai trò
 
 Khi `NODE_ENV=development`, portal đăng nhập được npm script thiết lập bằng

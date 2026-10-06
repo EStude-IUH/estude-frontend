@@ -28,7 +28,13 @@ function getDevelopmentPortal(): AuthPortal | null {
   return parsePortal(process.env.NEXT_PUBLIC_AUTH_PORTAL);
 }
 
+export function isDevelopmentHome(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_AUTH_PORTAL === "home";
+}
+
 export function getPortalFromHost(host: string | null): AuthPortal | null {
+  // Home runs independently of role portals, including local port detection.
+  if (isDevelopmentHome()) return null;
   const developmentPortal = getDevelopmentPortal();
   if (developmentPortal) return developmentPortal;
   if (!host) return null;

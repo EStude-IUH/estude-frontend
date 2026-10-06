@@ -1,15 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState, type FormEvent } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AtSign, LoaderCircle, LockKeyhole } from 'lucide-react';
-import { AuthHeading } from '@/components/auth/auth-heading';
-import { AuthNotice } from '@/components/auth/auth-notice';
-import { FormField } from '@/components/auth/form-field';
-import { useAuth } from '@/context/auth-context';
-import { ApiError } from '@/lib/auth-api';
-import { getRoleHome } from '@/lib/role-routes';
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { AtSign, LoaderCircle, LockKeyhole } from "lucide-react";
+import { AuthHeading } from "@/components/auth/auth-heading";
+import { AuthNotice } from "@/components/auth/auth-notice";
+import { FormField } from "@/components/auth/form-field";
+import { useAuth } from "@/context/auth-context";
+import { ApiError } from "@/lib/auth-api";
+import { getRoleHome } from "@/lib/role-routes";
 
 interface LoginErrors {
   accountName?: string;
@@ -19,10 +18,10 @@ interface LoginErrors {
 export function LoginForm() {
   const router = useRouter();
   const { user, isInitializing, signIn } = useAuth();
-  const [accountName, setAccountName] = useState('');
-  const [password, setPassword] = useState('');
+  const [accountName, setAccountName] = useState("");
+  const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<LoginErrors>({});
-  const [apiError, setApiError] = useState('');
+  const [apiError, setApiError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -34,10 +33,10 @@ export function LoginForm() {
   function validate(): LoginErrors {
     const nextErrors: LoginErrors = {};
     if (!/^[a-z0-9._-]{3,50}$/.test(accountName.trim().toLowerCase())) {
-      nextErrors.accountName = 'Tên tài khoản không hợp lệ.';
+      nextErrors.accountName = "Tên tài khoản không hợp lệ.";
     }
     if (!password) {
-      nextErrors.password = 'Vui lòng nhập mật khẩu.';
+      nextErrors.password = "Vui lòng nhập mật khẩu.";
     }
     return nextErrors;
   }
@@ -46,7 +45,7 @@ export function LoginForm() {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
-    setApiError('');
+    setApiError("");
     if (Object.keys(nextErrors).length > 0) return;
 
     setIsSubmitting(true);
@@ -57,7 +56,7 @@ export function LoginForm() {
       setApiError(
         error instanceof ApiError
           ? error.message
-          : 'Đã có lỗi xảy ra. Vui lòng thử lại.',
+          : "Đã có lỗi xảy ra. Vui lòng thử lại.",
       );
     } finally {
       setIsSubmitting(false);
@@ -109,18 +108,13 @@ export function LoginForm() {
           {isSubmitting ? (
             <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
           ) : null}
-          {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
         </button>
       </form>
 
       <p className="mt-7 text-center text-sm text-slate-500">
-        Chưa có tài khoản?{' '}
-        <Link
-          href="/register"
-          className="font-bold text-brand-600 hover:text-brand-800"
-        >
-          Đăng ký ngay
-        </Link>
+        Sử dụng tài khoản do nhà trường cấp. Nếu chưa có tài khoản, hãy liên hệ
+        giáo viên hoặc quản trị viên.
       </p>
     </>
   );

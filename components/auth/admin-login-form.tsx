@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 import { AuthNotice } from "@/components/auth/auth-notice";
 import { FormField } from "@/components/auth/form-field";
@@ -171,6 +172,10 @@ export function StaffLoginForm({ role }: { role: UserRole }) {
             ? "Chỉ dành cho quản trị viên được cấp quyền."
             : `Chỉ dành cho ${roleName} được cấp tài khoản.`}
         </p>
+        <nav aria-label="Thông tin EStude" className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 border-t border-slate-100 pt-4 text-sm font-semibold text-slate-500">
+          <Link href="/about" className="rounded py-1 hover:text-brand-600 focus-visible:outline-brand-600">Giới thiệu EStude</Link>
+          <Link href="/help" className="rounded py-1 hover:text-brand-600 focus-visible:outline-brand-600">Hướng dẫn sử dụng</Link>
+        </nav>
       </section>
 
     </main>

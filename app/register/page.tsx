@@ -1,16 +1,5 @@
-import type { Metadata } from 'next';
-import { RegisterForm } from '@/components/auth/register-form';
-import { AuthShell } from '@/components/auth/auth-shell';
-
-export const metadata: Metadata = {
-  title: 'Đăng ký',
-  description: 'Tạo tài khoản sinh viên EStude.',
-};
+import { redirect } from "next/navigation";
 
 export default function RegisterPage() {
-  return (
-    <AuthShell>
-      <RegisterForm />
-    </AuthShell>
-  );
+  redirect("/login");
 }

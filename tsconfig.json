@@ -21,6 +21,7 @@
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
+    ".next-home/types/**/*.ts",
     ".next-admin/types/**/*.ts",
     ".next-teacher/types/**/*.ts",
     ".next-student/types/**/*.ts",
