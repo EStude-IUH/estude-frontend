@@ -7,7 +7,6 @@ import {
   BarChart3,
   Bell,
   BookOpen,
-  CalendarDays,
   BrainCircuit,
   ChevronDown,
   CircleHelp,
@@ -47,7 +46,6 @@ const studentNavItems: StudentNavItem[] = [
   { icon: BookOpen, label: "Môn học", href: "/student/courses" },
   { icon: ClipboardCheck, label: "Bài tập", href: "/student/assignments" },
   { icon: ClipboardCheck, label: "Bài thi", href: "/student/exams" },
-  { icon: CalendarDays, label: "Lịch học tập", href: "/student/calendar" },
   { icon: BrainCircuit, label: "Study Coach", href: "/student/study-coach" },
   {
     icon: ListChecks,

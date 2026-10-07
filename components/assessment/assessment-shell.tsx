@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   BellRing,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -103,7 +102,6 @@ function AssessmentWorkspaceShell({ children }: { children: ReactNode }) {
   }, [user]);
 
   const links: WorkspaceLink[] = [
-    { href: "/teacher/dashboard", label: "Lịch học", icon: CalendarDays },
     {
       href: "/teacher/classes",
       label: "Lớp học được phân công",

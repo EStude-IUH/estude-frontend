@@ -7,7 +7,6 @@ import {
   Bell,
   BellRing,
   BookOpenCheck,
-  CalendarDays,
   CalendarClock,
   ChartNoAxesCombined,
   CheckCircle2,
@@ -33,7 +32,7 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { OverviewDashboard } from "@/components/dashboard/overview-dashboard";
-import { WeeklyTimetable } from "@/components/dashboard/weekly-timetable";
+import { MonthlyTimetable } from "@/components/dashboard/monthly-timetable";
 import { AccountManagementPanel } from "@/components/admin/account-management-panel";
 import { UserManagementPanel } from "@/components/admin/user-management-panel";
 import { StudentDetailPanel } from "@/components/admin/student-detail-panel";
@@ -279,11 +278,9 @@ export function StaffDashboardView() {
   const dashboardPath =
     user.role === "ADMIN" ? "/admin/dashboard" : "/teacher/dashboard";
   const navItems = [
-    {
-      icon: user.role === "TEACHER" ? CalendarDays : LayoutDashboard,
-      label: user.role === "TEACHER" ? "Lịch học" : "Tổng quan",
-      href: dashboardPath,
-    },
+    ...(user.role === "ADMIN"
+      ? [{ icon: LayoutDashboard, label: "Tổng quan", href: dashboardPath }]
+      : []),
     ...(user.role === "ADMIN"
       ? [
           {
@@ -379,7 +376,7 @@ export function StaffDashboardView() {
           (item) =>
             item.href === pathname ||
             (item.href === "/teacher/classes" && isTeacherClassDetailPage),
-        )?.label ?? "Tổng quan");
+        )?.label ?? (isTeacherDashboard ? "Lịch học" : "Tổng quan"));
   const sidebarLabelClass = `max-w-[180px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity,transform] duration-300 ease-in-out ${
     isSidebarCollapsed
       ? "lg:max-w-0 lg:-translate-x-1 lg:opacity-0"
@@ -820,7 +817,7 @@ export function StaffDashboardView() {
               )
             ) : pathname.endsWith("/dashboard") ? (
               pathname === "/teacher/dashboard" ? (
-                <WeeklyTimetable />
+                <MonthlyTimetable />
               ) : (
                 <OverviewDashboard user={user} />
               )
